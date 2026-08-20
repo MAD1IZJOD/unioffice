@@ -217,6 +217,14 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  packages/core: {}
+
+  packages/database:
+    dependencies:
+      '@unioffice/core':
+        specifier: workspace:*
+        version: link:../core
+
 packages:
 
   '@turbo/darwin-64@2.10.11':
