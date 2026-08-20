@@ -1,3 +1,9 @@
+import type {
+  AgentId,
+  TaskId,
+  WorkId,
+} from "../types/ids.js";
+
 export type TaskStatus =
   | "pending"
   | "ready"
@@ -8,11 +14,11 @@ export type TaskStatus =
   | "cancelled";
 
 export interface Task {
-  id: string;
+  id: TaskId;
 
-  workId: string;
+  workId: WorkId;
 
-  parentTaskId?: string;
+  parentTaskId?: TaskId;
 
   title: string;
 
@@ -20,9 +26,9 @@ export interface Task {
 
   status: TaskStatus;
 
-  assignedAgentId?: string;
+  assignedAgentId?: AgentId;
 
-  dependsOn: string[];
+  dependsOn: TaskId[];
 
   createdAt: Date;
 

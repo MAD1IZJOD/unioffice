@@ -1,10 +1,12 @@
+import type { OrganizationId } from "../types/ids.js";
+
 export type OrganizationStatus =
   | "active"
   | "suspended"
   | "archived";
 
 export interface Organization {
-  id: string;
+  id: OrganizationId;
 
   name: string;
 

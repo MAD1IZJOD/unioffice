@@ -1,3 +1,11 @@
+import type {
+  AgentId,
+  EventId,
+  OrganizationId,
+  TaskId,
+  WorkId,
+} from "../types/ids.js";
+
 export type EventType =
   | "work.created"
   | "work.started"
@@ -31,15 +39,15 @@ export type EventActorType =
   | "system";
 
 export interface Event {
-  id: string;
+  id: EventId;
 
-  organizationId: string;
+  organizationId: OrganizationId;
 
-  workId?: string;
+  workId?: WorkId;
 
-  taskId?: string;
+  taskId?: TaskId;
 
-  agentId?: string;
+  agentId?: AgentId;
 
   actorType: EventActorType;
 

@@ -1,3 +1,10 @@
+import type {
+  OrganizationId,
+  TaskId,
+  WorkId,
+  WorkflowId,
+} from "../types/ids.js";
+
 export type WorkflowStatus =
   | "draft"
   | "ready"
@@ -20,7 +27,7 @@ export interface WorkflowNode {
 
   name: string;
 
-  taskId?: string;
+  taskId?: TaskId;
 
   dependsOn: string[];
 
@@ -28,11 +35,11 @@ export interface WorkflowNode {
 }
 
 export interface Workflow {
-  id: string;
+  id: WorkflowId;
 
-  organizationId: string;
+  organizationId: OrganizationId;
 
-  workId: string;
+  workId: WorkId;
 
   name: string;
 

@@ -1,3 +1,10 @@
+import type {
+  OrganizationId,
+  UserId,
+  WorkspaceId,
+  WorkId,
+} from "../types/ids.js";
+
 export type WorkStatus =
   | "queued"
   | "planning"
@@ -14,13 +21,13 @@ export type WorkPriority =
   | "critical";
 
 export interface Work {
-  id: string;
+  id: WorkId;
 
-  organizationId: string;
+  organizationId: OrganizationId;
 
-  workspaceId?: string;
+  workspaceId?: WorkspaceId;
 
-  requesterId: string;
+  requesterId: UserId;
 
   objective: string;
 

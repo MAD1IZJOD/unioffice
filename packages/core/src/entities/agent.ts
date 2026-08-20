@@ -1,3 +1,9 @@
+import type {
+  AgentId,
+  OrganizationId,
+  WorkspaceId,
+} from "../types/ids.js";
+
 export type AgentStatus =
   | "active"
   | "paused"
@@ -9,11 +15,11 @@ export type AgentType =
   | "orchestrator";
 
 export interface Agent {
-  id: string;
+  id: AgentId;
 
-  organizationId: string;
+  organizationId: OrganizationId;
 
-  workspaceId?: string;
+  workspaceId?: WorkspaceId;
 
   name: string;
 

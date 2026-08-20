@@ -1,3 +1,11 @@
+import type {
+  AgentId,
+  ArtifactId,
+  OrganizationId,
+  TaskId,
+  WorkId,
+} from "../types/ids.js";
+
 export type ArtifactType =
   | "document"
   | "spreadsheet"
@@ -10,15 +18,15 @@ export type ArtifactType =
   | "other";
 
 export interface Artifact {
-  id: string;
+  id: ArtifactId;
 
-  organizationId: string;
+  organizationId: OrganizationId;
 
-  workId?: string;
+  workId?: WorkId;
 
-  taskId?: string;
+  taskId?: TaskId;
 
-  createdByAgentId?: string;
+  createdByAgentId?: AgentId;
 
   name: string;
 
