@@ -9,3 +9,4 @@ export * from "./types/ids.js";
 export * from "./types/domain.js";
 export * from "./value-objects/organization-slug.js";
 export * from "./value-objects/entity-id.js";
+export * from "./entities/workspace.js";
