@@ -1,0 +1,82 @@
+The core concept we had been building was not just another chatbot or AI assistant. It was an AI-native company operating system: a coordinated organization of specialized agents that can perform actual company functions.
+
+The product model we had established was roughly:
+
+                    UNI-OFFICE
+                  Company Brain
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+     Revenue       Engineering     Operations
+     24 agents      31 agents       22 agents
+        │              │              │
+      Atlas           Forge          Ledger
+
+        ┌──────────────┼──────────────┐
+        │              │              │
+      Product         People         Support
+     18 agents       14 agents       28 agents
+
+              = 137 specialized agents
+
+
+
+And the important part was the coordination layer:
+
+Company Brain — shared organizational knowledge/context.
+Agents — specialized workers rather than generic chatbots.
+Memory — persistent organizational knowledge.
+Communication — agents coordinating across departments.
+Workflows — agents executing multi-step business processes.
+Approval gates — humans remain in control of consequential actions.
+Organization map — visual representation of the AI workforce.
+Agent performance — tracking what agents are doing and how well.
+Cross-team coordination — agents can hand work between departments.
+
+We also explicitly framed the product around:
+
+“Hire agents, not seats.”
+
+That's why the landing page now has the 48-agent Team plan, 137-agent Company plan, and custom Enterprise model.
+
+The big distinction
+
+The website is currently a marketing/pre-booking shell for UNI-Office.
+
+The actual product is what we need to build next:
+
+
+                    UNI-OFFICE
+                         │
+                 ┌───────┴───────┐
+                 │  COMPANY BRAIN │
+                 └───────┬───────┘
+                         │
+              ┌──────────┴──────────┐
+              │     ORCHESTRATOR    │
+              └──────────┬──────────┘
+                         │
+       ┌─────────────────┼─────────────────┐
+       ▼                 ▼                 ▼
+   Departments        Agents            Memory
+       │                 │                 │
+       └─────────────────┼─────────────────┘
+                         ▼
+                    Workflows
+                         │
+                         ▼
+                 Approval / Action
+                         │
+                         ▼
+                    Real company
+
+
+And this is where I would be careful: we shouldn't jump straight from the landing page into building 137 agents. That's the wrong engineering order.
+
+The first real UNI-Office product should prove the core operating-system loop with a small number of agents:
+
+task → understand context → plan → delegate → execute → communicate → request approval when necessary → record outcome → learn/store memory.
+
+Once that architecture actually works, adding dozens of specialized agents becomes an expansion problem rather than a mess of 137 independent AI prompts.
+
+So yes, I remember what we're building. Ultron → UNI-Office was a rebrand, not a change in the fundamental product vision.
