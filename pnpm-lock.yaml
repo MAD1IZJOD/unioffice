@@ -234,6 +234,12 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/memory:
+    dependencies:
+      '@unioffice/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/tools: {}
 
 packages:
