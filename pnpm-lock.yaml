@@ -240,6 +240,18 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/orchestrator:
+    dependencies:
+      '@unioffice/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@unioffice/core':
+        specifier: workspace:*
+        version: link:../core
+      '@unioffice/memory':
+        specifier: workspace:*
+        version: link:../memory
+
   packages/tools: {}
 
 packages:
