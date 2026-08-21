@@ -234,6 +234,8 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/tools: {}
+
 packages:
 
   '@ecies/ciphers@0.2.6':
