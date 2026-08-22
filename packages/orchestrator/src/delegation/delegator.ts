@@ -1,7 +1,9 @@
 import type {
   AgentId,
+  OrganizationId,
   TaskId,
   WorkId,
+  WorkspaceId,
 } from "@unioffice/core";
 
 import type {
@@ -11,9 +13,13 @@ import type {
 export interface DelegationContext {
   workId: WorkId;
 
+  task: PlannedTask;
+
   availableAgentIds: AgentId[];
 
-  task: PlannedTask;
+  organizationId: OrganizationId;
+
+  workspaceId?: WorkspaceId;
 
   context: Record<string, unknown>;
 }

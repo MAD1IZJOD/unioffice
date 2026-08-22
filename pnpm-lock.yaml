@@ -266,6 +266,9 @@ importers:
       '@unioffice/core':
         specifier: workspace:*
         version: link:../core
+      '@unioffice/database':
+        specifier: workspace:*
+        version: link:../database
       '@unioffice/memory':
         specifier: workspace:*
         version: link:../memory

@@ -1,9 +1,11 @@
 import type {
+  Agent,
   Work,
   WorkId,
 } from "@unioffice/core";
 
 import type {
+  AgentRepository,
   WorkRepository,
 } from "@unioffice/database";
 
@@ -21,6 +23,9 @@ export interface PlanWorkResult {
 export class WorkService {
   constructor(
     private readonly workRepository: WorkRepository,
+
+    private readonly agentRepository: AgentRepository,
+
     private readonly planner: Planner,
   ) {}
 
@@ -47,13 +52,32 @@ export class WorkService {
 
     const planningWork: Work = {
       ...work,
+
       status: "planning",
+
       updatedAt: new Date(),
     };
 
     const updatedWork =
       await this.workRepository.update(
         planningWork,
+      );
+
+    const agents =
+      await this.agentRepository.findByOrganization(
+        updatedWork.organizationId,
+      );
+
+    const availableAgents: Agent[] =
+      agents.filter(
+        (agent) =>
+          agent.status === "active" &&
+          (
+            !updatedWork.workspaceId ||
+            !agent.workspaceId ||
+            agent.workspaceId ===
+              updatedWork.workspaceId
+          ),
       );
 
     const plan =
@@ -63,7 +87,10 @@ export class WorkService {
         objective:
           updatedWork.objective,
 
-        availableAgentIds: [],
+        availableAgentIds:
+          availableAgents.map(
+            (agent) => agent.id,
+          ),
 
         context: {
           organizationId:
@@ -76,6 +103,7 @@ export class WorkService {
 
     return {
       work: updatedWork,
+
       plan,
     };
   }
