@@ -222,6 +222,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@unioffice/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@unioffice/core':
         specifier: workspace:*
         version: link:../../packages/core

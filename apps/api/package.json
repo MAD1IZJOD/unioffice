@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@unioffice/agents": "workspace:*",
     "@unioffice/core": "workspace:*",
     "@unioffice/database": "workspace:*",
     "@unioffice/orchestrator": "workspace:*"
