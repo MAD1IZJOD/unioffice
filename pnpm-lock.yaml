@@ -220,6 +220,18 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  apps/api:
+    dependencies:
+      '@unioffice/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@unioffice/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@unioffice/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+
   packages/agents:
     dependencies:
       '@unioffice/core':
