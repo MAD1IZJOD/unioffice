@@ -1,5 +1,5 @@
 {
-  "name": "@unioffice/orchestrator",
+  "name": "@unioffice/workflows",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,9 +9,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@unioffice/agents": "workspace:*",
-    "@unioffice/core": "workspace:*",
-    "@unioffice/memory": "workspace:*",
-    "@unioffice/workflows": "workspace:*"
+    "@unioffice/core": "workspace:*"
   }
 }

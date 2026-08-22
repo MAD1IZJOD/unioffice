@@ -257,8 +257,17 @@ importers:
       '@unioffice/memory':
         specifier: workspace:*
         version: link:../memory
+      '@unioffice/workflows':
+        specifier: workspace:*
+        version: link:../workflows
 
   packages/tools: {}
+
+  packages/workflows:
+    dependencies:
+      '@unioffice/core':
+        specifier: workspace:*
+        version: link:../core
 
 packages:
 
