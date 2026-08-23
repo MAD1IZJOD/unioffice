@@ -18,6 +18,8 @@ export interface DefaultAgentRuntimeOptions {
   temperature?: number;
 
   maxTokens?: number;
+
+  think?: boolean;
 }
 
 export class DefaultAgentRuntime
@@ -28,6 +30,8 @@ export class DefaultAgentRuntime
   private readonly temperature?: number;
 
   private readonly maxTokens: number;
+
+  private readonly think: boolean;
 
   constructor(
     private readonly modelProvider: ModelProvider,
@@ -43,6 +47,9 @@ export class DefaultAgentRuntime
     this.maxTokens =
       options.maxTokens ??
       500;
+      this.think =
+        options.think ??
+        false;
   }
 
   async execute(
@@ -81,7 +88,10 @@ export class DefaultAgentRuntime
           maxTokens:
             this.maxTokens,
 
-          metadata: {
+            think:
+                 this.think,
+
+            metadata: {
             agentId:
               context.agentId,
 

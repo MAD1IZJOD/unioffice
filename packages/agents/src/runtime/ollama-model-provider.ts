@@ -73,6 +73,8 @@ export class OllamaModelProvider
               ),
 
             stream: false,
+            think:
+            request.think ?? false,
 
             options: {
               ...(request.temperature !==

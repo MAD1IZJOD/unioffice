@@ -18,6 +18,8 @@ export interface ModelRequest {
 
   maxTokens?: number;
 
+  think?: boolean;
+
   metadata?: Record<string, unknown>;
 }
 

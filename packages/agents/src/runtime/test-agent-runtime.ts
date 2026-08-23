@@ -78,7 +78,8 @@ const runtime =
     {
       model: "qwen3:8b",
 
-      maxTokens: 300,
+      maxTokens: 150,
+      think: false ,
     },
   );
 
