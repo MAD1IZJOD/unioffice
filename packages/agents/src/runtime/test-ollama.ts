@@ -25,7 +25,7 @@ const result =
       },
     ],
 
-    maxTokens: 100,
+    maxTokens: 500,
   });
 
 console.log("Model:", result.model);
