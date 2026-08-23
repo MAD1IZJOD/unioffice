@@ -1,46 +1,100 @@
-import type { ToolDefinition } from "../tool.js";
+import type {
+  ToolDefinition,
+} from "../tool.js";
 
-export class ToolRegistry {
-  private readonly tools = new Map<
-    string,
-    ToolDefinition
-  >();
+export interface ToolRegistry {
+  register<
+    TInput = unknown,
+    TOutput = unknown,
+  >(
+    tool: ToolDefinition<
+      TInput,
+      TOutput
+    >,
+  ): void;
 
-  register(tool: ToolDefinition): void {
-    if (this.tools.has(tool.id)) {
+  get(
+    toolId: string,
+  ): ToolDefinition | null;
+
+  getMany(
+    toolIds: string[],
+  ): ToolDefinition[];
+
+  has(
+    toolId: string,
+  ): boolean;
+
+  list(): ToolDefinition[];
+}
+
+export class DefaultToolRegistry
+  implements ToolRegistry
+{
+  private readonly tools =
+    new Map<
+      string,
+      ToolDefinition
+    >();
+
+  register<
+    TInput = unknown,
+    TOutput = unknown,
+  >(
+    tool: ToolDefinition<
+      TInput,
+      TOutput
+    >,
+  ): void {
+    if (
+      this.tools.has(tool.id)
+    ) {
       throw new Error(
         `Tool already registered: ${tool.id}`,
       );
     }
 
-    this.tools.set(tool.id, tool);
+    this.tools.set(
+      tool.id,
+      tool,
+    );
   }
 
-  get(id: string): ToolDefinition {
-    const tool = this.tools.get(id);
+  get(
+    toolId: string,
+  ): ToolDefinition | null {
+    return (
+      this.tools.get(toolId) ??
+      null
+    );
+  }
 
-    if (!tool) {
-      throw new Error(
-        `Tool not found: ${id}`,
+  getMany(
+    toolIds: string[],
+  ): ToolDefinition[] {
+    return toolIds
+      .map((toolId) =>
+        this.tools.get(toolId),
+      )
+      .filter(
+        (
+          tool,
+        ): tool is ToolDefinition =>
+          tool !== undefined,
       );
-    }
-
-    return tool;
   }
 
-  has(id: string): boolean {
-    return this.tools.has(id);
+  has(
+    toolId: string,
+  ): boolean {
+    return this.tools.has(
+      toolId,
+    );
   }
 
   list(): ToolDefinition[] {
-    return [...this.tools.values()];
-  }
-
-  remove(id: string): boolean {
-    return this.tools.delete(id);
-  }
-
-  clear(): void {
-    this.tools.clear();
+    return Array.from(
+      this.tools.values(),
+    );
   }
 }

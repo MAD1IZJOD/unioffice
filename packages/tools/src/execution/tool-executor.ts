@@ -3,7 +3,9 @@ import type {
   ToolExecutionContext,
 } from "../tool.js";
 
-import { ToolRegistry } from "../registry/tool-registry.js";
+import type {
+  ToolRegistry,
+} from "../registry/tool-registry.js";
 
 export interface ToolExecutionResult {
   toolId: string;
@@ -29,43 +31,74 @@ export class ToolExecutor {
     private readonly registry: ToolRegistry,
   ) {}
 
-  async execute<TInput, TOutput>(
+  async execute<
+    TInput = unknown,
+    TOutput = unknown,
+  >(
     toolId: string,
     input: TInput,
     context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
-    const startedAt = new Date();
+    const startedAt =
+      new Date();
 
     try {
-      const tool = this.registry.get(
-        toolId,
-      ) as ToolDefinition<TInput, TOutput>;
+      const tool =
+        this.registry.get(
+          toolId,
+        ) as
+          | ToolDefinition<
+              TInput,
+              TOutput
+            >
+          | null;
 
-      const output = await tool.execute(
-        input,
-        context,
-      );
+      if (!tool) {
+        throw new Error(
+          `Tool not found: ${toolId}`,
+        );
+      }
+
+      const output =
+        await tool.execute(
+          input,
+          context,
+        );
 
       return {
         toolId,
-        status: "completed",
+
+        status:
+          "completed",
+
         output,
+
         startedAt,
-        completedAt: new Date(),
+
+        completedAt:
+          new Date(),
       };
     } catch (error) {
       return {
         toolId,
-        status: "failed",
+
+        status:
+          "failed",
+
         error: {
-          code: "TOOL_EXECUTION_FAILED",
+          code:
+            "TOOL_EXECUTION_FAILED",
+
           message:
             error instanceof Error
               ? error.message
               : String(error),
         },
+
         startedAt,
-        completedAt: new Date(),
+
+        completedAt:
+          new Date(),
       };
     }
   }
