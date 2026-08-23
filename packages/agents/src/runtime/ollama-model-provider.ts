@@ -10,6 +10,8 @@ interface OllamaGenerateResponse {
 
   response: string;
 
+  thinking?: string;
+
   done: boolean;
 
   prompt_eval_count?: number;
@@ -107,11 +109,9 @@ export class OllamaModelProvider
         OllamaGenerateResponse;
 
     return {
-      content:
-        data.response,
+      content: data.response,
 
-      model:
-        data.model,
+      model: data.model,
 
       usage: {
         inputTokens:
@@ -137,6 +137,9 @@ export class OllamaModelProvider
 
         loadDuration:
           data.load_duration,
+
+        thinking:
+          data.thinking,
       },
     };
   }
