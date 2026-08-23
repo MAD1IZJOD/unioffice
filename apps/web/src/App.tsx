@@ -1,7 +1,6 @@
 import {
   Activity,
   Brain,
-  Boxes,
   ChevronDown,
   Command,
   FileOutput,
