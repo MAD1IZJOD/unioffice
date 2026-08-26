@@ -2,31 +2,89 @@
   min-height: 100vh;
 }
 
-.sidebar {
-  width: 280px;
-}
-
 .main-content {
-  margin-left: 280px;
+  margin-left: 260px;
   min-height: 100vh;
 }
 
-@media (max-width: 1024px) {
-  .sidebar {
-    width: 240px;
-  }
+.command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+}
 
-  .main-content {
-    margin-left: 240px;
+@media (max-width: 1200px) {
+  .command-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 768px) {
-  .sidebar {
-    display: none;
-  }
-
+@media (max-width: 1024px) {
   .main-content {
     margin-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .main-content {
+    padding-top: 0;
+  }
+}
+
+.execution-line {
+  position: relative;
+}
+
+.execution-line::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 22px;
+  bottom: -14px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.execution-line:last-child::before {
+  display: none;
+}
+
+.command-textarea {
+  resize: none;
+  outline: none;
+}
+
+.command-textarea::placeholder {
+  color: rgba(100, 116, 139, 0.55);
+}
+
+.subtle-pulse {
+  animation: subtlePulse 2s ease-in-out infinite;
+}
+
+@keyframes subtlePulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.fade-up {
+  animation: fadeUp 280ms ease-out both;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
