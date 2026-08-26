@@ -37,8 +37,8 @@ const organizationNavigation = [
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-[#070a0d] text-[#e6edf3]">
-      <aside className="fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-white/[0.07] bg-[#090d11]/95">
+    <div className="app-shell min-h-screen bg-[#070a0d] text-[#e6edf3]">
+      <aside className="sidebar fixed inset-y-0 left-0 z-40 flex flex-col border-r border-white/[0.07] bg-[#090d11]/95">
         <div className="flex h-[72px] items-center border-b border-white/[0.07] px-5">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-400/10">
@@ -172,7 +172,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="ml-[280px] min-h-screen">
+      <main className="main-content min-h-screen">
         <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-white/[0.07] bg-[#070a0d]/80 px-7 backdrop-blur-xl">
           <div>
             <div className="font-mono-ui text-[9px] uppercase tracking-[0.2em] text-slate-600">
