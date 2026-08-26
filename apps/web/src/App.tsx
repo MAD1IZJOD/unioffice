@@ -172,6 +172,29 @@ export default function App() {
         </div>
       </aside>
 
+      <div className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between border-b border-white/[0.07] bg-[#090d11]/95 px-4 backdrop-blur-xl md:hidden">
+  <div className="flex items-center gap-2">
+    <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-400/10">
+      <LayoutDashboard
+        size={16}
+        className="text-cyan-300"
+      />
+    </div>
+
+    <span className="text-[12px] font-semibold tracking-[0.14em]">
+      UNI-OFFICE
+    </span>
+  </div>
+
+  <button
+    type="button"
+    className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-2 text-slate-400"
+    aria-label="Open navigation"
+  >
+    <Command size={16} />
+  </button>
+</div>
+
       <main className="main-content min-h-screen">
         <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-white/[0.07] bg-[#070a0d]/80 px-7 backdrop-blur-xl">
           <div>
