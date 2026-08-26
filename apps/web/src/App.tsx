@@ -1,6 +1,5 @@
 import {
   Activity,
-  ArrowUpRight,
   Brain,
   ChevronDown,
   Command,
