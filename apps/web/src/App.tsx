@@ -180,7 +180,7 @@ export default function App() {
             </div>
 
             <h1 className="mt-1 text-lg font-semibold tracking-tight">
-              Operating System
+  Command Center
             </h1>
           </div>
 
@@ -193,7 +193,7 @@ export default function App() {
               </span>
 
               <kbd className="font-mono-ui rounded border border-white/[0.08] px-1.5 py-0.5 text-[9px] text-slate-600">
-                ⌘K
+  Ctrl K
               </kbd>
             </div>
 
