@@ -230,7 +230,7 @@ export default function App() {
           </div>
         </header>
 
-        <section className="grid-background min-h-[calc(100vh-72px)] p-7">
+        <section className="grid-background min-h-[calc(100vh-72px)] p-7 max-md:px-4 max-md:pt-20">
           <Outlet />
         </section>
       </main>
