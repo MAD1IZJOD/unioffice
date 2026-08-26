@@ -16,98 +16,72 @@ export const router =
           index: true,
           element: <Command />,
         },
+
         {
           path: "command",
           element: <Command />,
         },
+
         {
           path: "work",
           element: (
-            <PlaceholderPage
-              title="Work"
-              eyebrow="WORK MANAGEMENT"
-              description="Track active work, execution plans, tasks, and outcomes."
-            />
+            <PlaceholderPage title="Work" />
           ),
         },
+
         {
           path: "agents",
           element: (
-            <PlaceholderPage
-              title="Agents"
-              eyebrow="AGENT OPERATIONS"
-              description="Monitor agents, capabilities, execution state, and assignments."
-            />
+            <PlaceholderPage title="Agents" />
           ),
         },
+
         {
           path: "tools",
           element: (
-            <PlaceholderPage
-              title="Tools"
-              eyebrow="TOOL REGISTRY"
-              description="Manage the tools available to UNI-OFFICE agents."
-            />
+            <PlaceholderPage title="Tools" />
           ),
         },
+
         {
           path: "brain",
           element: (
-            <PlaceholderPage
-              title="Company Brain"
-              eyebrow="COMPANY INTELLIGENCE"
-              description="Company memory, knowledge, active threads, and strategic context."
-            />
+            <PlaceholderPage title="Company Brain" />
           ),
         },
+
         {
           path: "artifacts",
           element: (
-            <PlaceholderPage
-              title="Artifacts"
-              eyebrow="OUTPUTS"
-              description="Generated documents, reports, files, and other work products."
-            />
+            <PlaceholderPage title="Artifacts" />
           ),
         },
+
         {
           path: "approvals",
           element: (
-            <PlaceholderPage
-              title="Approvals"
-              eyebrow="GOVERNANCE"
-              description="Review actions that require human approval."
-            />
+            <PlaceholderPage title="Approvals" />
           ),
         },
+
         {
           path: "activity",
           element: (
-            <PlaceholderPage
-              title="Activity"
-              eyebrow="SYSTEM ACTIVITY"
-              description="Observe execution events across the organization."
-            />
+            <PlaceholderPage title="Activity" />
           ),
         },
+
         {
           path: "organization",
           element: (
-            <PlaceholderPage
-              title="Organization"
-              eyebrow="ORGANIZATION MAP"
-              description="Visualize departments, agents, responsibilities, and relationships."
-            />
+            <PlaceholderPage title="Organization" />
           ),
         },
+
         {
           path: "governance",
           element: (
-            <PlaceholderPage
-              title="Governance"
-              eyebrow="POLICIES & CONTROLS"
-              description="Permissions, policies, approvals, and audit controls."
-            />
+            <PlaceholderPage title="Governance" />
           ),
         },
       ],
