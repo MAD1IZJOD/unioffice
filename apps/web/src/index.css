@@ -10,8 +10,8 @@
     "Segoe UI",
     sans-serif;
 
-  color: #e6edf3;
-  background: #06090c;
+  color: #e2e8f0;
+  background: #080c10;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -22,12 +22,7 @@
   box-sizing: border-box;
 }
 
-html {
-  min-width: 320px;
-  min-height: 100%;
-  background: #06090c;
-}
-
+html,
 body,
 #root {
   min-width: 320px;
@@ -38,11 +33,11 @@ body,
 body {
   background:
     radial-gradient(
-      circle at 50% -15%,
-      rgba(0, 255, 170, 0.045),
-      transparent 32%
+      circle at 50% -20%,
+      rgba(34, 211, 238, 0.055),
+      transparent 34%
     ),
-    #06090c;
+    #080c10;
 }
 
 button,
@@ -57,7 +52,8 @@ button {
 }
 
 ::selection {
-  background: rgba(0, 255, 170, 0.18);
+  color: #ecfeff;
+  background: rgba(34, 211, 238, 0.25);
 }
 
 ::-webkit-scrollbar {
@@ -70,34 +66,35 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #26313a;
   border-radius: 999px;
+  background: #26323d;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #34414c;
+  background: #394855;
 }
 
 .glass-panel {
-  background: rgba(14, 18, 22, 0.74);
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid #202b35;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(17, 24, 31, 0.96),
+      rgba(12, 17, 23, 0.96)
+    );
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 16px 40px rgba(0, 0, 0, 0.14);
 }
 
-.grid-background {
-  background-image:
-    linear-gradient(
-      rgba(255, 255, 255, 0.022) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.022) 1px,
-      transparent 1px
-    );
+.panel-muted {
+  border: 1px solid #1c2731;
+  background: #0d1319;
+}
 
-  background-size: 32px 32px;
+.panel-elevated {
+  border: 1px solid #293642;
+  background: #111820;
 }
 
 .font-mono-ui {
@@ -110,23 +107,42 @@ button {
 }
 
 .status-dot {
+  display: inline-block;
   width: 7px;
   height: 7px;
-  display: inline-block;
+  flex-shrink: 0;
   border-radius: 50%;
 }
 
 .status-dot-live {
-  background: #00ffaa;
-  box-shadow: 0 0 8px rgba(0, 255, 170, 0.8);
+  background: #34d399;
+  box-shadow:
+    0 0 0 3px rgba(52, 211, 153, 0.08),
+    0 0 9px rgba(52, 211, 153, 0.55);
 }
 
 .status-dot-warning {
-  background: #f59e0b;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.65);
+  background: #fbbf24;
+  box-shadow:
+    0 0 0 3px rgba(251, 191, 36, 0.08),
+    0 0 9px rgba(251, 191, 36, 0.45);
 }
 
 .status-dot-error {
-  background: #ef4444;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.65);
+  background: #f87171;
+  box-shadow:
+    0 0 0 3px rgba(248, 113, 113, 0.08),
+    0 0 9px rgba(248, 113, 113, 0.45);
+}
+
+.text-primary {
+  color: #f1f5f9;
+}
+
+.text-secondary {
+  color: #a8b4c3;
+}
+
+.text-muted {
+  color: #718096;
 }
