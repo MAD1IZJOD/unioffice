@@ -16,68 +16,58 @@ export const router =
           index: true,
           element: <Command />,
         },
-
         {
           path: "command",
           element: <Command />,
         },
-
         {
           path: "work",
           element: (
             <PlaceholderPage title="Work" />
           ),
         },
-
         {
           path: "agents",
           element: (
             <PlaceholderPage title="Agents" />
           ),
         },
-
         {
           path: "tools",
           element: (
             <PlaceholderPage title="Tools" />
           ),
         },
-
         {
           path: "brain",
           element: (
             <PlaceholderPage title="Company Brain" />
           ),
         },
-
         {
           path: "artifacts",
           element: (
             <PlaceholderPage title="Artifacts" />
           ),
         },
-
         {
           path: "approvals",
           element: (
             <PlaceholderPage title="Approvals" />
           ),
         },
-
         {
           path: "activity",
           element: (
             <PlaceholderPage title="Activity" />
           ),
         },
-
         {
           path: "organization",
           element: (
             <PlaceholderPage title="Organization" />
           ),
         },
-
         {
           path: "governance",
           element: (
