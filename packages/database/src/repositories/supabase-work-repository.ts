@@ -4,62 +4,81 @@ import type {
   WorkId,
 } from "@unioffice/core";
 
-import type {
-  SupabaseClient,
-} from "@supabase/supabase-js";
+import {
+  createSupabaseAdminClient,
+} from "../supabase-client.js";
 
-import type {
-  WorkRepository,
-} from "./work-repository.js";
+type WorkRow = {
+  id: string;
+  organization_id: string;
+  workspace_id: string | null;
+  requester_id: string;
+  objective: string;
+  status: Work["status"];
+  priority: Work["priority"];
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  metadata: Record<string, unknown>;
+};
 
-export class SupabaseWorkRepository
-  implements WorkRepository
-{
-  constructor(
-    private readonly client: SupabaseClient,
-  ) {}
+function toWork(row: WorkRow): Work {
+  return {
+    id: row.id as WorkId,
+    organizationId:
+      row.organization_id as OrganizationId,
+    workspaceId:
+      row.workspace_id
+        ? (row.workspace_id as Work["workspaceId"])
+        : undefined,
+    requesterId:
+      row.requester_id as Work["requesterId"],
+    objective: row.objective,
+    status: row.status,
+    priority: row.priority,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    startedAt: row.started_at
+      ? new Date(row.started_at)
+      : undefined,
+    completedAt: row.completed_at
+      ? new Date(row.completed_at)
+      : undefined,
+    metadata: row.metadata ?? {},
+  };
+}
 
-  async create(
-    work: Work,
-  ): Promise<Work> {
+export class SupabaseWorkRepository {
+  private readonly supabase =
+    createSupabaseAdminClient();
+
+  async create(work: Work): Promise<Work> {
     const { data, error } =
-      await this.client
+      await this.supabase
         .from("works")
         .insert({
           id: work.id,
-
           organization_id:
             work.organizationId,
-
           workspace_id:
             work.workspaceId ?? null,
-
           requester_id:
             work.requesterId,
-
           objective:
             work.objective,
-
           status:
             work.status,
-
           priority:
             work.priority,
-
           created_at:
             work.createdAt.toISOString(),
-
           updated_at:
             work.updatedAt.toISOString(),
-
           started_at:
-            work.startedAt?.toISOString() ??
-            null,
-
+            work.startedAt?.toISOString() ?? null,
           completed_at:
-            work.completedAt?.toISOString() ??
-            null,
-
+            work.completedAt?.toISOString() ?? null,
           metadata:
             work.metadata,
         })
@@ -72,14 +91,14 @@ export class SupabaseWorkRepository
       );
     }
 
-    return this.mapRow(data);
+    return toWork(data as WorkRow);
   }
 
   async findById(
     id: WorkId,
   ): Promise<Work | null> {
     const { data, error } =
-      await this.client
+      await this.supabase
         .from("works")
         .select("*")
         .eq("id", id)
@@ -92,7 +111,7 @@ export class SupabaseWorkRepository
     }
 
     return data
-      ? this.mapRow(data)
+      ? toWork(data as WorkRow)
       : null;
   }
 
@@ -100,7 +119,7 @@ export class SupabaseWorkRepository
     organizationId: OrganizationId,
   ): Promise<Work[]> {
     const { data, error } =
-      await this.client
+      await this.supabase
         .from("works")
         .select("*")
         .eq(
@@ -113,51 +132,36 @@ export class SupabaseWorkRepository
 
     if (error) {
       throw new Error(
-        `Failed to find organization work: ${error.message}`,
+        `Failed to find works: ${error.message}`,
       );
     }
 
-    return (data ?? []).map(
-      (row) => this.mapRow(row),
-    );
+    return (data as WorkRow[]).map(toWork);
   }
 
-  async update(
-    work: Work,
-  ): Promise<Work> {
+  async update(work: Work): Promise<Work> {
     const { data, error } =
-      await this.client
+      await this.supabase
         .from("works")
         .update({
           organization_id:
             work.organizationId,
-
           workspace_id:
             work.workspaceId ?? null,
-
           requester_id:
             work.requesterId,
-
           objective:
             work.objective,
-
           status:
             work.status,
-
           priority:
             work.priority,
-
           updated_at:
             work.updatedAt.toISOString(),
-
           started_at:
-            work.startedAt?.toISOString() ??
-            null,
-
+            work.startedAt?.toISOString() ?? null,
           completed_at:
-            work.completedAt?.toISOString() ??
-            null,
-
+            work.completedAt?.toISOString() ?? null,
           metadata:
             work.metadata,
         })
@@ -171,14 +175,14 @@ export class SupabaseWorkRepository
       );
     }
 
-    return this.mapRow(data);
+    return toWork(data as WorkRow);
   }
 
   async delete(
     id: WorkId,
   ): Promise<void> {
     const { error } =
-      await this.client
+      await this.supabase
         .from("works")
         .delete()
         .eq("id", id);
@@ -188,50 +192,5 @@ export class SupabaseWorkRepository
         `Failed to delete work: ${error.message}`,
       );
     }
-  }
-
-  private mapRow(
-    row: any,
-  ): Work {
-    return {
-      id: row.id as WorkId,
-
-      organizationId:
-        row.organization_id as OrganizationId,
-
-      workspaceId:
-        row.workspace_id ?? undefined,
-
-      requesterId:
-        row.requester_id,
-
-      objective:
-        row.objective,
-
-      status:
-        row.status,
-
-      priority:
-        row.priority,
-
-      createdAt:
-        new Date(row.created_at),
-
-      updatedAt:
-        new Date(row.updated_at),
-
-      startedAt:
-        row.started_at
-          ? new Date(row.started_at)
-          : undefined,
-
-      completedAt:
-        row.completed_at
-          ? new Date(row.completed_at)
-          : undefined,
-
-      metadata:
-        row.metadata ?? {},
-    };
   }
 }
