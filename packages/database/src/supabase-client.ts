@@ -1,13 +1,7 @@
-import {
-  createClient,
-  type SupabaseClient,
-} from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
-function getRequiredEnv(
-  name: string,
-): string {
-  const value =
-    process.env[name];
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
 
   if (!value) {
     throw new Error(
@@ -18,25 +12,14 @@ function getRequiredEnv(
   return value;
 }
 
-export function createSupabaseClient(): SupabaseClient {
-  const url =
-    getRequiredEnv(
-      "SUPABASE_URL",
-    );
-
-  const serviceRoleKey =
-    getRequiredEnv(
-      "SUPABASE_SERVICE_ROLE_KEY",
-    );
-
+export function createSupabaseAdminClient() {
   return createClient(
-    url,
-    serviceRoleKey,
+    getRequiredEnv("SUPABASE_URL"),
+    getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
     {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
-        detectSessionInUrl: false,
       },
     },
   );
