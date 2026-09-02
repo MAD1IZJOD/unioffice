@@ -17,6 +17,8 @@ export interface PlanningContext {
 export interface PlannedTask {
   id: TaskId;
 
+  ref: string;
+
   title: string;
 
   description: string;
