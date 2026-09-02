@@ -9,6 +9,9 @@ import type {
 export function agentToDefinition(
   agent: Agent,
 ): AgentDefinition {
+  const configuredInstructions =
+    agent.metadata.systemInstructions;
+
   return {
     id: agent.id,
 
@@ -20,7 +23,15 @@ export function agentToDefinition(
     type: agent.type,
 
     systemInstructions:
-      `You are ${agent.name}. ${agent.description}`,
+      typeof configuredInstructions === "string" &&
+      configuredInstructions.trim()
+        ? configuredInstructions
+        : [
+            `You are ${agent.name}.`,
+            agent.description,
+            "Only claim work you actually performed.",
+            "You do not have tools unless they are explicitly listed.",
+          ].join("\n"),
 
     capabilities:
       agent.capabilities,
