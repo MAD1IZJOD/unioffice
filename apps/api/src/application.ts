@@ -11,6 +11,10 @@ import type {
   WorkRepository,
 } from "@unioffice/database";
 
+import type {
+  EventRecorder,
+} from "./event-recorder.js";
+
 export interface CreateWorkInput {
   organizationId: OrganizationId;
 
@@ -28,6 +32,7 @@ export interface CreateWorkInput {
 export class WorkApplicationService {
   constructor(
     private readonly workRepository: WorkRepository,
+    private readonly eventRecorder: EventRecorder,
   ) {}
 
   async createWork(
@@ -63,6 +68,21 @@ export class WorkApplicationService {
         input.metadata ?? {},
     };
 
-    return this.workRepository.create(work);
+    const createdWork =
+      await this.workRepository.create(work);
+
+    await this.eventRecorder.record({
+      organizationId: createdWork.organizationId,
+      workId: createdWork.id,
+      actorType: "user",
+      actorId: createdWork.requesterId,
+      type: "work.created",
+      payload: {
+        objective: createdWork.objective,
+        priority: createdWork.priority,
+      },
+    });
+
+    return createdWork;
   }
 }
