@@ -39,9 +39,19 @@ export class OllamaModelProvider
   constructor(
     options: OllamaModelProviderOptions = {},
   ) {
-    this.baseUrl =
+    const baseUrl =
       options.baseUrl ??
       "http://127.0.0.1:11434";
+
+    try {
+      this.baseUrl = new URL(baseUrl)
+        .toString()
+        .replace(/\/$/, "");
+    } catch {
+      throw new Error(
+        "Ollama baseUrl must be a valid URL.",
+      );
+    }
 
     this.defaultModel =
       options.defaultModel ??
@@ -51,8 +61,10 @@ export class OllamaModelProvider
   async generate(
     request: ModelRequest,
   ): Promise<ModelResponse> {
-    const response =
-      await fetch(
+    let response: Response;
+
+    try {
+      response = await fetch(
         `${this.baseUrl}/api/generate`,
         {
           method: "POST",
@@ -96,6 +108,11 @@ export class OllamaModelProvider
           }),
         },
       );
+    } catch (error) {
+      throw new Error(
+        `Unable to reach Ollama at ${this.baseUrl}: ${this.errorMessage(error)}`,
+      );
+    }
 
     if (!response.ok) {
       const errorText =
@@ -109,6 +126,8 @@ export class OllamaModelProvider
     const data =
       (await response.json()) as
         OllamaGenerateResponse;
+
+    this.validateResponse(data);
 
     return {
       content: data.response,
@@ -172,5 +191,36 @@ export class OllamaModelProvider
       case "assistant":
         return "ASSISTANT";
     }
+  }
+
+  private validateResponse(
+    response: OllamaGenerateResponse,
+  ): void {
+    if (
+      typeof response.model !== "string" ||
+      !response.model
+    ) {
+      throw new Error(
+        "Ollama returned a response without a model name.",
+      );
+    }
+
+    if (typeof response.response !== "string") {
+      throw new Error(
+        "Ollama returned a response without generated content.",
+      );
+    }
+
+    if (response.done !== true) {
+      throw new Error(
+        "Ollama did not finish the generation.",
+      );
+    }
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error
+      ? error.message
+      : String(error);
   }
 }
