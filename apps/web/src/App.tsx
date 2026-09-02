@@ -1,5 +1,7 @@
 import {
   Activity,
+  ArrowUpRight,
+  Bell,
   Brain,
   ChevronDown,
   Command,
@@ -22,7 +24,10 @@ import {
   useLocation,
 } from "react-router-dom";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 const navigation = [
   ["COMMAND", "/command", Command],
@@ -53,6 +58,29 @@ const pageTitles: Record<string, string> = {
   "/organization": "Organization",
   "/governance": "Governance",
 };
+
+const quickNavigation = [
+  {
+    label: "Command Center",
+    path: "/command",
+    icon: Command,
+  },
+  {
+    label: "Organization map",
+    path: "/organization",
+    icon: Network,
+  },
+  {
+    label: "Approval queue",
+    path: "/approvals",
+    icon: ShieldCheck,
+  },
+  {
+    label: "Company Brain",
+    path: "/brain",
+    icon: Brain,
+  },
+];
 
 function Navigation({
   onNavigate,
@@ -180,6 +208,37 @@ export default function App() {
 
   const [mobileOpen, setMobileOpen] =
     useState(false);
+
+  const [commandOpen, setCommandOpen] =
+    useState(false);
+
+  const [notificationsOpen, setNotificationsOpen] =
+    useState(false);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k"
+      ) {
+        event.preventDefault();
+        setCommandOpen(true);
+      }
+
+      if (event.key === "Escape") {
+        setCommandOpen(false);
+        setNotificationsOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+  }, []);
 
   const title =
     pageTitles[location.pathname] ??
@@ -329,6 +388,7 @@ export default function App() {
             <button
               type="button"
               className="search-button"
+              onClick={() => setCommandOpen(true)}
             >
               <Search size={14} />
 
@@ -336,6 +396,65 @@ export default function App() {
 
               <kbd>Ctrl K</kbd>
             </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                className="icon-button relative"
+                aria-label="Open notifications"
+                onClick={() =>
+                  setNotificationsOpen(
+                    (isOpen) => !isOpen,
+                  )
+                }
+              >
+                <Bell size={15} />
+
+                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.95)]" />
+              </button>
+
+              {notificationsOpen && (
+                <div className="notification-popover">
+                  <div className="flex items-center justify-between border-b border-[#202b35] px-4 py-3">
+                    <span className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      Attention queue
+                    </span>
+
+                    <span className="rounded-full bg-amber-400/10 px-2 py-1 font-mono-ui text-[8px] text-amber-300">
+                      02 NEW
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 p-2">
+                    <NavLink
+                      to="/approvals"
+                      onClick={() =>
+                        setNotificationsOpen(false)
+                      }
+                      className="notification-item"
+                    >
+                      <span className="status-dot status-dot-warning" />
+                      <span>
+                        Two approval gates need review
+                      </span>
+                    </NavLink>
+
+                    <NavLink
+                      to="/work"
+                      onClick={() =>
+                        setNotificationsOpen(false)
+                      }
+                      className="notification-item"
+                    >
+                      <span className="status-dot status-dot-live" />
+                      <span>
+                        Atlas shared an execution update
+                      </span>
+                    </NavLink>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="system-status">
               <span className="status-dot status-dot-live" />
@@ -351,6 +470,60 @@ export default function App() {
           <Outlet />
         </section>
       </main>
+
+      {commandOpen && (
+        <div
+          className="command-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Quick navigation"
+          onClick={() => setCommandOpen(false)}
+        >
+          <div
+            className="command-palette"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 border-b border-[#263440] px-4 py-4">
+              <Search size={16} className="text-cyan-300" />
+
+              <input
+                autoFocus
+                placeholder="Jump to a system surface..."
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
+              />
+
+              <kbd className="rounded border border-[#2c3945] px-1.5 py-1 font-mono-ui text-[8px] text-slate-500">
+                ESC
+              </kbd>
+            </div>
+
+            <div className="p-2">
+              <div className="px-2 pb-2 pt-1 font-mono-ui text-[8px] uppercase tracking-[0.16em] text-slate-600">
+                Navigate
+              </div>
+
+              {quickNavigation.map(
+                ({ label, path, icon: Icon }) => (
+                  <NavLink
+                    key={path}
+                    to={path}
+                    onClick={() => setCommandOpen(false)}
+                    className="palette-item"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2a3844] bg-[#10171e] text-slate-400">
+                      <Icon size={14} />
+                    </span>
+
+                    <span>{label}</span>
+
+                    <ArrowUpRight className="ml-auto text-slate-600" size={14} />
+                  </NavLink>
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
