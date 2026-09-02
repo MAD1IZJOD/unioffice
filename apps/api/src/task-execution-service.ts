@@ -9,12 +9,16 @@ import type {
 } from "@unioffice/database";
 
 import type {
-  AgentRuntime,
-} from "@unioffice/agents";
+  ExecutionEngine,
+} from "@unioffice/orchestrator";
 
 import {
   agentToDefinition,
 } from "./agent-definition.js";
+
+import type {
+  EventRecorder,
+} from "./event-recorder.js";
 
 export class TaskExecutionService {
   constructor(
@@ -24,8 +28,11 @@ export class TaskExecutionService {
     private readonly agentRepository:
       AgentRepository,
 
-    private readonly agentRuntime:
-      AgentRuntime,
+    private readonly executionEngine:
+      ExecutionEngine,
+
+    private readonly eventRecorder:
+      EventRecorder,
   ) {}
 
   async executeTask(
@@ -48,10 +55,7 @@ export class TaskExecutionService {
       );
     }
 
-    if (
-      task.status !== "pending" &&
-      task.status !== "ready"
-    ) {
+    if (task.status !== "ready") {
       throw new Error(
         `Task cannot execute from status: ${task.status}`,
       );
@@ -74,128 +78,141 @@ export class TaskExecutionService {
       );
     }
 
-    const now = new Date();
-
+    const startedAt = new Date();
     const runningTask: Task = {
       ...task,
-
       status: "running",
-
-      startedAt: now,
-
-      updatedAt: now,
+      startedAt,
+      updatedAt: startedAt,
     };
 
-    await this.taskRepository.update(
-      runningTask,
-    );
+    await this.taskRepository.update(runningTask);
+
+    await this.eventRecorder.record({
+      organizationId: agent.organizationId,
+      workId: task.workId,
+      taskId: task.id,
+      agentId: agent.id,
+      type: "task.started",
+      payload: {
+        title: task.title,
+      },
+    });
 
     try {
       const result =
-        await this.agentRuntime.execute(
-          agentToDefinition(agent),
-
-          {
-            agentId: agent.id,
-
-            taskId: task.id,
-
-            workId: task.workId,
-
-            input: {
-              title: task.title,
-
-              description:
-                task.description,
-            },
-
-            context: {
-              ...task.metadata,
-            },
+        await this.executionEngine.execute({
+          workId: task.workId,
+          taskId: task.id,
+          agentId: agent.id,
+          agent: agentToDefinition(agent),
+          input: {
+            title: task.title,
+            description: task.description,
           },
-        );
+          context: {
+            ...task.metadata,
+          },
+        });
 
-      const completedAt =
-        new Date();
+      const completedAt = new Date();
+      const status =
+        result.status === "completed"
+          ? "completed"
+          : result.status === "waiting"
+            ? "waiting"
+            : "failed";
 
       const finalTask: Task = {
         ...runningTask,
-
-        status:
-          result.status === "completed"
-            ? "completed"
-            : result.status === "waiting"
-              ? "waiting"
-              : "failed",
-
+        status,
         completedAt:
-          result.status === "completed" ||
-          result.status === "failed"
+          status === "completed" ||
+          status === "failed"
             ? completedAt
             : undefined,
-
-        updatedAt:
-          completedAt,
-
-        result:
-          result.output,
-
+        updatedAt: completedAt,
+        result: result.output,
         metadata: {
           ...runningTask.metadata,
-
           execution: {
-            status:
-              result.status,
-
-            error:
-              result.error,
-
-            toolCalls:
-              result.toolCalls,
+            status: result.status,
+            error: result.error,
+            metadata: result.metadata,
           },
         },
       };
 
-      return await this.taskRepository.update(
-        finalTask,
-      );
-    } catch (error) {
-      const failedAt =
-        new Date();
+      const persistedTask =
+        await this.taskRepository.update(finalTask);
 
+      if (persistedTask.status === "completed") {
+        await this.eventRecorder.record({
+          organizationId: agent.organizationId,
+          workId: persistedTask.workId,
+          taskId: persistedTask.id,
+          agentId: agent.id,
+          type: "task.completed",
+          payload: {
+            title: persistedTask.title,
+          },
+        });
+      } else if (persistedTask.status === "failed") {
+        await this.eventRecorder.record({
+          organizationId: agent.organizationId,
+          workId: persistedTask.workId,
+          taskId: persistedTask.id,
+          agentId: agent.id,
+          type: "task.failed",
+          payload: {
+            title: persistedTask.title,
+            error: result.error,
+          },
+        });
+      }
+
+      return persistedTask;
+    } catch (error) {
+      const failedAt = new Date();
       const failedTask: Task = {
         ...runningTask,
-
         status: "failed",
-
-        completedAt:
-          failedAt,
-
-        updatedAt:
-          failedAt,
-
+        completedAt: failedAt,
+        updatedAt: failedAt,
         metadata: {
           ...runningTask.metadata,
-
           execution: {
             status: "failed",
-
             error: {
-              code:
-                "TASK_EXECUTION_FAILED",
-
-              message:
-                error instanceof Error
-                  ? error.message
-                  : String(error),
+              code: "TASK_EXECUTION_FAILED",
+              message: errorMessage(error),
             },
           },
         },
       };
 
-      return await this.taskRepository.update(
-        failedTask,
-      );
+      const persistedTask =
+        await this.taskRepository.update(failedTask);
+
+      await this.eventRecorder.record({
+        organizationId: agent.organizationId,
+        workId: persistedTask.workId,
+        taskId: persistedTask.id,
+        agentId: agent.id,
+        type: "task.failed",
+        payload: {
+          title: persistedTask.title,
+          error: errorMessage(error),
+        },
+      });
+
+      return persistedTask;
     }
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : String(error);
 }
