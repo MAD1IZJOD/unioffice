@@ -17,6 +17,7 @@ export interface ApiConfig {
   supabaseServiceRoleKey: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
+  seedDevelopmentWorkforce: boolean;
 }
 
 export function loadApiConfig(
@@ -41,6 +42,8 @@ export function loadApiConfig(
       "OLLAMA_BASE_URL",
     ),
     ollamaModel: env.OLLAMA_MODEL ?? "qwen3:8b",
+    seedDevelopmentWorkforce:
+      env.SEED_DEVELOPMENT_WORKFORCE === "true",
   };
 }
 
