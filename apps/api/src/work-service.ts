@@ -16,6 +16,10 @@ import type {
   WorkPlan,
 } from "@unioffice/orchestrator";
 
+import type {
+  EventRecorder,
+} from "./event-recorder.js";
+
 export interface PlanWorkResult {
   work: Work;
 
@@ -35,6 +39,8 @@ export class WorkService {
     private readonly planner: Planner,
 
     private readonly delegator: Delegator,
+
+    private readonly eventRecorder: EventRecorder,
   ) {}
 
   async planWork(
@@ -71,117 +77,212 @@ export class WorkService {
         planningWork,
       );
 
-    const agents =
-      await this.agentRepository.findByOrganization(
-        updatedWork.organizationId,
-      );
+    await this.eventRecorder.record({
+      organizationId: updatedWork.organizationId,
+      workId: updatedWork.id,
+      type: "work.planning_started",
+      payload: {
+        objective: updatedWork.objective,
+      },
+    });
 
-    const availableAgents =
-      agents.filter(
-        (agent) =>
-          agent.status === "active" &&
-          (
-            !updatedWork.workspaceId ||
-            !agent.workspaceId ||
-            agent.workspaceId ===
-              updatedWork.workspaceId
-          ),
-      );
+    try {
+      const agents =
+        await this.agentRepository.findByOrganization(
+          updatedWork.organizationId,
+        );
 
-    const plan =
-      await this.planner.plan({
-        workId: updatedWork.id,
+      const availableAgents =
+        agents.filter(
+          (agent) =>
+            agent.status === "active" &&
+            (
+              !updatedWork.workspaceId ||
+              !agent.workspaceId ||
+              agent.workspaceId ===
+                updatedWork.workspaceId
+            ),
+        );
 
-        objective:
-          updatedWork.objective,
+      if (availableAgents.length === 0) {
+        throw new Error(
+          "Cannot plan work without active agents.",
+        );
+      }
 
-        availableAgentIds:
-          availableAgents.map(
-            (agent) => agent.id,
-          ),
-
-        context: {
-          organizationId:
-            updatedWork.organizationId,
-
-          workspaceId:
-            updatedWork.workspaceId,
-        },
-      });
-
-    const tasks: Task[] = [];
-
-    for (const plannedTask of plan.tasks) {
-      const delegation =
-        await this.delegator.delegate({
+      const plan =
+        await this.planner.plan({
           workId: updatedWork.id,
 
-          task: plannedTask,
+          objective:
+            updatedWork.objective,
 
           availableAgentIds:
             availableAgents.map(
               (agent) => agent.id,
             ),
 
-          organizationId:
-            updatedWork.organizationId,
-
-          workspaceId:
-            updatedWork.workspaceId,
-
           context: {
-            objective:
-              updatedWork.objective,
+            organizationId:
+              updatedWork.organizationId,
+
+            workspaceId:
+              updatedWork.workspaceId,
           },
         });
 
-      const now = new Date();
+      const tasks: Task[] = [];
 
-      const task: Task = {
-        id: plannedTask.id,
+      for (const plannedTask of plan.tasks) {
+        const delegation =
+          await this.delegator.delegate({
+            workId: updatedWork.id,
 
-        workId: updatedWork.id,
+            task: plannedTask,
 
-        title:
-          plannedTask.title,
+            availableAgentIds:
+              availableAgents.map(
+                (agent) => agent.id,
+              ),
 
-        description:
-          plannedTask.description,
+            organizationId:
+              updatedWork.organizationId,
 
-        status: "pending",
+            workspaceId:
+              updatedWork.workspaceId,
 
-        assignedAgentId:
-          delegation.agentId,
+            context: {
+              objective:
+                updatedWork.objective,
+            },
+          });
 
-        dependsOn:
-          plannedTask.dependsOn,
+        const now = new Date();
 
-        createdAt: now,
+        const task: Task = {
+          id: plannedTask.id,
 
-        updatedAt: now,
+          workId: updatedWork.id,
 
-        metadata: {
-          ...plannedTask.metadata,
+          title:
+            plannedTask.title,
 
-          delegation:
-            delegation.metadata,
+          description:
+            plannedTask.description,
+
+          status: "pending",
+
+          assignedAgentId:
+            delegation.agentId,
+
+          dependsOn:
+            plannedTask.dependsOn,
+
+          createdAt: now,
+
+          updatedAt: now,
+
+          metadata: {
+            ...plannedTask.metadata,
+
+            delegation:
+              delegation.metadata,
+          },
+        };
+
+        const createdTask =
+          await this.taskRepository.create(
+            task,
+          );
+
+        tasks.push(createdTask);
+
+        await this.eventRecorder.record({
+          organizationId: updatedWork.organizationId,
+          workId: updatedWork.id,
+          taskId: createdTask.id,
+          agentId: createdTask.assignedAgentId,
+          type: "task.created",
+          payload: {
+            title: createdTask.title,
+            plannerRef: plannedTask.ref,
+            dependsOn: createdTask.dependsOn,
+          },
+        });
+
+        await this.eventRecorder.record({
+          organizationId: updatedWork.organizationId,
+          workId: updatedWork.id,
+          taskId: createdTask.id,
+          agentId: createdTask.assignedAgentId,
+          type: "agent.assigned",
+          payload: {
+            agentId: createdTask.assignedAgentId,
+            delegation: delegation.metadata,
+          },
+        });
+      }
+
+      const plannedWork =
+        await this.workRepository.update({
+          ...updatedWork,
+          status: "queued",
+          updatedAt: new Date(),
+          metadata: {
+            ...updatedWork.metadata,
+            plan: {
+              taskCount: tasks.length,
+              createdAt: new Date().toISOString(),
+            },
+          },
+        });
+
+      await this.eventRecorder.record({
+        organizationId: plannedWork.organizationId,
+        workId: plannedWork.id,
+        type: "work.planning_completed",
+        payload: {
+          taskCount: tasks.length,
         },
+      });
+
+      return {
+        work: plannedWork,
+
+        plan,
+
+        tasks,
       };
+    } catch (error) {
+      const failedWork =
+        await this.workRepository.update({
+          ...updatedWork,
+          status: "failed",
+          updatedAt: new Date(),
+          completedAt: new Date(),
+          metadata: {
+            ...updatedWork.metadata,
+            planningError: errorMessage(error),
+          },
+        });
 
-      const createdTask =
-        await this.taskRepository.create(
-          task,
-        );
+      await this.eventRecorder.record({
+        organizationId: failedWork.organizationId,
+        workId: failedWork.id,
+        type: "work.failed",
+        payload: {
+          stage: "planning",
+          error: errorMessage(error),
+        },
+      });
 
-      tasks.push(createdTask);
+      throw error;
     }
-
-    return {
-      work: updatedWork,
-
-      plan,
-
-      tasks,
-    };
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : String(error);
 }
