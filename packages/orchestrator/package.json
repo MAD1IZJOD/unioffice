@@ -7,7 +7,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/planner/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@unioffice/agents": "workspace:*",
