@@ -8,6 +8,8 @@ import type {
 
 export type EventType =
   | "work.created"
+  | "work.planning_started"
+  | "work.planning_completed"
   | "work.started"
   | "work.completed"
   | "work.failed"

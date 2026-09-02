@@ -4,9 +4,13 @@ import type {
   WorkId,
 } from "@unioffice/core";
 
-import {
-  createSupabaseAdminClient,
-} from "../supabase-client.js";
+import type {
+  SupabaseClient,
+} from "@supabase/supabase-js";
+
+import type {
+  WorkRepository,
+} from "./work-repository.js";
 
 type WorkRow = {
   id: string;
@@ -49,9 +53,12 @@ function toWork(row: WorkRow): Work {
   };
 }
 
-export class SupabaseWorkRepository {
-  private readonly supabase =
-    createSupabaseAdminClient();
+export class SupabaseWorkRepository
+  implements WorkRepository
+{
+  constructor(
+    private readonly supabase: SupabaseClient,
+  ) {}
 
   async create(work: Work): Promise<Work> {
     const { data, error } =
