@@ -1,14 +1,19 @@
 import {
   ArrowUpRight,
   Bot,
+  Brain,
   Boxes,
   CheckCircle2,
   CircleDashed,
   Clock3,
   LoaderCircle,
   Plus,
+  ShieldCheck,
   Sparkles,
+  UsersRound,
 } from "lucide-react";
+
+import type { LucideIcon } from "lucide-react";
 
 import { useState } from "react";
 
@@ -42,6 +47,32 @@ const stages = [
   },
 ] as const;
 
+const workforce: {
+  name: string;
+  description: string;
+  icon: LucideIcon;
+  tone: "cyan" | "violet" | "emerald";
+}[] = [
+  {
+    name: "Atlas",
+    description: "Orchestrates work",
+    icon: Brain,
+    tone: "cyan",
+  },
+  {
+    name: "Forge",
+    description: "Builds and ships",
+    icon: Bot,
+    tone: "violet",
+  },
+  {
+    name: "Ledger",
+    description: "Safeguards decisions",
+    icon: ShieldCheck,
+    tone: "emerald",
+  },
+];
+
 function getStageIndex(
   state: ExecutionState,
 ) {
@@ -52,6 +83,12 @@ function getStageIndex(
 
 export default function Command() {
   const [input, setInput] = useState("");
+
+  const [priority, setPriority] =
+    useState("Standard");
+
+  const [approvalMode, setApprovalMode] =
+    useState("Recommended");
 
   const [state, setState] =
     useState<ExecutionState>("idle");
@@ -100,6 +137,13 @@ export default function Command() {
   const currentStage =
     getStageIndex(state);
 
+  const statusCopy =
+    state === "idle"
+      ? "Ready to coordinate your next objective"
+      : state === "completed"
+        ? "Outcome recorded in Company Brain"
+        : "Company Brain is coordinating the work";
+
   return (
     <div className="mx-auto max-w-[1380px] fade-up">
       {/* Hero */}
@@ -112,14 +156,14 @@ export default function Command() {
           </span>
         </div>
 
-        <h2 className="mt-5 text-[34px] font-semibold tracking-[-0.04em] text-slate-100 max-sm:text-[28px]">
-          Command Center
+        <h2 className="mt-5 max-w-[800px] text-[34px] font-semibold tracking-[-0.04em] text-slate-100 max-sm:text-[28px]">
+          Direct the company, not another chatbot.
         </h2>
 
         <p className="mt-2 max-w-[700px] text-[13px] leading-6 text-slate-400">
-          Give UNI-OFFICE an objective. The system can
-          turn that objective into work, assign agents,
-          execute tools and return the result.
+          Start with an objective. UNI-OFFICE builds the
+          work plan, brings in the right specialists and
+          keeps consequential actions under your control.
         </p>
       </div>
 
@@ -137,8 +181,8 @@ export default function Command() {
                 </div>
 
                 <div>
-                  <div className="text-[11px] font-semibold text-slate-200">
-                    New Work
+                <div className="text-[11px] font-semibold text-slate-200">
+                    New company objective
                   </div>
 
                   <div className="mt-0.5 font-mono-ui text-[8px] uppercase tracking-[0.14em] text-slate-500">
@@ -167,9 +211,69 @@ export default function Command() {
                   setInput(event.target.value)
                 }
                 disabled={state !== "idle"}
-                className="command-textarea mt-4 min-h-[210px] w-full bg-transparent text-[17px] leading-8 text-slate-100 placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Describe what you want UNI-OFFICE to accomplish..."
+                className="command-textarea mt-4 min-h-[172px] w-full bg-transparent text-[17px] leading-8 text-slate-100 placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="What should your company accomplish?"
               />
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {[
+                  "Plan a product launch",
+                  "Prepare a competitor brief",
+                  "Improve customer onboarding",
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    disabled={state !== "idle"}
+                    onClick={() => setInput(suggestion)}
+                    className="rounded-full border border-[#263440] bg-[#10171e] px-3 py-1.5 text-[9px] font-medium text-slate-400 transition hover:border-cyan-300/25 hover:bg-cyan-300/[0.06] hover:text-cyan-100 disabled:opacity-40"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                <label className="rounded-xl border border-[#23313c] bg-[#0b1117] p-3.5">
+                  <span className="flex items-center gap-2 font-mono-ui text-[8px] font-semibold uppercase tracking-[0.13em] text-slate-500">
+                    <Sparkles size={12} className="text-cyan-300" />
+                    Delivery tempo
+                  </span>
+
+                  <select
+                    value={priority}
+                    disabled={state !== "idle"}
+                    onChange={(event) =>
+                      setPriority(event.target.value)
+                    }
+                    className="mt-2 w-full appearance-none bg-transparent text-[11px] font-semibold text-slate-200 outline-none disabled:opacity-50"
+                  >
+                    <option>Standard</option>
+                    <option>Priority</option>
+                    <option>Deep work</option>
+                  </select>
+                </label>
+
+                <label className="rounded-xl border border-[#23313c] bg-[#0b1117] p-3.5">
+                  <span className="flex items-center gap-2 font-mono-ui text-[8px] font-semibold uppercase tracking-[0.13em] text-slate-500">
+                    <ShieldCheck size={12} className="text-emerald-300" />
+                    Approval gate
+                  </span>
+
+                  <select
+                    value={approvalMode}
+                    disabled={state !== "idle"}
+                    onChange={(event) =>
+                      setApprovalMode(event.target.value)
+                    }
+                    className="mt-2 w-full appearance-none bg-transparent text-[11px] font-semibold text-slate-200 outline-none disabled:opacity-50"
+                  >
+                    <option>Recommended</option>
+                    <option>Always ask</option>
+                    <option>Observe only</option>
+                  </select>
+                </label>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#202b35] bg-[#0c1218] px-5 py-4">
@@ -180,7 +284,7 @@ export default function Command() {
                 />
 
                 <span className="font-mono-ui text-[9px] uppercase tracking-[0.12em] text-slate-500">
-                  Context ready
+                  Company Brain connected
                 </span>
 
                 <span className="h-1 w-1 rounded-full bg-emerald-400" />
@@ -199,7 +303,7 @@ export default function Command() {
                 }
                 className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.10] px-4 py-2.5 text-[11px] font-semibold text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/[0.16] disabled:cursor-not-allowed disabled:opacity-30"
               >
-                Create Work
+                Launch work
                 <ArrowUpRight size={14} />
               </button>
             </div>
@@ -215,7 +319,7 @@ export default function Command() {
                   </div>
 
                   <div className="mt-1.5 text-[14px] font-semibold text-slate-200">
-                    Work is being processed
+                    {statusCopy}
                   </div>
                 </div>
 
@@ -309,7 +413,7 @@ export default function Command() {
                     </div>
 
                     <div className="mt-1 font-mono-ui text-[9px] text-slate-500">
-                      Preparing agent execution
+                      Atlas is coordinating the assigned specialists
                     </div>
                   </div>
 
@@ -331,7 +435,7 @@ export default function Command() {
                   </div>
 
                   <p className="mt-3 text-[13px] leading-6 text-slate-300">
-                    {result}
+                    {result} Delivery tempo: {priority}. Approval mode: {approvalMode}.
                   </p>
                 </div>
               )}
@@ -354,7 +458,7 @@ export default function Command() {
         <aside className="space-y-4">
           <div className="panel-muted rounded-2xl p-5">
             <div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-              System state
+              Coordination state
             </div>
 
             <div className="mt-5 flex items-center gap-3">
@@ -362,11 +466,11 @@ export default function Command() {
 
               <div>
                 <div className="text-[13px] font-semibold text-slate-200">
-                  Operational
+                  Company Brain online
                 </div>
 
                 <div className="mt-1 text-[10px] text-slate-500">
-                  All core services available
+                  Shared context is ready for delegation
                 </div>
               </div>
             </div>
@@ -374,21 +478,21 @@ export default function Command() {
             <div className="mt-5 border-t border-[#202b35] pt-4">
               <div className="flex justify-between text-[10px]">
                 <span className="text-slate-500">
-                  Model
+                  Orchestrator
                 </span>
 
                 <span className="font-mono-ui text-slate-300">
-                  QWEN3:8B
+                  ATLAS / READY
                 </span>
               </div>
 
               <div className="mt-3 flex justify-between text-[10px]">
                 <span className="text-slate-500">
-                  Runtime
+                  Governance
                 </span>
 
                 <span className="font-mono-ui text-emerald-400">
-                  READY
+                  ACTIVE
                 </span>
               </div>
             </div>
@@ -396,27 +500,47 @@ export default function Command() {
 
           <div className="panel-muted rounded-2xl p-5">
             <div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-              Quick examples
+              Your AI workforce
             </div>
 
-            <div className="mt-4 space-y-2">
-              {[
-                "Build a calculator app",
-                "Analyze this dataset",
-                "Research a competitor",
-              ].map((example) => (
-                <button
-                  key={example}
-                  type="button"
-                  onClick={() =>
-                    setInput(example)
-                  }
-                  disabled={state !== "idle"}
-                  className="w-full rounded-lg border border-[#202b35] bg-[#10161d] px-3 py-2.5 text-left text-[10px] text-slate-400 transition hover:border-[#34424f] hover:bg-[#141b23] hover:text-slate-200 disabled:opacity-40"
-                >
-                  {example}
-                </button>
-              ))}
+            <div className="mt-4 space-y-3">
+              {workforce.map(
+                ({ name, description, icon: Icon, tone }) => (
+                  <div
+                    key={name}
+                    className="flex items-center gap-3 rounded-xl border border-[#202b35] bg-[#10161d] px-3 py-3"
+                  >
+                    <span
+                      className={[
+                        "flex h-8 w-8 items-center justify-center rounded-lg border",
+                        tone === "cyan"
+                          ? "border-cyan-400/20 bg-cyan-400/[0.06] text-cyan-300"
+                          : tone === "violet"
+                            ? "border-violet-400/20 bg-violet-400/[0.06] text-violet-300"
+                            : "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-300",
+                      ].join(" ")}
+                    >
+                      <Icon size={14} />
+                    </span>
+
+                    <div>
+                      <div className="text-[10px] font-semibold text-slate-200">
+                        {name}
+                      </div>
+                      <div className="mt-0.5 text-[9px] text-slate-500">
+                        {description}
+                      </div>
+                    </div>
+
+                    <span className="ml-auto status-dot status-dot-live" />
+                  </div>
+                ),
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#202b35] bg-[#0b1117] px-3 py-2.5 text-[9px] text-slate-500">
+              <UsersRound size={13} className="text-slate-400" />
+              137 agents can be organized by department
             </div>
           </div>
         </aside>
