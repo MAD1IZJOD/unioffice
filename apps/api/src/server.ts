@@ -40,6 +40,7 @@ export interface ApiServices {
   workQueryService: WorkQueryService;
   healthCheck: () => Promise<Record<string, unknown>>;
   developmentOrganizationId?: OrganizationId;
+  corsOrigins: string[];
 }
 
 export function buildApiServer(
@@ -47,19 +48,19 @@ export function buildApiServer(
 ) {
   const app = Fastify({ logger: true });
 
-  app.addHook("onRequest", async (_request, reply) => {
-    reply.header(
-      "access-control-allow-origin",
-      "http://localhost:5173",
-    );
+  app.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+
+    if (origin && services.corsOrigins.includes(origin)) {
+      reply.header("access-control-allow-origin", origin);
+      reply.header("vary", "Origin");
+    }
+
     reply.header(
       "access-control-allow-methods",
       "GET,POST,OPTIONS",
     );
-    reply.header(
-      "access-control-allow-headers",
-      "content-type",
-    );
+    reply.header("access-control-allow-headers", "content-type");
   });
 
   app.options("/*", async (_request, reply) => {
