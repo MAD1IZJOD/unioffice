@@ -1,4 +1,5 @@
 import type {
+  AgentType,
   AgentId,
   TaskId,
   WorkId,
@@ -24,6 +25,12 @@ export interface PlannedTask {
   description: string;
 
   assignedAgentId?: AgentId;
+
+  requiredCapabilities?: string[];
+
+  suggestedAgentType?: AgentType;
+
+  requiresApproval?: boolean;
 
   dependsOn: TaskId[];
 

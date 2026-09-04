@@ -13,9 +13,7 @@ import type {
   AgentRepository,
 } from "@unioffice/database";
 
-import {
-  DefaultDelegator,
-} from "./default-delegator.js";
+import { DefaultDelegator } from "./default-delegator.js";
 
 const organizationId = "org-1" as OrganizationId;
 const atlasId = "agent-atlas" as AgentId;
@@ -24,9 +22,9 @@ const forgeId = "agent-forge" as AgentId;
 function agent(
   id: AgentId,
   status: Agent["status"] = "active",
+  overrides: Partial<Agent> = {},
 ): Agent {
   const now = new Date();
-
   return {
     id,
     organizationId,
@@ -39,28 +37,27 @@ function agent(
     createdAt: now,
     updatedAt: now,
     metadata: {},
+    ...overrides,
   };
 }
 
 function repository(agents: Agent[]): AgentRepository {
   return {
-    async create(value) {
-      return value;
-    },
-    async findById(id) {
-      return agents.find((value) => value.id === id) ?? null;
-    },
-    async findByOrganization() {
-      return agents;
-    },
-    async update(value) {
-      return value;
-    },
+    async create(value) { return value; },
+    async findById(id) { return agents.find((value) => value.id === id) ?? null; },
+    async findByOrganization() { return agents; },
+    async update(value) { return value; },
     async delete() {},
   };
 }
 
-function context(assignedAgentId?: AgentId) {
+function context(overrides: Partial<{
+  assignedAgentId: AgentId;
+  requiredCapabilities: string[];
+  suggestedAgentType: Agent["type"];
+  workspaceId: string;
+  availableAgentIds: AgentId[];
+}> = {}) {
   return {
     workId: "work-1" as WorkId,
     task: {
@@ -68,45 +65,78 @@ function context(assignedAgentId?: AgentId) {
       ref: "task",
       title: "Test task",
       description: "Test task description.",
-      assignedAgentId,
+      assignedAgentId: overrides.assignedAgentId,
+      requiredCapabilities: overrides.requiredCapabilities,
+      suggestedAgentType: overrides.suggestedAgentType,
       dependsOn: [],
       metadata: {},
     },
-    availableAgentIds: [atlasId, forgeId],
+    availableAgentIds: overrides.availableAgentIds ?? [atlasId, forgeId],
     organizationId,
+    workspaceId: overrides.workspaceId as never,
     context: {},
   };
 }
 
 test("uses a valid explicit assignment", async () => {
-  const delegator = new DefaultDelegator(
-    repository([agent(atlasId), agent(forgeId)]),
-  );
-
-  const result = await delegator.delegate(context(forgeId));
-
+  const delegator = new DefaultDelegator(repository([agent(atlasId), agent(forgeId)]));
+  const result = await delegator.delegate(context({ assignedAgentId: forgeId }));
   assert.equal(result.agentId, forgeId);
   assert.equal(result.metadata.delegation, "explicit");
 });
 
-test("selects an active agent when no assignment is supplied", async () => {
-  const delegator = new DefaultDelegator(
-    repository([agent(atlasId), agent(forgeId)]),
-  );
-
-  const result = await delegator.delegate(context());
-
-  assert.equal(result.agentId, atlasId);
-  assert.equal(result.metadata.delegation, "default");
+test("ranks agents by required capability", async () => {
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { capabilities: ["planning"] }),
+    agent(forgeId, "active", { capabilities: ["coding"] }),
+  ]));
+  const result = await delegator.delegate(context({ requiredCapabilities: ["coding"] }));
+  assert.equal(result.agentId, forgeId);
+  assert.equal(result.metadata.delegation, "capability_ranked");
 });
 
 test("rejects an unavailable explicit assignment", async () => {
-  const delegator = new DefaultDelegator(
-    repository([agent(atlasId), agent(forgeId, "disabled")]),
-  );
-
+  const delegator = new DefaultDelegator(repository([agent(atlasId), agent(forgeId, "disabled")]));
   await assert.rejects(
-    () => delegator.delegate(context(forgeId)),
+    () => delegator.delegate(context({ assignedAgentId: forgeId })),
     /Assigned agent is unavailable/,
   );
+});
+
+test("prefers an exact workspace agent over an organization-wide agent", async () => {
+  const workspaceId = "workspace-1";
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId),
+    agent(forgeId, "active", { workspaceId: workspaceId as never }),
+  ]));
+  const result = await delegator.delegate(context({ workspaceId }));
+  assert.equal(result.agentId, forgeId);
+});
+
+test("excludes workspace-incompatible agents", async () => {
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { workspaceId: "other" as never }),
+    agent(forgeId, "active", { capabilities: ["coding"] }),
+  ]));
+  const result = await delegator.delegate(context({
+    workspaceId: "workspace-1",
+    requiredCapabilities: ["coding"],
+  }));
+  assert.equal(result.agentId, forgeId);
+});
+
+test("fails when no eligible agent has all required capabilities", async () => {
+  const delegator = new DefaultDelegator(repository([agent(atlasId), agent(forgeId)]));
+  await assert.rejects(
+    () => delegator.delegate(context({ requiredCapabilities: ["coding"] })),
+    /No eligible agents available/,
+  );
+});
+
+test("breaks an otherwise equal ranking by agent id", async () => {
+  const laterId = "agent-z" as AgentId;
+  const earlierId = "agent-a" as AgentId;
+  const delegator = new DefaultDelegator(repository([agent(laterId), agent(earlierId)]));
+  const result = await delegator.delegate(context({ availableAgentIds: [laterId, earlierId] }));
+  assert.equal(result.agentId, earlierId);
 });
