@@ -185,6 +185,21 @@ export class WorkService {
           metadata: {
             ...plannedTask.metadata,
 
+            approval: plannedTask.requiresApproval
+              ? {
+                  required: true,
+                  reason: plannedTask.approvalReason,
+                  status: "not_requested",
+                }
+              : undefined,
+
+            routing: {
+              requiredCapabilities:
+                plannedTask.requiredCapabilities ?? [],
+              suggestedAgentType:
+                plannedTask.suggestedAgentType,
+            },
+
             delegation:
               delegation.metadata,
           },
@@ -207,6 +222,10 @@ export class WorkService {
             title: createdTask.title,
             plannerRef: plannedTask.ref,
             dependsOn: createdTask.dependsOn,
+            requiredCapabilities:
+              plannedTask.requiredCapabilities ?? [],
+            requiresApproval:
+              plannedTask.requiresApproval ?? false,
           },
         });
 

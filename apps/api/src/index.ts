@@ -6,6 +6,7 @@ import {
 import {
   createSupabaseAdminClient,
   SupabaseAgentRepository,
+  SupabaseApprovalRepository,
   SupabaseEventRepository,
   SupabaseOrganizationRepository,
   SupabaseTaskRepository,
@@ -51,6 +52,10 @@ import {
 } from "./work-execution-service.js";
 
 import {
+  WorkApprovalService,
+} from "./work-approval-service.js";
+
+import {
   WorkQueryService,
 } from "./work-query-service.js";
 
@@ -69,6 +74,8 @@ export async function createApiServer() {
     new SupabaseWorkRepository(supabase);
   const taskRepository =
     new SupabaseTaskRepository(supabase);
+  const approvalRepository =
+    new SupabaseApprovalRepository(supabase);
   const eventRepository =
     new SupabaseEventRepository(supabase);
   const eventRecorder = new EventRecorder(eventRepository);
@@ -109,11 +116,18 @@ export async function createApiServer() {
     executionEngine,
     eventRecorder,
   );
+  const workApprovalService = new WorkApprovalService(
+    approvalRepository,
+    taskRepository,
+    workRepository,
+    eventRecorder,
+  );
   const workExecutionService = new WorkExecutionService(
     workRepository,
     taskRepository,
     taskExecutionService,
     eventRecorder,
+    workApprovalService,
   );
   const workQueryService = new WorkQueryService(
     workRepository,
@@ -133,6 +147,7 @@ export async function createApiServer() {
     applicationService,
     workService,
     workExecutionService,
+    workApprovalService,
     workQueryService,
     developmentOrganizationId:
       developmentOrganization?.organization.id,

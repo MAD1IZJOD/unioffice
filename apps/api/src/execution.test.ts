@@ -4,6 +4,8 @@ import test from "node:test";
 import type {
   Agent,
   AgentId,
+  ApprovalId,
+  ApprovalRequest,
   Event,
   OrganizationId,
   Task,
@@ -14,6 +16,7 @@ import type {
 
 import type {
   AgentRepository,
+  ApprovalRepository,
   EventRepository,
   TaskRepository,
   WorkRepository,
@@ -34,6 +37,10 @@ import {
 import {
   WorkExecutionService,
 } from "./work-execution-service.js";
+
+import {
+  WorkApprovalService,
+} from "./work-approval-service.js";
 
 const organizationId = "organization-1" as OrganizationId;
 const workId = "work-1" as WorkId;
@@ -139,6 +146,36 @@ class MemoryEventRepository implements EventRepository {
 
   async findByWork(id: WorkId): Promise<Event[]> {
     return this.events.filter((event) => event.workId === id);
+  }
+}
+
+class MemoryApprovalRepository implements ApprovalRepository {
+  readonly approvals = new Map<ApprovalId, ApprovalRequest>();
+
+  async create(approval: ApprovalRequest): Promise<ApprovalRequest> {
+    this.approvals.set(approval.id, approval);
+    return approval;
+  }
+
+  async findById(id: ApprovalId): Promise<ApprovalRequest | null> {
+    return this.approvals.get(id) ?? null;
+  }
+
+  async findByWork(id: WorkId): Promise<ApprovalRequest[]> {
+    return [...this.approvals.values()].filter(
+      (approval) => approval.workId === id,
+    );
+  }
+
+  async findPendingByOrganization(id: OrganizationId): Promise<ApprovalRequest[]> {
+    return [...this.approvals.values()].filter(
+      (approval) => approval.organizationId === id && approval.status === "pending",
+    );
+  }
+
+  async update(approval: ApprovalRequest): Promise<ApprovalRequest> {
+    this.approvals.set(approval.id, approval);
+    return approval;
   }
 }
 
@@ -344,9 +381,108 @@ test("executes dependencies in order and completes work", async () => {
     ["completed", "completed"],
   );
   assert.deepEqual(
-    eventRepository.events.map((event) => event.type),
+    eventRepository.events
+      .filter((event) => event.type.startsWith("work."))
+      .map((event) => event.type),
     ["work.started", "work.completed"],
   );
+  assert.equal(
+    eventRepository.events.filter((event) => event.type === "task.ready").length,
+    2,
+  );
+});
+
+test("pauses an approval-gated task and resumes it after approval", async () => {
+  const workRepository = new MemoryWorkRepository();
+  const taskRepository = new MemoryTaskRepository();
+  const approvalRepository = new MemoryApprovalRepository();
+  const { recorder, repository: eventRepository } = createRecorder();
+  const task = makeTask("task-approval" as TaskId, {
+    metadata: {
+      approval: {
+        required: true,
+        reason: "A human must approve the proposed release.",
+        status: "not_requested",
+      },
+    },
+  });
+  await workRepository.create(makeWork());
+  await taskRepository.create(task);
+
+  const taskExecutionService = {
+    async executeTask(id: TaskId): Promise<Task> {
+      const current = await taskRepository.findById(id);
+      assert.ok(current);
+      return taskRepository.update({
+        ...current,
+        status: "completed",
+        startedAt: new Date(),
+        completedAt: new Date(),
+        updatedAt: new Date(),
+        result: "Released after approval.",
+      });
+    },
+  } as TaskExecutionService;
+  const approvalService = new WorkApprovalService(
+    approvalRepository,
+    taskRepository,
+    workRepository,
+    recorder,
+  );
+  const executionService = new WorkExecutionService(
+    workRepository,
+    taskRepository,
+    taskExecutionService,
+    recorder,
+    approvalService,
+  );
+
+  const paused = await executionService.executeWork(workId);
+  const pending = [...approvalRepository.approvals.values()][0];
+
+  assert.equal(paused.work.status, "waiting_approval");
+  assert.equal(paused.tasks[0]?.status, "waiting");
+  assert.equal(pending?.status, "pending");
+
+  await approvalService.approve(pending!.id, "user-1");
+  const resumed = await executionService.executeWork(workId);
+
+  assert.equal(resumed.work.status, "completed");
+  assert.equal(resumed.tasks[0]?.status, "completed");
+  assert.deepEqual(
+    eventRepository.events
+      .filter((event) => event.type.startsWith("approval."))
+      .map((event) => event.type),
+    ["approval.requested", "approval.approved"],
+  );
+});
+
+test("fails work when an approval is rejected", async () => {
+  const workRepository = new MemoryWorkRepository();
+  const taskRepository = new MemoryTaskRepository();
+  const approvalRepository = new MemoryApprovalRepository();
+  const { recorder } = createRecorder();
+  const work = makeWork();
+  const task = makeTask("task-reject" as TaskId, {
+    status: "waiting",
+    metadata: { approval: { required: true, reason: "Review", status: "pending" } },
+  });
+  await workRepository.create({ ...work, status: "waiting_approval" });
+  await taskRepository.create(task);
+  const approvalService = new WorkApprovalService(
+    approvalRepository,
+    taskRepository,
+    workRepository,
+    recorder,
+  );
+  const pending = await approvalService.requestApproval(work, task);
+  const approvalId = (pending.metadata.approval as { requestId: ApprovalId }).requestId;
+
+  const rejected = await approvalService.reject(approvalId, "user-1");
+
+  assert.equal(rejected.status, "rejected");
+  assert.equal((await taskRepository.findById(task.id))?.status, "failed");
+  assert.equal((await workRepository.findById(work.id))?.status, "failed");
 });
 
 test("marks work as failed when a task fails", async () => {

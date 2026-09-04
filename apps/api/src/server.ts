@@ -2,6 +2,7 @@ import Fastify from "fastify";
 
 import type {
   OrganizationId,
+  ApprovalId,
   UserId,
   WorkId,
   WorkPriority,
@@ -24,6 +25,10 @@ import type {
   WorkService,
 } from "./work-service.js";
 
+import type {
+  WorkApprovalService,
+} from "./work-approval-service.js";
+
 const developmentRequesterId =
   "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09" as UserId;
 
@@ -31,6 +36,7 @@ export interface ApiServices {
   applicationService: WorkApplicationService;
   workService: WorkService;
   workExecutionService: WorkExecutionService;
+  workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
   healthCheck: () => Promise<Record<string, unknown>>;
   developmentOrganizationId?: OrganizationId;
@@ -143,6 +149,45 @@ export function buildApiServer(
     return { events };
   });
 
+  app.get("/work/:id/approvals", async (request) => {
+    const approvals = await services.workApprovalService.getWorkApprovals(
+      parameterId(request.params),
+    );
+    return { approvals };
+  });
+
+  app.get("/approvals", async (request) => {
+    const query = objectBody(request.query);
+    const organizationId = optionalText(query.organizationId) ??
+      services.developmentOrganizationId;
+    if (!organizationId) {
+      throw new ApiError(400, "organizationId is required when no development workforce is seeded.");
+    }
+    const approvals = await services.workApprovalService.getPendingApprovals(
+      organizationId as OrganizationId,
+    );
+    return { approvals };
+  });
+
+  app.post("/approvals/:id/approve", async (request) => {
+    const approval = await services.workApprovalService.approve(
+      parameterApprovalId(request.params),
+      resolverId(request.body),
+    );
+    const execution = await services.workExecutionService.executeWork(
+      approval.workId,
+    );
+    return { approval, ...execution };
+  });
+
+  app.post("/approvals/:id/reject", async (request) => {
+    const approval = await services.workApprovalService.reject(
+      parameterApprovalId(request.params),
+      resolverId(request.body),
+    );
+    return { approval };
+  });
+
   return app;
 }
 
@@ -170,6 +215,20 @@ function parameterId(params: unknown): WorkId {
     (params as Record<string, unknown>).id,
     "id",
   ) as WorkId;
+}
+
+function parameterApprovalId(params: unknown): ApprovalId {
+  if (typeof params !== "object" || params === null) {
+    throw new ApiError(400, "Route id is required.");
+  }
+  return requiredText(
+    (params as Record<string, unknown>).id,
+    "id",
+  ) as ApprovalId;
+}
+
+function resolverId(body: unknown): string {
+  return requiredText(objectBody(body).resolvedBy, "resolvedBy");
 }
 
 function requiredText(value: unknown, field: string): string {

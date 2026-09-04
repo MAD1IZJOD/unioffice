@@ -14,6 +14,10 @@ import type {
 } from "./event-recorder.js";
 
 import type {
+  ApprovalCoordinator,
+} from "./work-approval-service.js";
+
+import type {
   TaskExecutionService,
 } from "./task-execution-service.js";
 
@@ -28,6 +32,7 @@ export class WorkExecutionService {
     private readonly taskRepository: TaskRepository,
     private readonly taskExecutionService: TaskExecutionService,
     private readonly eventRecorder: EventRecorder,
+    private readonly approvalCoordinator?: ApprovalCoordinator,
   ) {}
 
   async executeWork(
@@ -104,16 +109,6 @@ export class WorkExecutionService {
             },
           });
 
-        await this.eventRecorder.record({
-          organizationId: waitingWork.organizationId,
-          workId: waitingWork.id,
-          taskId: waitingTask.id,
-          type: "approval.requested",
-          payload: {
-            title: waitingTask.title,
-          },
-        });
-
         return {
           work: waitingWork,
           tasks,
@@ -149,7 +144,14 @@ export class WorkExecutionService {
         };
       }
 
-      tasks = await this.markReadyTasks(tasks);
+      tasks = await this.markReadyTasks(
+        executingWork,
+        tasks,
+      );
+
+      if (tasks.some((task) => task.status === "waiting")) {
+        continue;
+      }
 
       const nextTask = tasks.find(
         (task) => task.status === "ready",
@@ -202,6 +204,7 @@ export class WorkExecutionService {
   }
 
   private async markReadyTasks(
+    work: Work,
     tasks: Task[],
   ): Promise<Task[]> {
     const tasksById = new Map(
@@ -222,10 +225,35 @@ export class WorkExecutionService {
         continue;
       }
 
-      await this.taskRepository.update({
+      if (requiresApproval(task)) {
+        if (!this.approvalCoordinator) {
+          throw new Error(
+            "Task requires approval but no approval coordinator is configured.",
+          );
+        }
+
+        await this.approvalCoordinator.requestApproval(
+          work,
+          task,
+        );
+        continue;
+      }
+
+      const readyTask = await this.taskRepository.update({
         ...task,
         status: "ready",
         updatedAt: new Date(),
+      });
+
+      await this.eventRecorder.record({
+        organizationId: work.organizationId,
+        workId: work.id,
+        taskId: readyTask.id,
+        agentId: readyTask.assignedAgentId,
+        type: "task.ready",
+        payload: {
+          title: readyTask.title,
+        },
       });
     }
 
@@ -280,6 +308,15 @@ export class WorkExecutionService {
 
     return work;
   }
+}
+
+function requiresApproval(task: Task): boolean {
+  const approval = task.metadata.approval;
+
+  return typeof approval === "object" &&
+    approval !== null &&
+    (approval as Record<string, unknown>).required === true &&
+    (approval as Record<string, unknown>).status !== "approved";
 }
 
 function errorMessage(error: unknown): string {
