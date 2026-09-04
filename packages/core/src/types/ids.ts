@@ -30,6 +30,10 @@ export type ArtifactId = string & {
   readonly __brand: "ArtifactId";
 };
 
+export type ApprovalId = string & {
+  readonly __brand: "ApprovalId";
+};
+
 export type EventId = string & {
   readonly __brand: "EventId";
 };
