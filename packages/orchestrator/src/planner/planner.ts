@@ -32,6 +32,8 @@ export interface PlannedTask {
 
   requiresApproval?: boolean;
 
+  approvalReason?: string;
+
   dependsOn: TaskId[];
 
   metadata: Record<string, unknown>;
@@ -39,6 +41,8 @@ export interface PlannedTask {
 
 export interface WorkPlan {
   workId: WorkId;
+
+  objective: string;
 
   tasks: PlannedTask[];
 

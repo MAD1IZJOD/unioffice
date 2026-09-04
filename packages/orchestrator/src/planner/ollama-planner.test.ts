@@ -17,6 +17,13 @@ import {
 
 const agentId = "agent-1" as AgentId;
 
+function taskFields() {
+  return {
+    requiredCapabilities: [],
+    requiresApproval: false,
+  };
+}
+
 test("parses stable refs and validates dependencies", () => {
   const plan = parseOllamaPlan(
     JSON.stringify({
@@ -25,6 +32,7 @@ test("parses stable refs and validates dependencies", () => {
           ref: "research",
           title: "Research",
           description: "Collect the facts.",
+          ...taskFields(),
           dependsOn: [],
         },
         {
@@ -32,6 +40,9 @@ test("parses stable refs and validates dependencies", () => {
           title: "Brief",
           description: "Summarize the facts.",
           assignedAgentId: agentId,
+          requiredCapabilities: ["writing"],
+          requiresApproval: true,
+          approvalReason: "A human must review this external brief.",
           dependsOn: ["research"],
         },
       ],
@@ -60,6 +71,7 @@ test("rejects dependency references that do not exist", () => {
               ref: "brief",
               title: "Brief",
               description: "Write a brief.",
+              ...taskFields(),
               dependsOn: ["missing"],
             },
           ],
@@ -80,12 +92,14 @@ test("rejects circular planner dependencies", () => {
               ref: "research",
               title: "Research",
               description: "Research first.",
+              ...taskFields(),
               dependsOn: ["brief"],
             },
             {
               ref: "brief",
               title: "Brief",
               description: "Write after research.",
+              ...taskFields(),
               dependsOn: ["research"],
             },
           ],
@@ -107,12 +121,14 @@ test("converts dependency refs to persistent task IDs", async () => {
               ref: "research",
               title: "Research",
               description: "Collect facts.",
+              ...taskFields(),
               dependsOn: [],
             },
             {
               ref: "brief",
               title: "Brief",
               description: "Summarize facts.",
+              ...taskFields(),
               dependsOn: ["research"],
             },
           ],
@@ -134,5 +150,36 @@ test("converts dependency refs to persistent task IDs", async () => {
   assert.deepEqual(
     plan.tasks[1]?.dependsOn,
     [plan.tasks[0]?.id],
+  );
+  assert.equal(plan.objective, "Create a brief.");
+});
+
+test("rejects malformed capability and approval fields", () => {
+  assert.throws(
+    () => parseOllamaPlan(JSON.stringify({
+      tasks: [{
+        ref: "review",
+        title: "Review",
+        description: "Review the proposal.",
+        requiredCapabilities: "analysis",
+        requiresApproval: true,
+        dependsOn: [],
+      }],
+    }), []),
+    /requiredCapabilities array/,
+  );
+
+  assert.throws(
+    () => parseOllamaPlan(JSON.stringify({
+      tasks: [{
+        ref: "review",
+        title: "Review",
+        description: "Review the proposal.",
+        requiredCapabilities: [],
+        requiresApproval: true,
+        dependsOn: [],
+      }],
+    }), []),
+    /approvalReason/,
   );
 });

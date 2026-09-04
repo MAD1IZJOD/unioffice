@@ -1,6 +1,7 @@
 import {
   createEntityId,
   type AgentId,
+  type AgentType,
   type TaskId,
 } from "@unioffice/core";
 
@@ -36,11 +37,14 @@ export class OllamaPlanner implements Planner {
               "Convert a user's objective into executable tasks.",
               "Return ONLY valid JSON.",
               "Do not use markdown.",
-              "Each task must contain:",
-              "ref, title, description, assignedAgentId, dependsOn.",
+              "Return an object with a tasks array.",
+              "Each task must contain ref, title, description, dependsOn, requiredCapabilities, suggestedAgentType, requiresApproval and approvalReason.",
               "ref must be a unique short identifier such as research or analysis.",
               "dependsOn must contain task refs, never UUIDs.",
               "assignedAgentId is optional and must be one of the available agent IDs when present.",
+              "requiredCapabilities must be an array of capabilities that the assignee must have; use an empty array when none are mandatory.",
+              "suggestedAgentType must be specialist, manager, or orchestrator when present.",
+              "requiresApproval must be true only when a human decision is required before executing the task. Include approvalReason when true.",
               "Use an empty dependsOn array when a task has no prerequisites.",
               "Keep the plan practical and minimal.",
             ].join("\n"),
@@ -91,6 +95,14 @@ export class OllamaPlanner implements Planner {
             ? (task.assignedAgentId as AgentId)
             : undefined,
 
+        requiredCapabilities: task.requiredCapabilities,
+
+        suggestedAgentType: task.suggestedAgentType,
+
+        requiresApproval: task.requiresApproval,
+
+        approvalReason: task.approvalReason,
+
         dependsOn: task.dependsOn.map(
           (ref) => this.taskIdForRef(idsByRef, ref),
         ),
@@ -104,6 +116,8 @@ export class OllamaPlanner implements Planner {
       workId: context.workId,
 
       tasks,
+
+      objective: context.objective,
 
       metadata: {
         planner: "ollama",
@@ -133,6 +147,10 @@ interface RawPlannedTask {
   title: string;
   description: string;
   assignedAgentId?: AgentId;
+  requiredCapabilities: string[];
+  suggestedAgentType?: AgentType;
+  requiresApproval: boolean;
+  approvalReason?: string;
   dependsOn: string[];
 }
 
@@ -146,11 +164,12 @@ export function parseOllamaPlan(
 ): ParsedOllamaPlan {
   const parsed = parseJsonPlan(content);
 
-  if (
-    !Array.isArray(parsed.tasks) ||
-    parsed.tasks.length === 0
-  ) {
+  if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
     throw new Error("Planner returned no tasks.");
+  }
+
+  if (parsed.tasks.length > 20) {
+    throw new Error("Planner returned too many tasks (maximum is 20).");
   }
 
   const availableAgents = new Set(
@@ -211,6 +230,20 @@ function parseTask(
     availableAgents,
   );
 
+  const requiredCapabilities = parseCapabilities(
+    task.requiredCapabilities,
+    index,
+  );
+  const suggestedAgentType = parseAgentType(
+    task.suggestedAgentType,
+    index,
+  );
+  const approval = parseApprovalRequirement(
+    task.requiresApproval,
+    task.approvalReason,
+    index,
+  );
+
   return {
     ref,
     title: requiredText(task.title, "title", index),
@@ -220,10 +253,100 @@ function parseTask(
       index,
     ),
     assignedAgentId,
+    requiredCapabilities,
+    suggestedAgentType,
+    requiresApproval: approval.requiresApproval,
+    approvalReason: approval.approvalReason,
     dependsOn: parseDependencies(
       task.dependsOn,
       index,
     ),
+  };
+}
+
+function parseCapabilities(value: unknown, index: number): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `Planner task ${index + 1} must include a requiredCapabilities array.`,
+    );
+  }
+
+  if (value.length > 8) {
+    throw new Error(
+      `Planner task ${index + 1} has too many required capabilities.`,
+    );
+  }
+
+  const capabilities = value.map((capability) => {
+    if (typeof capability !== "string" || !capability.trim()) {
+      throw new Error(
+        `Planner task ${index + 1} has an invalid required capability.`,
+      );
+    }
+
+    return capability.trim().toLocaleLowerCase();
+  });
+
+  if (new Set(capabilities).size !== capabilities.length) {
+    throw new Error(
+      `Planner task ${index + 1} repeats a required capability.`,
+    );
+  }
+
+  return capabilities;
+}
+
+function parseAgentType(
+  value: unknown,
+  index: number,
+): AgentType | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (
+    value === "specialist" ||
+    value === "manager" ||
+    value === "orchestrator"
+  ) {
+    return value;
+  }
+
+  throw new Error(
+    `Planner task ${index + 1} has an invalid suggestedAgentType.`,
+  );
+}
+
+function parseApprovalRequirement(
+  value: unknown,
+  reason: unknown,
+  index: number,
+): { requiresApproval: boolean; approvalReason?: string } {
+  if (typeof value !== "boolean") {
+    throw new Error(
+      `Planner task ${index + 1} must include requiresApproval as a boolean.`,
+    );
+  }
+
+  if (!value) {
+    if (reason !== undefined && reason !== null) {
+      throw new Error(
+        `Planner task ${index + 1} supplied approvalReason without requiring approval.`,
+      );
+    }
+
+    return { requiresApproval: false };
+  }
+
+  if (typeof reason !== "string" || !reason.trim()) {
+    throw new Error(
+      `Planner task ${index + 1} requires a non-empty approvalReason.`,
+    );
+  }
+
+  return {
+    requiresApproval: true,
+    approvalReason: reason.trim(),
   };
 }
 
