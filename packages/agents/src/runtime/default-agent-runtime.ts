@@ -22,6 +22,15 @@ export interface DefaultAgentRuntimeOptions {
   think?: boolean;
 }
 
+const MAX_OBJECTIVE_CHARS = 3_000;
+const MAX_TASK_CHARS = 4_000;
+const MAX_DEPENDENCY_CHARS = 6_000;
+const MAX_OPERATIONAL_CONTEXT_CHARS = 4_000;
+const MAX_VALUE_DEPTH = 5;
+const MAX_OBJECT_KEYS = 32;
+const MAX_ARRAY_ITEMS = 24;
+const MAX_STRING_CHARS = 1_200;
+
 export class DefaultAgentRuntime
   implements AgentRuntime
 {
@@ -160,18 +169,21 @@ export class DefaultAgentRuntime
 
       "Work objective:",
 
-      context.work.objective,
+      this.limitText(context.work.objective, MAX_OBJECTIVE_CHARS),
 
       "Task:",
 
       this.stringify({
         title: context.task.title,
         description: context.task.description,
-      }),
+      }, MAX_TASK_CHARS),
 
       "Completed dependency results:",
 
-      this.stringify(context.task.dependencies),
+      this.stringify(
+        context.task.dependencies,
+        MAX_DEPENDENCY_CHARS,
+      ),
 
       "Operational context:",
 
@@ -181,7 +193,7 @@ export class DefaultAgentRuntime
         priority: context.work.priority,
         workMetadata: context.work.metadata,
         taskMetadata: context.context,
-      }),
+      }, MAX_OPERATIONAL_CONTEXT_CHARS),
 
       "Return the concrete result for this task. Clearly distinguish facts, assumptions, and recommendations.",
     ].join("\n\n");
@@ -189,18 +201,116 @@ export class DefaultAgentRuntime
 
   private stringify(
     value: unknown,
+    maxChars: number,
   ): string {
+    try {
+      const serialized = JSON.stringify(
+        this.sanitizeForPrompt(value),
+        null,
+        2,
+      );
+
+      if (!serialized) {
+        return "null";
+      }
+
+      if (serialized.length <= maxChars) {
+        return serialized;
+      }
+
+      return JSON.stringify({
+        truncated: true,
+        preview: `${serialized.slice(0, maxChars)}…`,
+      });
+    } catch {
+      return JSON.stringify({
+        unavailable: "Execution context could not be serialized safely.",
+      });
+    }
+  }
+
+  private sanitizeForPrompt(
+    value: unknown,
+    seen = new WeakSet<object>(),
+    depth = 0,
+  ): unknown {
+    if (typeof value === "string") {
+      return this.limitText(value, MAX_STRING_CHARS);
+    }
+
     if (
-      typeof value ===
-      "string"
+      value === null ||
+      typeof value === "number" ||
+      typeof value === "boolean"
     ) {
       return value;
     }
 
-    return JSON.stringify(
-      value,
-      null,
-      2,
-    );
+    if (typeof value === "undefined") {
+      return "[undefined]";
+    }
+
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
+
+    if (typeof value === "function" || typeof value === "symbol") {
+      return `[unsupported ${typeof value}]`;
+    }
+
+    if (depth >= MAX_VALUE_DEPTH) {
+      return "[maximum nesting depth reached]";
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (typeof value !== "object") {
+      return String(value);
+    }
+
+    if (seen.has(value)) {
+      return "[circular reference omitted]";
+    }
+
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      const items = value
+        .slice(0, MAX_ARRAY_ITEMS)
+        .map((item) => this.sanitizeForPrompt(item, seen, depth + 1));
+
+      if (value.length > MAX_ARRAY_ITEMS) {
+        items.push(
+          `[${value.length - MAX_ARRAY_ITEMS} additional items omitted]`,
+        );
+      }
+
+      seen.delete(value);
+      return items;
+    }
+
+    const entries = Object.entries(value)
+      .slice(0, MAX_OBJECT_KEYS)
+      .map(([key, entry]) => [
+        this.limitText(key, 160),
+        this.sanitizeForPrompt(entry, seen, depth + 1),
+      ]);
+    const result = Object.fromEntries(entries) as Record<string, unknown>;
+
+    if (Object.keys(value).length > MAX_OBJECT_KEYS) {
+      result.additionalProperties =
+        `[${Object.keys(value).length - MAX_OBJECT_KEYS} properties omitted]`;
+    }
+
+    seen.delete(value);
+    return result;
+  }
+
+  private limitText(value: string, maxChars: number): string {
+    return value.length <= maxChars
+      ? value
+      : `${value.slice(0, maxChars)}… [truncated]`;
   }
 }

@@ -61,3 +61,55 @@ test("provides the model with structured work and dependency context", async () 
   assert.match(prompt, /Completed dependency results:/);
   assert.match(prompt, /SSO is the highest-impact gap/);
 });
+
+test("bounds oversized and circular dependency context before model execution", async () => {
+  let request: ModelRequest | undefined;
+  const provider: ModelProvider = {
+    async generate(value) {
+      request = value;
+      return { model: "test-model", content: "Done.", metadata: {} };
+    },
+  };
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+  const runtime = new DefaultAgentRuntime(provider);
+  const definition: AgentDefinition = {
+    id: "agent-1",
+    name: "Nova",
+    description: "Research specialist.",
+    type: "specialist",
+    systemInstructions: "Research accurately.",
+    capabilities: ["research"],
+    toolIds: [],
+    constraints: {},
+    metadata: {},
+  };
+
+  await runtime.execute(definition, {
+    agentId: "agent-1" as never,
+    workId: "work-1" as never,
+    taskId: "task-2" as never,
+    work: {
+      objective: "Create a decision brief.",
+      organizationId: "org-1" as never,
+      priority: "normal",
+      metadata: circular,
+    },
+    task: {
+      title: "Review research",
+      description: "Use prior findings.",
+      dependencies: [{
+        id: "task-1" as never,
+        title: "Large research output",
+        result: `${"useful finding ".repeat(2_000)}SENTINEL_TAIL`,
+      }],
+    },
+    context: {},
+  });
+
+  const prompt = request?.messages[1]?.content ?? "";
+  assert.ok(prompt.length < 18_000);
+  assert.match(prompt, /truncated/);
+  assert.match(prompt, /circular reference omitted/);
+  assert.doesNotMatch(prompt, /SENTINEL_TAIL/);
+});
