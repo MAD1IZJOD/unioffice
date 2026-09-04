@@ -16,6 +16,7 @@ import type {
 
 import type {
   AgentId,
+  OrganizationId,
   TaskId,
   WorkId,
 } from "@unioffice/core";
@@ -66,8 +67,21 @@ const context: AgentExecutionContext = {
   workId:
     "work:test" as WorkId,
 
-  input:
-    "Explain why AI agents need tools instead of only an LLM. Give three concrete examples.",
+  work: {
+    objective:
+      "Explain why AI agents need tools instead of only an LLM.",
+    organizationId:
+      "organization:test" as OrganizationId,
+    priority: "normal",
+    metadata: {},
+  },
+
+  task: {
+    title: "Explain agent tools",
+    description:
+      "Give three concrete examples of why agents need tools beyond an LLM.",
+    dependencies: [],
+  },
 
   context: {},
 };

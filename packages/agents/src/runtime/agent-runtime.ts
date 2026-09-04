@@ -4,7 +4,9 @@ import type {
 
 import type {
   AgentId,
+  OrganizationId,
   TaskId,
+  WorkspaceId,
   WorkId,
 } from "@unioffice/core";
 
@@ -15,9 +17,27 @@ export interface AgentExecutionContext {
 
   workId: WorkId;
 
-  input: unknown;
+  work: {
+    objective: string;
+    organizationId: OrganizationId;
+    workspaceId?: WorkspaceId;
+    priority: string;
+    metadata: Record<string, unknown>;
+  };
+
+  task: {
+    title: string;
+    description: string;
+    dependencies: AgentDependencyResult[];
+  };
 
   context: Record<string, unknown>;
+}
+
+export interface AgentDependencyResult {
+  id: TaskId;
+  title: string;
+  result?: unknown;
 }
 
 export interface AgentExecutionResult {
@@ -59,4 +79,4 @@ export interface AgentRuntime {
     definition: AgentDefinition,
     context: AgentExecutionContext,
   ): Promise<AgentExecutionResult>;
-} 
+}

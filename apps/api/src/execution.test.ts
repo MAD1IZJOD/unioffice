@@ -248,6 +248,7 @@ function createRecorder(): {
 
 test("persists a completed task execution result", async () => {
   const taskRepository = new MemoryTaskRepository();
+  const workRepository = new MemoryWorkRepository();
   const agentRepository = new MemoryAgentRepository();
   const { recorder, repository: eventRepository } =
     createRecorder();
@@ -256,6 +257,7 @@ test("persists a completed task execution result", async () => {
   });
 
   await taskRepository.create(task);
+  await workRepository.create(makeWork());
   await agentRepository.create(makeAgent());
 
   const engine: ExecutionEngine = {
@@ -272,6 +274,7 @@ test("persists a completed task execution result", async () => {
   };
   const service = new TaskExecutionService(
     taskRepository,
+    workRepository,
     agentRepository,
     engine,
     recorder,
@@ -291,6 +294,7 @@ test("persists a completed task execution result", async () => {
 
 test("persists failed agent execution", async () => {
   const taskRepository = new MemoryTaskRepository();
+  const workRepository = new MemoryWorkRepository();
   const agentRepository = new MemoryAgentRepository();
   const { recorder, repository: eventRepository } =
     createRecorder();
@@ -299,6 +303,7 @@ test("persists failed agent execution", async () => {
   });
 
   await taskRepository.create(task);
+  await workRepository.create(makeWork());
   await agentRepository.create(makeAgent());
 
   const engine: ExecutionEngine = {
@@ -318,6 +323,7 @@ test("persists failed agent execution", async () => {
   };
   const service = new TaskExecutionService(
     taskRepository,
+    workRepository,
     agentRepository,
     engine,
     recorder,

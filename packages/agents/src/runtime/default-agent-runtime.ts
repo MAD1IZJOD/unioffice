@@ -156,17 +156,34 @@ export class DefaultAgentRuntime
     context: AgentExecutionContext,
   ): string {
     return [
-      "Task input:",
+      "You are executing one task in a coordinated company workflow.",
 
-      this.stringify(
-        context.input,
-      ),
+      "Work objective:",
 
-      "Execution context:",
+      context.work.objective,
 
-      this.stringify(
-        context.context,
-      ),
+      "Task:",
+
+      this.stringify({
+        title: context.task.title,
+        description: context.task.description,
+      }),
+
+      "Completed dependency results:",
+
+      this.stringify(context.task.dependencies),
+
+      "Operational context:",
+
+      this.stringify({
+        organizationId: context.work.organizationId,
+        workspaceId: context.work.workspaceId,
+        priority: context.work.priority,
+        workMetadata: context.work.metadata,
+        taskMetadata: context.context,
+      }),
+
+      "Return the concrete result for this task. Clearly distinguish facts, assumptions, and recommendations.",
     ].join("\n\n");
   }
 

@@ -112,6 +112,7 @@ export async function createApiServer() {
   );
   const taskExecutionService = new TaskExecutionService(
     taskRepository,
+    workRepository,
     agentRepository,
     executionEngine,
     eventRecorder,

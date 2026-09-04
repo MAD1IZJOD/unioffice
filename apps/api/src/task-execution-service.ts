@@ -6,6 +6,7 @@ import type {
 import type {
   AgentRepository,
   TaskRepository,
+  WorkRepository,
 } from "@unioffice/database";
 
 import type {
@@ -24,6 +25,9 @@ export class TaskExecutionService {
   constructor(
     private readonly taskRepository:
       TaskRepository,
+
+    private readonly workRepository:
+      WorkRepository,
 
     private readonly agentRepository:
       AgentRepository,
@@ -53,6 +57,14 @@ export class TaskExecutionService {
       throw new Error(
         `Task has no assigned agent: ${taskId}`,
       );
+    }
+
+    const work = await this.workRepository.findById(
+      task.workId,
+    );
+
+    if (!work) {
+      throw new Error(`Work not found: ${task.workId}`);
     }
 
     if (task.status !== "ready") {
@@ -106,12 +118,20 @@ export class TaskExecutionService {
           taskId: task.id,
           agentId: agent.id,
           agent: agentToDefinition(agent),
-          input: {
+          work: {
+            objective: work.objective,
+            organizationId: work.organizationId,
+            workspaceId: work.workspaceId,
+            priority: work.priority,
+            metadata: work.metadata,
+          },
+          task: {
             title: task.title,
             description: task.description,
+            dependencies: await this.dependencyResults(task),
           },
           context: {
-            ...task.metadata,
+            taskMetadata: task.metadata,
           },
         });
 
@@ -208,6 +228,30 @@ export class TaskExecutionService {
 
       return persistedTask;
     }
+  }
+
+  private async dependencyResults(
+    task: Task,
+  ): Promise<Array<{
+    id: TaskId;
+    title: string;
+    result?: unknown;
+  }>> {
+    const dependencies = await Promise.all(
+      task.dependsOn.map((dependencyId) =>
+        this.taskRepository.findById(dependencyId),
+      ),
+    );
+
+    return dependencies.flatMap((dependency) =>
+      dependency?.status === "completed"
+        ? [{
+            id: dependency.id,
+            title: dependency.title,
+            result: dependency.result,
+          }]
+        : [],
+    );
   }
 }
 

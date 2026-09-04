@@ -1,6 +1,8 @@
 import type {
   AgentId,
+  OrganizationId,
   TaskId,
+  WorkspaceId,
   WorkId,
 } from "@unioffice/core";
 
@@ -20,7 +22,23 @@ export interface ExecutionRequest {
 
   agent: AgentDefinition;
 
-  input: unknown;
+  work: {
+    objective: string;
+    organizationId: OrganizationId;
+    workspaceId?: WorkspaceId;
+    priority: string;
+    metadata: Record<string, unknown>;
+  };
+
+  task: {
+    title: string;
+    description: string;
+    dependencies: Array<{
+      id: TaskId;
+      title: string;
+      result?: unknown;
+    }>;
+  };
 
   context: Record<string, unknown>;
 }
@@ -67,7 +85,8 @@ export class DefaultExecutionEngine
       agentId: request.agentId,
       taskId: request.taskId,
       workId: request.workId,
-      input: request.input,
+      work: request.work,
+      task: request.task,
       context: request.context,
     };
 
