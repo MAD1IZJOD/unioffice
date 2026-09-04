@@ -33,7 +33,15 @@ export class WorkExecutionService {
     private readonly taskExecutionService: TaskExecutionService,
     private readonly eventRecorder: EventRecorder,
     private readonly approvalCoordinator?: ApprovalCoordinator,
-  ) {}
+    private readonly maxConcurrentTasks = 4,
+  ) {
+    if (
+      !Number.isInteger(maxConcurrentTasks) ||
+      maxConcurrentTasks < 1
+    ) {
+      throw new Error("maxConcurrentTasks must be a positive integer.");
+    }
+  }
 
   async executeWork(
     workId: WorkId,
@@ -160,11 +168,11 @@ export class WorkExecutionService {
         continue;
       }
 
-      const nextTask = tasks.find(
+      const readyTasks = tasks.filter(
         (task) => task.status === "ready",
       );
 
-      if (!nextTask) {
+      if (readyTasks.length === 0) {
         if (tasks.some((task) => task.status === "running")) {
           return {
             work: executingWork,
@@ -179,42 +187,75 @@ export class WorkExecutionService {
         );
       }
 
-      try {
-        await this.taskExecutionService.executeTask(
-          nextTask.id,
-        );
-      } catch (error) {
-        const failedAt = new Date();
-        const failedTask =
-          await this.taskRepository.update({
-            ...nextTask,
-            status: "failed",
-            completedAt: failedAt,
-            updatedAt: failedAt,
-            metadata: {
-              ...nextTask.metadata,
-              execution: {
-                status: "failed",
-                error: errorMessage(error),
-              },
-            },
-          });
-
-        await this.eventRecorder.record({
-          organizationId: executingWork.organizationId,
-          workId: executingWork.id,
-          taskId: failedTask.id,
-          agentId: failedTask.assignedAgentId,
-          type: "task.failed",
-          payload: {
-            title: failedTask.title,
-            error: errorMessage(error),
-          },
-        });
-      }
+      await this.executeReadyTasks(
+        executingWork,
+        readyTasks.slice(0, this.maxConcurrentTasks),
+      );
 
       tasks = await this.taskRepository.findByWork(workId);
     }
+  }
+
+  private async executeReadyTasks(
+    work: Work,
+    tasks: Task[],
+  ): Promise<void> {
+    const executions = await Promise.allSettled(
+      tasks.map((task) =>
+        this.taskExecutionService.executeTask(task.id),
+      ),
+    );
+
+    await Promise.all(executions.map(async (execution, index) => {
+      if (execution.status === "rejected") {
+        await this.recordExecutionFailure(
+          work,
+          tasks[index]!,
+          execution.reason,
+        );
+      }
+    }));
+  }
+
+  private async recordExecutionFailure(
+    work: Work,
+    task: Task,
+    error: unknown,
+  ): Promise<void> {
+    const current = await this.taskRepository.findById(task.id);
+
+    // A concurrent executor may have atomically claimed this task after this
+    // runner observed it as ready. Do not overwrite that execution state.
+    if (!current || current.status !== "ready") {
+      return;
+    }
+
+    const failedAt = new Date();
+    const failedTask = await this.taskRepository.update({
+      ...current,
+      status: "failed",
+      completedAt: failedAt,
+      updatedAt: failedAt,
+      metadata: {
+        ...current.metadata,
+        execution: {
+          status: "failed",
+          error: errorMessage(error),
+        },
+      },
+    });
+
+    await this.eventRecorder.record({
+      organizationId: work.organizationId,
+      workId: work.id,
+      taskId: failedTask.id,
+      agentId: failedTask.assignedAgentId,
+      type: "task.failed",
+      payload: {
+        title: failedTask.title,
+        error: errorMessage(error),
+      },
+    });
   }
 
   private async markReadyTasks(

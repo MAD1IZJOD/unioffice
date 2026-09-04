@@ -472,6 +472,98 @@ test("executes dependencies in order and completes work", async () => {
   );
 });
 
+test("executes independent ready tasks concurrently", async () => {
+  const workRepository = new MemoryWorkRepository();
+  const taskRepository = new MemoryTaskRepository();
+  const { recorder } = createRecorder();
+  const first = makeTask("task-first" as TaskId);
+  const second = makeTask("task-second" as TaskId);
+  let activeExecutions = 0;
+  let maxActiveExecutions = 0;
+
+  await workRepository.create(makeWork());
+  await taskRepository.create(first);
+  await taskRepository.create(second);
+
+  const taskExecutionService = {
+    async executeTask(id: TaskId): Promise<Task> {
+      const task = await taskRepository.findById(id);
+      assert.ok(task);
+      activeExecutions += 1;
+      maxActiveExecutions = Math.max(
+        maxActiveExecutions,
+        activeExecutions,
+      );
+      await Promise.resolve();
+      activeExecutions -= 1;
+      return taskRepository.update({
+        ...task,
+        status: "completed",
+        startedAt: new Date(),
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      });
+    },
+  } as TaskExecutionService;
+  const service = new WorkExecutionService(
+    workRepository,
+    taskRepository,
+    taskExecutionService,
+    recorder,
+    undefined,
+    2,
+  );
+
+  const result = await service.executeWork(workId);
+
+  assert.equal(result.work.status, "completed");
+  assert.equal(maxActiveExecutions, 2);
+});
+
+test("limits independent task fan-out to the configured concurrency", async () => {
+  const workRepository = new MemoryWorkRepository();
+  const taskRepository = new MemoryTaskRepository();
+  const { recorder } = createRecorder();
+  let activeExecutions = 0;
+  let maxActiveExecutions = 0;
+
+  await workRepository.create(makeWork());
+  await Promise.all(["one", "two", "three"].map(async (suffix) =>
+    taskRepository.create(makeTask(`task-${suffix}` as TaskId)),
+  ));
+
+  const taskExecutionService = {
+    async executeTask(id: TaskId): Promise<Task> {
+      const task = await taskRepository.findById(id);
+      assert.ok(task);
+      activeExecutions += 1;
+      maxActiveExecutions = Math.max(maxActiveExecutions, activeExecutions);
+      await Promise.resolve();
+      activeExecutions -= 1;
+      return taskRepository.update({
+        ...task,
+        status: "completed",
+        startedAt: new Date(),
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      });
+    },
+  } as TaskExecutionService;
+  const service = new WorkExecutionService(
+    workRepository,
+    taskRepository,
+    taskExecutionService,
+    recorder,
+    undefined,
+    2,
+  );
+
+  const result = await service.executeWork(workId);
+
+  assert.equal(result.work.status, "completed");
+  assert.equal(maxActiveExecutions, 2);
+});
+
 test("pauses an approval-gated task and resumes it after approval", async () => {
   const workRepository = new MemoryWorkRepository();
   const taskRepository = new MemoryTaskRepository();
