@@ -149,6 +149,14 @@ export function buildApiServer(
     return { events };
   });
 
+  app.get("/work/:id/artifacts", async (request) => {
+    const artifacts = await services.workQueryService.getArtifacts(
+      parameterId(request.params),
+    );
+
+    return { artifacts };
+  });
+
   app.get("/work/:id/approvals", async (request) => {
     const approvals = await services.workApprovalService.getWorkApprovals(
       parameterId(request.params),

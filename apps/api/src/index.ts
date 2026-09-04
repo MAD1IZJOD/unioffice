@@ -7,6 +7,7 @@ import {
   createSupabaseAdminClient,
   SupabaseAgentRepository,
   SupabaseApprovalRepository,
+  SupabaseArtifactRepository,
   SupabaseEventRepository,
   SupabaseOrganizationRepository,
   SupabaseTaskRepository,
@@ -76,6 +77,8 @@ export async function createApiServer() {
     new SupabaseTaskRepository(supabase);
   const approvalRepository =
     new SupabaseApprovalRepository(supabase);
+  const artifactRepository =
+    new SupabaseArtifactRepository(supabase);
   const eventRepository =
     new SupabaseEventRepository(supabase);
   const eventRecorder = new EventRecorder(eventRepository);
@@ -112,6 +115,7 @@ export async function createApiServer() {
   );
   const taskExecutionService = new TaskExecutionService(
     taskRepository,
+    artifactRepository,
     workRepository,
     agentRepository,
     executionEngine,
@@ -134,6 +138,7 @@ export async function createApiServer() {
     workRepository,
     taskRepository,
     eventRepository,
+    artifactRepository,
   );
 
   const developmentOrganization =

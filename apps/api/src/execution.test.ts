@@ -6,6 +6,8 @@ import type {
   AgentId,
   ApprovalId,
   ApprovalRequest,
+  Artifact,
+  ArtifactId,
   Event,
   OrganizationId,
   Task,
@@ -17,6 +19,7 @@ import type {
 import type {
   AgentRepository,
   ApprovalRepository,
+  ArtifactRepository,
   EventRepository,
   TaskRepository,
   WorkRepository,
@@ -199,6 +202,31 @@ class MemoryApprovalRepository implements ApprovalRepository {
   }
 }
 
+class MemoryArtifactRepository implements ArtifactRepository {
+  readonly artifacts = new Map<ArtifactId, Artifact>();
+
+  async create(artifact: Artifact): Promise<Artifact> {
+    this.artifacts.set(artifact.id, artifact);
+    return artifact;
+  }
+
+  async findById(id: ArtifactId): Promise<Artifact | null> {
+    return this.artifacts.get(id) ?? null;
+  }
+
+  async findByWork(id: WorkId): Promise<Artifact[]> {
+    return [...this.artifacts.values()].filter(
+      (artifact) => artifact.workId === id,
+    );
+  }
+
+  async findByTask(id: TaskId): Promise<Artifact[]> {
+    return [...this.artifacts.values()].filter(
+      (artifact) => artifact.taskId === id,
+    );
+  }
+}
+
 function makeAgent(): Agent {
   const now = new Date();
 
@@ -268,6 +296,7 @@ function createRecorder(): {
 
 test("persists a completed task execution result", async () => {
   const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
   const workRepository = new MemoryWorkRepository();
   const agentRepository = new MemoryAgentRepository();
   const { recorder, repository: eventRepository } =
@@ -294,6 +323,7 @@ test("persists a completed task execution result", async () => {
   };
   const service = new TaskExecutionService(
     taskRepository,
+    artifactRepository,
     workRepository,
     agentRepository,
     engine,
@@ -306,14 +336,20 @@ test("persists a completed task execution result", async () => {
   assert.equal(result.result, "Completed output.");
   assert.ok(result.startedAt);
   assert.ok(result.completedAt);
+  assert.equal(artifactRepository.artifacts.size, 1);
+  assert.deepEqual(
+    [...artifactRepository.artifacts.values()][0]?.metadata.content,
+    "Completed output.",
+  );
   assert.deepEqual(
     eventRepository.events.map((event) => event.type),
-    ["task.started", "task.completed"],
+    ["task.started", "artifact.created", "task.completed"],
   );
 });
 
 test("persists failed agent execution", async () => {
   const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
   const workRepository = new MemoryWorkRepository();
   const agentRepository = new MemoryAgentRepository();
   const { recorder, repository: eventRepository } =
@@ -343,6 +379,7 @@ test("persists failed agent execution", async () => {
   };
   const service = new TaskExecutionService(
     taskRepository,
+    artifactRepository,
     workRepository,
     agentRepository,
     engine,
@@ -359,8 +396,59 @@ test("persists failed agent execution", async () => {
   );
 });
 
+test("retains a completed task result when artifact projection fails", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder, repository: eventRepository } = createRecorder();
+  const task = makeTask("task-artifact-failure" as TaskId, { status: "ready" });
+  const artifactRepository: ArtifactRepository = {
+    async create() { throw new Error("Artifact storage unavailable."); },
+    async findById() { return null; },
+    async findByWork() { return []; },
+    async findByTask() { return []; },
+  };
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: "Durable task result.",
+        metadata: {},
+      };
+    },
+  };
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+  const service = new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+  );
+
+  const result = await service.executeTask(task.id);
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.result, "Durable task result.");
+  assert.deepEqual(result.metadata.artifact, {
+    status: "failed",
+    error: "Artifact storage unavailable.",
+  });
+  assert.deepEqual(
+    eventRepository.events.map((event) => event.type),
+    ["task.started", "task.completed"],
+  );
+});
+
 test("claims a task once when execution is requested concurrently", async () => {
   const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
   const workRepository = new MemoryWorkRepository();
   const agentRepository = new MemoryAgentRepository();
   const { recorder, repository: eventRepository } = createRecorder();
@@ -390,6 +478,7 @@ test("claims a task once when execution is requested concurrently", async () => 
   await agentRepository.create(makeAgent());
   const service = new TaskExecutionService(
     taskRepository,
+    artifactRepository,
     workRepository,
     agentRepository,
     engine,

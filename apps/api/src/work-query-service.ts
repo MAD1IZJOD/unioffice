@@ -1,5 +1,6 @@
 import type {
   Event,
+  Artifact,
   Task,
   Work,
   WorkId,
@@ -7,6 +8,7 @@ import type {
 
 import type {
   EventRepository,
+  ArtifactRepository,
   TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
@@ -16,6 +18,7 @@ export class WorkQueryService {
     private readonly workRepository: WorkRepository,
     private readonly taskRepository: TaskRepository,
     private readonly eventRepository: EventRepository,
+    private readonly artifactRepository: ArtifactRepository,
   ) {}
 
   async getWork(workId: WorkId): Promise<Work> {
@@ -38,5 +41,11 @@ export class WorkQueryService {
     await this.getWork(workId);
 
     return this.eventRepository.findByWork(workId);
+  }
+
+  async getArtifacts(workId: WorkId): Promise<Artifact[]> {
+    await this.getWork(workId);
+
+    return this.artifactRepository.findByWork(workId);
   }
 }

@@ -1,10 +1,18 @@
 import type {
+  Agent,
+  Artifact,
+  ArtifactId,
   Task,
   TaskId,
 } from "@unioffice/core";
 
+import {
+  createEntityId,
+} from "@unioffice/core";
+
 import type {
   AgentRepository,
+  ArtifactRepository,
   TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
@@ -25,6 +33,9 @@ export class TaskExecutionService {
   constructor(
     private readonly taskRepository:
       TaskRepository,
+
+    private readonly artifactRepository:
+      ArtifactRepository,
 
     private readonly workRepository:
       WorkRepository,
@@ -180,15 +191,23 @@ export class TaskExecutionService {
       const persistedTask =
         await this.taskRepository.update(finalTask);
 
+      let resolvedTask = persistedTask;
+
       if (persistedTask.status === "completed") {
+        resolvedTask = await this.persistResultArtifact(
+          persistedTask,
+          agent,
+          result.metadata,
+        );
+
         await this.eventRecorder.record({
           organizationId: agent.organizationId,
-          workId: persistedTask.workId,
-          taskId: persistedTask.id,
+          workId: resolvedTask.workId,
+          taskId: resolvedTask.id,
           agentId: agent.id,
           type: "task.completed",
           payload: {
-            title: persistedTask.title,
+            title: resolvedTask.title,
           },
         });
       } else if (persistedTask.status === "failed") {
@@ -205,7 +224,7 @@ export class TaskExecutionService {
         });
       }
 
-      return persistedTask;
+      return resolvedTask;
     } catch (error) {
       const failedAt = new Date();
       const failedTask: Task = {
@@ -267,6 +286,82 @@ export class TaskExecutionService {
         : [],
     );
   }
+
+  private async persistResultArtifact(
+    task: Task,
+    agent: Agent,
+    executionMetadata: Record<string, unknown>,
+  ): Promise<Task> {
+    if (task.result === undefined) {
+      return task;
+    }
+
+    const now = new Date();
+    const artifact: Artifact = {
+      id: createEntityId<"ArtifactId">() as ArtifactId,
+      organizationId: agent.organizationId,
+      workId: task.workId,
+      taskId: task.id,
+      createdByAgentId: agent.id,
+      name: `${task.title} result`,
+      type: isStructured(task.result) ? "structured_data" : "analysis",
+      description: `Execution result produced by ${agent.name}.`,
+      mimeType: isStructured(task.result)
+        ? "application/json"
+        : "text/plain",
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      metadata: {
+        content: task.result,
+        execution: executionMetadata,
+      },
+    };
+
+    try {
+      const createdArtifact =
+        await this.artifactRepository.create(artifact);
+
+      await this.eventRecorder.record({
+        organizationId: agent.organizationId,
+        workId: task.workId,
+        taskId: task.id,
+        agentId: agent.id,
+        type: "artifact.created",
+        payload: {
+          artifactId: createdArtifact.id,
+          name: createdArtifact.name,
+          type: createdArtifact.type,
+        },
+      });
+
+      return task;
+    } catch (error) {
+      // Task completion remains durable even if a secondary artifact projection
+      // cannot be written. Preserve that degradation on the task for operators.
+      try {
+        return await this.taskRepository.update({
+          ...task,
+          metadata: {
+            ...task.metadata,
+            artifact: {
+              status: "failed",
+              error: errorMessage(error),
+            },
+          },
+        });
+      } catch {
+        // The completed task result remains the source of truth if this
+        // diagnostic update also fails.
+      }
+
+      return task;
+    }
+  }
+}
+
+function isStructured(value: unknown): boolean {
+  return typeof value === "object" && value !== null;
 }
 
 function errorMessage(error: unknown): string {
