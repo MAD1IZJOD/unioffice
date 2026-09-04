@@ -157,6 +157,7 @@ export async function createApiServer() {
     workQueryService,
     developmentOrganizationId:
       developmentOrganization?.organization.id,
+    corsOrigins: config.corsOrigins,
     healthCheck: async () => {
       const { error } = await supabase
         .from("organizations")
