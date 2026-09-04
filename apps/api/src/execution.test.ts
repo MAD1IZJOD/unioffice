@@ -66,6 +66,26 @@ class MemoryTaskRepository implements TaskRepository {
     );
   }
 
+  async claimReadyForExecution(
+    id: TaskId,
+    startedAt: Date,
+  ): Promise<Task | null> {
+    const task = this.tasks.get(id);
+
+    if (!task || task.status !== "ready") {
+      return null;
+    }
+
+    const claimed = {
+      ...task,
+      status: "running" as const,
+      startedAt,
+      updatedAt: startedAt,
+    };
+    this.tasks.set(id, claimed);
+    return claimed;
+  }
+
   async update(task: Task): Promise<Task> {
     this.tasks.set(task.id, task);
     return task;
@@ -339,6 +359,60 @@ test("persists failed agent execution", async () => {
   );
 });
 
+test("claims a task once when execution is requested concurrently", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder, repository: eventRepository } = createRecorder();
+  const task = makeTask("task-concurrent" as TaskId, { status: "ready" });
+  let calls = 0;
+  let complete: (() => void) | undefined;
+  let markStarted: (() => void) | undefined;
+  const release = new Promise<void>((resolve) => { complete = resolve; });
+  const started = new Promise<void>((resolve) => { markStarted = resolve; });
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      calls += 1;
+      markStarted?.();
+      await release;
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: "Only one model invocation.",
+        metadata: {},
+      };
+    },
+  };
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+  const service = new TaskExecutionService(
+    taskRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+  );
+
+  const first = service.executeTask(task.id);
+  const second = service.executeTask(task.id);
+  await started;
+
+  assert.equal(calls, 1);
+  complete?.();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+
+  assert.equal(firstResult.status, "completed");
+  assert.equal(secondResult.status, "running");
+  assert.equal(calls, 1);
+  assert.equal(
+    eventRepository.events.filter((event) => event.type === "task.started").length,
+    1,
+  );
+});
+
 test("executes dependencies in order and completes work", async () => {
   const workRepository = new MemoryWorkRepository();
   const taskRepository = new MemoryTaskRepository();
@@ -529,4 +603,31 @@ test("marks work as failed when a task fails", async () => {
     eventRepository.events.at(-1)?.type,
     "work.failed",
   );
+});
+
+test("returns an already completed work item without re-executing tasks", async () => {
+  const workRepository = new MemoryWorkRepository();
+  const taskRepository = new MemoryTaskRepository();
+  const { recorder, repository: eventRepository } = createRecorder();
+  const work = { ...makeWork(), status: "completed" as const };
+  const task = makeTask("task-completed" as TaskId, { status: "completed" });
+  await workRepository.create(work);
+  await taskRepository.create(task);
+  const taskExecutionService = {
+    async executeTask(): Promise<Task> {
+      throw new Error("A completed work item must not execute again.");
+    },
+  } as unknown as TaskExecutionService;
+  const service = new WorkExecutionService(
+    workRepository,
+    taskRepository,
+    taskExecutionService,
+    recorder,
+  );
+
+  const result = await service.executeWork(work.id);
+
+  assert.equal(result.work.status, "completed");
+  assert.equal(result.tasks[0]?.id, task.id);
+  assert.equal(eventRepository.events.length, 0);
 });

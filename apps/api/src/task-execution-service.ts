@@ -59,18 +59,25 @@ export class TaskExecutionService {
       );
     }
 
-    const work = await this.workRepository.findById(
-      task.workId,
-    );
-
-    if (!work) {
-      throw new Error(`Work not found: ${task.workId}`);
+    if (
+      task.status === "completed" ||
+      task.status === "running"
+    ) {
+      return task;
     }
 
     if (task.status !== "ready") {
       throw new Error(
         `Task cannot execute from status: ${task.status}`,
       );
+    }
+
+    const work = await this.workRepository.findById(
+      task.workId,
+    );
+
+    if (!work) {
+      throw new Error(`Work not found: ${task.workId}`);
     }
 
     const agent =
@@ -91,31 +98,38 @@ export class TaskExecutionService {
     }
 
     const startedAt = new Date();
-    const runningTask: Task = {
-      ...task,
-      status: "running",
-      startedAt,
-      updatedAt: startedAt,
-    };
+    const runningTask =
+      await this.taskRepository.claimReadyForExecution(
+        task.id,
+        startedAt,
+      );
 
-    await this.taskRepository.update(runningTask);
+    if (!runningTask) {
+      const current = await this.taskRepository.findById(task.id);
+
+      if (!current) {
+        throw new Error(`Task not found: ${task.id}`);
+      }
+
+      return current;
+    }
 
     await this.eventRecorder.record({
       organizationId: agent.organizationId,
-      workId: task.workId,
-      taskId: task.id,
+      workId: runningTask.workId,
+      taskId: runningTask.id,
       agentId: agent.id,
       type: "task.started",
       payload: {
-        title: task.title,
+        title: runningTask.title,
       },
     });
 
     try {
       const result =
         await this.executionEngine.execute({
-          workId: task.workId,
-          taskId: task.id,
+          workId: runningTask.workId,
+          taskId: runningTask.id,
           agentId: agent.id,
           agent: agentToDefinition(agent),
           work: {
@@ -126,12 +140,12 @@ export class TaskExecutionService {
             metadata: work.metadata,
           },
           task: {
-            title: task.title,
-            description: task.description,
-            dependencies: await this.dependencyResults(task),
+            title: runningTask.title,
+            description: runningTask.description,
+            dependencies: await this.dependencyResults(runningTask),
           },
           context: {
-            taskMetadata: task.metadata,
+            taskMetadata: runningTask.metadata,
           },
         });
 

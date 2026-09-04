@@ -44,6 +44,13 @@ export class WorkExecutionService {
       work.status !== "queued" &&
       work.status !== "executing"
     ) {
+      if (work.status === "completed") {
+        return {
+          work,
+          tasks: await this.taskRepository.findByWork(workId),
+        };
+      }
+
       throw new Error(
         `Work cannot execute from status: ${work.status}`,
       );
@@ -158,6 +165,13 @@ export class WorkExecutionService {
       );
 
       if (!nextTask) {
+        if (tasks.some((task) => task.status === "running")) {
+          return {
+            work: executingWork,
+            tasks,
+          };
+        }
+
         return this.failWork(
           executingWork,
           tasks,

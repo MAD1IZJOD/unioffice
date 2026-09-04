@@ -125,6 +125,31 @@ export class SupabaseTaskRepository
     );
   }
 
+  async claimReadyForExecution(
+    id: TaskId,
+    startedAt: Date,
+  ): Promise<Task | null> {
+    const { data, error } = await this.client
+      .from("tasks")
+      .update({
+        status: "running",
+        started_at: startedAt.toISOString(),
+        updated_at: startedAt.toISOString(),
+      })
+      .eq("id", id)
+      .eq("status", "ready")
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(
+        `Failed to claim task for execution: ${error.message}`,
+      );
+    }
+
+    return data ? this.mapRow(data) : null;
+  }
+
   async update(
     task: Task,
   ): Promise<Task> {
