@@ -18,6 +18,7 @@ export interface ApiConfig {
   ollamaBaseUrl: string;
   ollamaModel: string;
   seedDevelopmentWorkforce: boolean;
+  corsOrigins: string[];
 }
 
 export function loadApiConfig(
@@ -44,7 +45,41 @@ export function loadApiConfig(
     ollamaModel: env.OLLAMA_MODEL ?? "qwen3:8b",
     seedDevelopmentWorkforce:
       env.SEED_DEVELOPMENT_WORKFORCE === "true",
+    corsOrigins: parseCorsOrigins(env.API_CORS_ORIGINS),
   };
+}
+
+function parseCorsOrigins(value: string | undefined): string[] {
+  const configuredOrigins = value?.split(",").map(
+    (origin) => origin.trim(),
+  ).filter(Boolean) ?? [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ];
+
+  return [...new Set(configuredOrigins.map((origin) => {
+    let parsed: URL;
+
+    try {
+      parsed = new URL(origin);
+    } catch {
+      throw new Error("API_CORS_ORIGINS must contain valid origins.");
+    }
+
+    if (
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash ||
+      parsed.username ||
+      parsed.password
+    ) {
+      throw new Error(
+        "API_CORS_ORIGINS entries must be origins without paths.",
+      );
+    }
+
+    return parsed.origin;
+  }))];
 }
 
 function required(
