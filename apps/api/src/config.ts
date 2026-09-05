@@ -7,7 +7,7 @@ dotenv.config({
   path:
     process.env.UNIOFFICE_ENV_FILE ??
     fileURLToPath(
-      new URL("../../.env", import.meta.url),
+      new URL("../../../.env", import.meta.url),
     ),
 });
 
