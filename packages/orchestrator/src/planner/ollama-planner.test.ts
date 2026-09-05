@@ -20,6 +20,7 @@ const agentId = "agent-1" as AgentId;
 function taskFields() {
   return {
     requiredCapabilities: [],
+    requiredTools: [],
     requiresApproval: false,
   };
 }
@@ -41,6 +42,7 @@ test("parses stable refs and validates dependencies", () => {
           description: "Summarize the facts.",
           assignedAgentId: agentId,
           requiredCapabilities: ["writing"],
+          requiredTools: [],
           requiresApproval: true,
           approvalReason: "A human must review this external brief.",
           dependsOn: ["research"],
@@ -162,6 +164,7 @@ test("rejects malformed capability and approval fields", () => {
         title: "Review",
         description: "Review the proposal.",
         requiredCapabilities: "analysis",
+        requiredTools: [],
         requiresApproval: true,
         dependsOn: [],
       }],
@@ -176,6 +179,7 @@ test("rejects malformed capability and approval fields", () => {
         title: "Review",
         description: "Review the proposal.",
         requiredCapabilities: [],
+        requiredTools: [],
         requiresApproval: true,
         dependsOn: [],
       }],
@@ -191,6 +195,7 @@ test("ignores an inactive approval reason", () => {
       title: "Research",
       description: "Collect facts.",
       requiredCapabilities: [],
+      requiredTools: [],
       requiresApproval: false,
       approvalReason: "This should not create a gate.",
       dependsOn: [],
@@ -199,4 +204,65 @@ test("ignores an inactive approval reason", () => {
 
   assert.equal(plan.tasks[0]?.requiresApproval, false);
   assert.equal(plan.tasks[0]?.approvalReason, undefined);
+});
+
+test("accepts a known required tool and carries it through to the plan", () => {
+  const plan = parseOllamaPlan(
+    JSON.stringify({
+      tasks: [{
+        ref: "compute",
+        title: "Compute the total",
+        description: "Multiply the two figures.",
+        requiredCapabilities: [],
+        requiredTools: ["calculator"],
+        requiresApproval: false,
+        dependsOn: [],
+      }],
+    }),
+    [],
+    [{ id: "calculator", name: "Calculator", description: "Evaluates arithmetic." }],
+  );
+
+  assert.deepEqual(plan.tasks[0]?.requiredTools, ["calculator"]);
+});
+
+test("rejects a required tool that does not exist", () => {
+  assert.throws(
+    () => parseOllamaPlan(
+      JSON.stringify({
+        tasks: [{
+          ref: "compute",
+          title: "Compute the total",
+          description: "Multiply the two figures.",
+          requiredCapabilities: [],
+          requiredTools: ["spreadsheet_macro"],
+          requiresApproval: false,
+          dependsOn: [],
+        }],
+      }),
+      [],
+      [{ id: "calculator", name: "Calculator", description: "Evaluates arithmetic." }],
+    ),
+    /requires an unknown tool: spreadsheet_macro/,
+  );
+});
+
+test("rejects a malformed requiredTools field", () => {
+  assert.throws(
+    () => parseOllamaPlan(
+      JSON.stringify({
+        tasks: [{
+          ref: "compute",
+          title: "Compute the total",
+          description: "Multiply the two figures.",
+          requiredCapabilities: [],
+          requiredTools: "calculator",
+          requiresApproval: false,
+          dependsOn: [],
+        }],
+      }),
+      [],
+    ),
+    /requiredTools array/,
+  );
 });

@@ -9,6 +9,7 @@ import type {
   PlannedTask,
   Planner,
   PlanningContext,
+  PlanningToolDescriptor,
   WorkPlan,
 } from "./planner.js";
 
@@ -25,6 +26,8 @@ export class OllamaPlanner implements Planner {
   async plan(
     context: PlanningContext,
   ): Promise<WorkPlan> {
+    const availableTools = context.availableTools ?? [];
+
     const response =
       await this.modelProvider.generate({
         model: this.model,
@@ -38,11 +41,18 @@ export class OllamaPlanner implements Planner {
               "Return ONLY valid JSON.",
               "Do not use markdown.",
               "Return an object with a tasks array.",
-              "Each task must contain ref, title, description, dependsOn, requiredCapabilities, suggestedAgentType, requiresApproval and approvalReason.",
+              "Each task must contain ref, title, description, dependsOn, requiredCapabilities, requiredTools, suggestedAgentType, requiresApproval and approvalReason.",
               "ref must be a unique short identifier such as research or analysis.",
               "dependsOn must contain task refs, never UUIDs.",
               "assignedAgentId is optional and must be one of the available agent IDs when present.",
               "requiredCapabilities must be an array of capabilities that the assignee must have; use an empty array when none are mandatory.",
+              "requiredTools must be an array of tool ids (from the tools list below) that the assignee MUST be authorized to use to complete this task correctly. Use requiredTools whenever the task depends on an exact calculation, a date/time lookup, or another deterministic operation a tool performs - never estimate or compute those yourself in the plan, and never have the executing agent guess when a tool exists for it. Use an empty array when no tool is required.",
+              availableTools.length > 0
+                ? [
+                    "Available tools (use their exact id in requiredTools):",
+                    ...availableTools.map((tool) => `- ${tool.id}: ${tool.name} - ${tool.description}`),
+                  ].join("\n")
+                : "No tools are currently available; requiredTools must always be an empty array.",
               "suggestedAgentType must be specialist, manager, or orchestrator when present.",
               "requiresApproval must be true only when a human decision is required before executing the task. Include approvalReason when true.",
               "Use an empty dependsOn array when a task has no prerequisites.",
@@ -70,6 +80,7 @@ export class OllamaPlanner implements Planner {
     const parsed = parseOllamaPlan(
       response.content,
       context.availableAgentIds,
+      availableTools,
     );
 
     const idsByRef = new Map(
@@ -96,6 +107,8 @@ export class OllamaPlanner implements Planner {
             : undefined,
 
         requiredCapabilities: task.requiredCapabilities,
+
+        requiredTools: task.requiredTools,
 
         suggestedAgentType: task.suggestedAgentType,
 
@@ -148,6 +161,7 @@ interface RawPlannedTask {
   description: string;
   assignedAgentId?: AgentId;
   requiredCapabilities: string[];
+  requiredTools: string[];
   suggestedAgentType?: AgentType;
   requiresApproval: boolean;
   approvalReason?: string;
@@ -161,6 +175,7 @@ export interface ParsedOllamaPlan {
 export function parseOllamaPlan(
   content: string,
   availableAgentIds: AgentId[],
+  availableTools: PlanningToolDescriptor[] = [],
 ): ParsedOllamaPlan {
   const parsed = parseJsonPlan(content);
 
@@ -175,9 +190,12 @@ export function parseOllamaPlan(
   const availableAgents = new Set(
     availableAgentIds,
   );
+  const availableToolIds = new Set(
+    availableTools.map((tool) => tool.id),
+  );
 
   const tasks = parsed.tasks.map((task, index) =>
-    parseTask(task, index, availableAgents),
+    parseTask(task, index, availableAgents, availableToolIds),
   );
 
   validateGraph(tasks);
@@ -209,6 +227,7 @@ function parseTask(
   task: unknown,
   index: number,
   availableAgents: Set<AgentId>,
+  availableToolIds: Set<string>,
 ): RawPlannedTask {
   if (!isRecord(task)) {
     throw new Error(
@@ -234,6 +253,11 @@ function parseTask(
     task.requiredCapabilities,
     index,
   );
+  const requiredTools = parseTools(
+    task.requiredTools,
+    index,
+    availableToolIds,
+  );
   const suggestedAgentType = parseAgentType(
     task.suggestedAgentType,
     index,
@@ -254,6 +278,7 @@ function parseTask(
     ),
     assignedAgentId,
     requiredCapabilities,
+    requiredTools,
     suggestedAgentType,
     requiresApproval: approval.requiresApproval,
     approvalReason: approval.approvalReason,
@@ -294,6 +319,50 @@ function parseCapabilities(value: unknown, index: number): string[] {
   }
 
   return capabilities;
+}
+
+function parseTools(
+  value: unknown,
+  index: number,
+  availableToolIds: Set<string>,
+): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `Planner task ${index + 1} must include a requiredTools array.`,
+    );
+  }
+
+  if (value.length > 8) {
+    throw new Error(
+      `Planner task ${index + 1} has too many required tools.`,
+    );
+  }
+
+  const tools = value.map((tool) => {
+    if (typeof tool !== "string" || !tool.trim()) {
+      throw new Error(
+        `Planner task ${index + 1} has an invalid required tool.`,
+      );
+    }
+
+    return tool.trim();
+  });
+
+  if (new Set(tools).size !== tools.length) {
+    throw new Error(
+      `Planner task ${index + 1} repeats a required tool.`,
+    );
+  }
+
+  for (const tool of tools) {
+    if (!availableToolIds.has(tool)) {
+      throw new Error(
+        `Planner task ${index + 1} requires an unknown tool: ${tool}`,
+      );
+    }
+  }
+
+  return tools;
 }
 
 function parseAgentType(

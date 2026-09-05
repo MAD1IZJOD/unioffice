@@ -54,6 +54,7 @@ function repository(agents: Agent[]): AgentRepository {
 function context(overrides: Partial<{
   assignedAgentId: AgentId;
   requiredCapabilities: string[];
+  requiredTools: string[];
   suggestedAgentType: Agent["type"];
   workspaceId: string;
   availableAgentIds: AgentId[];
@@ -67,6 +68,7 @@ function context(overrides: Partial<{
       description: "Test task description.",
       assignedAgentId: overrides.assignedAgentId,
       requiredCapabilities: overrides.requiredCapabilities,
+      requiredTools: overrides.requiredTools,
       suggestedAgentType: overrides.suggestedAgentType,
       dependsOn: [],
       metadata: {},
@@ -130,6 +132,48 @@ test("fails when no eligible agent has all required capabilities", async () => {
   await assert.rejects(
     () => delegator.delegate(context({ requiredCapabilities: ["coding"] })),
     /No eligible agents available/,
+  );
+});
+
+test("routes a tool-required task to the tool-authorized agent even when the orchestrator would otherwise win", async () => {
+  const delegator = new DefaultDelegator(repository([
+    // Atlas has no tools but IS the suggested agent type, so it would win
+    // on agentType/agentTypeSuitability if tool authorization weren't a
+    // hard filter. This is the exact bug this test exists to prevent.
+    agent(atlasId, "active", { type: "orchestrator" }),
+    agent(forgeId, "active", { type: "specialist", toolIds: ["calculator"] }),
+  ]));
+  const result = await delegator.delegate(context({
+    requiredTools: ["calculator"],
+    suggestedAgentType: "orchestrator",
+  }));
+
+  assert.equal(result.agentId, forgeId);
+  assert.equal(result.metadata.delegation, "capability_ranked");
+  assert.deepEqual(result.metadata.requiredTools, ["calculator"]);
+});
+
+test("fails with a tool-specific message when no agent is authorized for the required tool", async () => {
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { type: "orchestrator" }),
+    agent(forgeId, "active", { type: "specialist" }),
+  ]));
+
+  await assert.rejects(
+    () => delegator.delegate(context({ requiredTools: ["calculator"] })),
+    /No eligible agent is authorized for the required tool\(s\): calculator/,
+  );
+});
+
+test("rejects an explicit assignment to an agent that lacks the required tool", async () => {
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { toolIds: [] }),
+    agent(forgeId, "active", { toolIds: [] }),
+  ]));
+
+  await assert.rejects(
+    () => delegator.delegate(context({ assignedAgentId: forgeId, requiredTools: ["calculator"] })),
+    /Assigned agent is unavailable/,
   );
 });
 

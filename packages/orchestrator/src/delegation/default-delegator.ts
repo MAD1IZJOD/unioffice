@@ -33,12 +33,16 @@ export class DefaultDelegator implements Delegator {
     const requiredCapabilities = normalizeCapabilities(
       context.task.requiredCapabilities,
     );
+    const requiredTools = normalizeTools(
+      context.task.requiredTools,
+    );
     const eligibleAgents = agents.filter(
       (agent) =>
         availableAgentIds.has(agent.id) &&
         agent.status === "active" &&
         isWorkspaceCompatible(agent, context.workspaceId) &&
-        hasCapabilities(agent, requiredCapabilities),
+        hasCapabilities(agent, requiredCapabilities) &&
+        hasTools(agent, requiredTools),
     );
 
     if (context.task.assignedAgentId) {
@@ -60,7 +64,8 @@ export class DefaultDelegator implements Delegator {
           selectionReason:
             "The planner explicitly assigned this active, compatible agent.",
           requiredCapabilities,
-          score: this.score(assignedAgent, context, requiredCapabilities),
+          requiredTools,
+          score: this.score(assignedAgent, context, requiredCapabilities, requiredTools),
         },
       };
     }
@@ -68,14 +73,16 @@ export class DefaultDelegator implements Delegator {
     const rankedAgents = eligibleAgents
       .map((agent) => ({
         agent,
-        score: this.score(agent, context, requiredCapabilities),
+        score: this.score(agent, context, requiredCapabilities, requiredTools),
       }))
       .sort(compareCandidates);
     const candidate = rankedAgents[0];
 
     if (!candidate) {
       throw new Error(
-        `No eligible agents available for task: ${context.task.id}`,
+        requiredTools.length > 0
+          ? `No eligible agent is authorized for the required tool(s): ${requiredTools.join(", ")} (task: ${context.task.id})`
+          : `No eligible agents available for task: ${context.task.id}`,
       );
     }
 
@@ -87,8 +94,10 @@ export class DefaultDelegator implements Delegator {
         selectionReason: this.selectionReason(
           candidate.score,
           requiredCapabilities,
+          requiredTools,
         ),
         requiredCapabilities,
+        requiredTools,
         score: candidate.score,
         consideredAgentCount: rankedAgents.length,
       },
@@ -99,6 +108,7 @@ export class DefaultDelegator implements Delegator {
     agent: Agent,
     context: DelegationContext,
     requiredCapabilities: string[],
+    requiredTools: string[],
   ): DelegationScore {
     const matchedCapabilities = requiredCapabilities.filter((capability) =>
       agent.capabilities.some(
@@ -129,16 +139,21 @@ export class DefaultDelegator implements Delegator {
   private selectionReason(
     score: DelegationScore,
     requiredCapabilities: string[],
+    requiredTools: string[],
   ): string {
     const capabilityDetail = requiredCapabilities.length
       ? ` It satisfies: ${score.matchedCapabilities.join(", ")}.`
       : " No mandatory capability was specified.";
+    const toolDetail = requiredTools.length
+      ? ` It is authorized for the required tool(s): ${requiredTools.join(", ")}.`
+      : "";
 
     return [
       `Selected by deterministic rank: ${score.workspaceCompatibility} workspace compatibility,`,
       `${score.capabilities} required capability matches, ${score.agentTypeSuitability} agent type,`,
       `and availability score ${score.availability}.`,
       capabilityDetail,
+      toolDetail,
     ].join(" ");
   }
 }
@@ -186,6 +201,29 @@ function hasCapabilities(agent: Agent, requiredCapabilities: string[]): boolean 
   return requiredCapabilities.every((capability) =>
     agentCapabilities.has(capability),
   );
+}
+
+function normalizeTools(
+  tools: string[] | undefined,
+): string[] {
+  return [...new Set(
+    (tools ?? [])
+      .map((tool) => tool.trim())
+      .filter(Boolean),
+  )];
+}
+
+/**
+ * Unlike capabilities (freeform strings the planner asserts an agent has),
+ * tool authorization is a hard boundary enforced by ToolExecutor. A task
+ * that requires a tool can only go to an agent actually granted it - this
+ * is what keeps a deterministic-computation task from silently landing on
+ * an agent that will just have the model guess instead of using the tool.
+ */
+function hasTools(agent: Agent, requiredTools: string[]): boolean {
+  const agentToolIds = new Set(agent.toolIds);
+
+  return requiredTools.every((tool) => agentToolIds.has(tool));
 }
 
 function isWorkspaceCompatible(

@@ -134,6 +134,11 @@ export async function createApiServer() {
     planner,
     delegator,
     eventRecorder,
+    toolRegistry.list().map((tool) => ({
+      id: tool.id,
+      name: tool.name,
+      description: tool.description,
+    })),
   );
   const taskExecutionService = new TaskExecutionService(
     taskRepository,

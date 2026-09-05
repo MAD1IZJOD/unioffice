@@ -5,12 +5,23 @@ import type {
   WorkId,
 } from "@unioffice/core";
 
+export interface PlanningToolDescriptor {
+  id: string;
+
+  name: string;
+
+  description: string;
+}
+
 export interface PlanningContext {
   workId: WorkId;
 
   objective: string;
 
   availableAgentIds: AgentId[];
+
+  /** Tools that exist in the system, so the planner can request one by id. */
+  availableTools?: PlanningToolDescriptor[];
 
   context: Record<string, unknown>;
 }
@@ -27,6 +38,9 @@ export interface PlannedTask {
   assignedAgentId?: AgentId;
 
   requiredCapabilities?: string[];
+
+  /** Tool ids the executing agent must be authorized for. */
+  requiredTools?: string[];
 
   suggestedAgentType?: AgentType;
 

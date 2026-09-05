@@ -13,6 +13,7 @@ import type {
 import type {
   Delegator,
   Planner,
+  PlanningToolDescriptor,
   WorkPlan,
 } from "@unioffice/orchestrator";
 
@@ -41,6 +42,9 @@ export class WorkService {
     private readonly delegator: Delegator,
 
     private readonly eventRecorder: EventRecorder,
+
+    /** The real, registered tools the planner may request by id. */
+    private readonly availableTools: PlanningToolDescriptor[] = [],
   ) {}
 
   async planWork(
@@ -122,6 +126,8 @@ export class WorkService {
               (agent) => agent.id,
             ),
 
+          availableTools: this.availableTools,
+
           context: {
             organizationId:
               updatedWork.organizationId,
@@ -196,6 +202,8 @@ export class WorkService {
             routing: {
               requiredCapabilities:
                 plannedTask.requiredCapabilities ?? [],
+              requiredTools:
+                plannedTask.requiredTools ?? [],
               suggestedAgentType:
                 plannedTask.suggestedAgentType,
             },
@@ -224,6 +232,8 @@ export class WorkService {
             dependsOn: createdTask.dependsOn,
             requiredCapabilities:
               plannedTask.requiredCapabilities ?? [],
+            requiredTools:
+              plannedTask.requiredTools ?? [],
             requiresApproval:
               plannedTask.requiresApproval ?? false,
           },
