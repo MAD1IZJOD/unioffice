@@ -329,12 +329,6 @@ function parseApprovalRequirement(
   }
 
   if (!value) {
-    if (reason !== undefined && reason !== null) {
-      throw new Error(
-        `Planner task ${index + 1} supplied approvalReason without requiring approval.`,
-      );
-    }
-
     return { requiresApproval: false };
   }
 
