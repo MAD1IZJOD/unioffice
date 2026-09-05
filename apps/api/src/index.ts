@@ -118,6 +118,10 @@ export async function createApiServer() {
       model: config.ollamaModel,
       think: false,
       toolRegistry,
+      // A genuinely multi-step deterministic task (e.g. a month-by-month
+      // projection) needs one tool call per step; 3 was too tight for real
+      // work and only ever exercised in unit tests with a single call.
+      maxToolCalls: 10,
     },
   );
   const executionEngine = new DefaultExecutionEngine(

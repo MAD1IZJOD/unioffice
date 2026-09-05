@@ -38,7 +38,7 @@ function toolDefinition(toolIds: string[]): AgentDefinition {
   };
 }
 
-function baseContext() {
+function baseContext(requiredTools?: string[]) {
   return {
     agentId: "agent-1" as never,
     workId: "work-1" as never,
@@ -53,6 +53,7 @@ function baseContext() {
       title: "Double the number 21",
       description: "Use the double tool.",
       dependencies: [],
+      requiredTools,
     },
     context: {},
   };
@@ -331,4 +332,93 @@ test("bounds an oversized tool output before it is fed back into the model", asy
   const followUpPrompt = requests[1]?.messages.at(-1)?.content ?? "";
   assert.ok(followUpPrompt.length < 5_000, "the tool result message must be bounded, not the raw 50,000-char output");
   assert.match(followUpPrompt, /truncated/);
+});
+
+test("rejects a plain-text answer that skips a required tool and forces a retry", async () => {
+  const registry = new DefaultToolRegistry();
+  registry.register(echoTool);
+  let turn = 0;
+  const provider: ModelProvider = {
+    async generate() {
+      turn += 1;
+
+      // Turn 1: the model just computes the answer itself, ignoring the tool.
+      if (turn === 1) {
+        return { model: "test-model", content: "The doubled value is 42.", metadata: {} };
+      }
+
+      // Turn 2: after being corrected, it actually calls the required tool.
+      if (turn === 2) {
+        return {
+          model: "test-model",
+          content: JSON.stringify({ tool_call: { id: "double", input: { value: 21 } } }),
+          metadata: {},
+        };
+      }
+
+      return { model: "test-model", content: "The doubled value is 42, confirmed by the tool.", metadata: {} };
+    },
+  };
+  const runtime = new DefaultAgentRuntime(provider, { model: "test-model", toolRegistry: registry });
+
+  const result = await runtime.execute(toolDefinition(["double"]), baseContext(["double"]));
+
+  assert.equal(turn, 3, "the model must be asked to retry after skipping the required tool");
+  assert.equal(result.status, "completed");
+  assert.equal(result.toolCalls.length, 1);
+  assert.equal(result.toolCalls[0]?.toolId, "double");
+  assert.equal(result.metadata.requiredToolsSatisfied, true);
+  assert.equal(result.output, "The doubled value is 42, confirmed by the tool.");
+});
+
+test("flags non-compliance when the model never calls a required tool within budget", async () => {
+  const registry = new DefaultToolRegistry();
+  registry.register(echoTool);
+  const provider: ModelProvider = {
+    // Always answers in plain text, never calls the tool, no matter how
+    // many times it is corrected.
+    async generate() {
+      return { model: "test-model", content: "The doubled value is 42.", metadata: {} };
+    },
+  };
+  const runtime = new DefaultAgentRuntime(provider, {
+    model: "test-model",
+    toolRegistry: registry,
+    maxToolCalls: 2,
+  });
+
+  const result = await runtime.execute(toolDefinition(["double"]), baseContext(["double"]));
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.toolCalls.length, 0);
+  assert.equal(result.metadata.requiredToolsSatisfied, false);
+  assert.deepEqual(result.metadata.requiredTools, ["double"]);
+});
+
+test("accepts a final answer immediately when the required tool was already called", async () => {
+  const registry = new DefaultToolRegistry();
+  registry.register(echoTool);
+  let turn = 0;
+  const provider: ModelProvider = {
+    async generate() {
+      turn += 1;
+
+      if (turn === 1) {
+        return {
+          model: "test-model",
+          content: JSON.stringify({ tool_call: { id: "double", input: { value: 21 } } }),
+          metadata: {},
+        };
+      }
+
+      return { model: "test-model", content: "The doubled value is 42.", metadata: {} };
+    },
+  };
+  const runtime = new DefaultAgentRuntime(provider, { model: "test-model", toolRegistry: registry });
+
+  const result = await runtime.execute(toolDefinition(["double"]), baseContext(["double"]));
+
+  assert.equal(turn, 2, "no retry should be needed once the required tool has been called");
+  assert.equal(result.status, "completed");
+  assert.equal(result.metadata.requiredToolsSatisfied, true);
 });

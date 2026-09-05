@@ -39,6 +39,7 @@ export interface ExecutionRequest {
       title: string;
       result?: unknown;
     }>;
+    requiredTools?: string[];
   };
 
   context: Record<string, unknown>;

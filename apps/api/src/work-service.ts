@@ -114,6 +114,10 @@ export class WorkService {
         );
       }
 
+      const availableCapabilities = [...new Set(
+        availableAgents.flatMap((agent) => agent.capabilities),
+      )];
+
       const plan =
         await this.planner.plan({
           workId: updatedWork.id,
@@ -127,6 +131,8 @@ export class WorkService {
             ),
 
           availableTools: this.availableTools,
+
+          availableCapabilities,
 
           context: {
             organizationId:

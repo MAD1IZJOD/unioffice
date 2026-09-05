@@ -131,7 +131,7 @@ test("fails when no eligible agent has all required capabilities", async () => {
   const delegator = new DefaultDelegator(repository([agent(atlasId), agent(forgeId)]));
   await assert.rejects(
     () => delegator.delegate(context({ requiredCapabilities: ["coding"] })),
-    /No eligible agents available/,
+    /No eligible agent has the required capability\(ies\): coding/,
   );
 });
 
@@ -151,6 +151,18 @@ test("routes a tool-required task to the tool-authorized agent even when the orc
   assert.equal(result.agentId, forgeId);
   assert.equal(result.metadata.delegation, "capability_ranked");
   assert.deepEqual(result.metadata.requiredTools, ["calculator"]);
+});
+
+test("fails with a combined message when both a capability and a tool are unmet", async () => {
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { type: "orchestrator" }),
+    agent(forgeId, "active", { type: "specialist", capabilities: ["coding"] }),
+  ]));
+
+  await assert.rejects(
+    () => delegator.delegate(context({ requiredCapabilities: ["finance"], requiredTools: ["calculator"] })),
+    /No eligible agent is authorized for the required tool\(s\): calculator and has the required capability\(ies\): finance/,
+  );
 });
 
 test("fails with a tool-specific message when no agent is authorized for the required tool", async () => {

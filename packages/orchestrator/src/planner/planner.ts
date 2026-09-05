@@ -23,6 +23,14 @@ export interface PlanningContext {
   /** Tools that exist in the system, so the planner can request one by id. */
   availableTools?: PlanningToolDescriptor[];
 
+  /**
+   * The union of capabilities actually held by the available agents. A
+   * capability the planner invents that no agent has is unsatisfiable by
+   * construction, so the planner is constrained to this vocabulary rather
+   * than free-texting a plausible-sounding one.
+   */
+  availableCapabilities?: string[];
+
   context: Record<string, unknown>;
 }
 

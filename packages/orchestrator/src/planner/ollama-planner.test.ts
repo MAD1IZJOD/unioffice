@@ -247,6 +247,68 @@ test("rejects a required tool that does not exist", () => {
   );
 });
 
+test("rejects a required capability outside the known vocabulary", () => {
+  assert.throws(
+    () => parseOllamaPlan(
+      JSON.stringify({
+        tasks: [{
+          ref: "compute",
+          title: "Compute the total",
+          description: "Project revenue growth.",
+          requiredCapabilities: ["mathematical_analysis"],
+          requiredTools: [],
+          requiresApproval: false,
+          dependsOn: [],
+        }],
+      }),
+      [],
+      [],
+      ["analysis", "writing", "coding"],
+    ),
+    /requires an unknown capability: mathematical_analysis/,
+  );
+});
+
+test("accepts a required capability that is in the known vocabulary", () => {
+  const plan = parseOllamaPlan(
+    JSON.stringify({
+      tasks: [{
+        ref: "compute",
+        title: "Compute the total",
+        description: "Project revenue growth.",
+        requiredCapabilities: ["analysis"],
+        requiredTools: [],
+        requiresApproval: false,
+        dependsOn: [],
+      }],
+    }),
+    [],
+    [],
+    ["analysis", "writing", "coding"],
+  );
+
+  assert.deepEqual(plan.tasks[0]?.requiredCapabilities, ["analysis"]);
+});
+
+test("does not enforce a capability vocabulary when the caller supplies none", () => {
+  const plan = parseOllamaPlan(
+    JSON.stringify({
+      tasks: [{
+        ref: "compute",
+        title: "Compute the total",
+        description: "Project revenue growth.",
+        requiredCapabilities: ["anything_goes"],
+        requiredTools: [],
+        requiresApproval: false,
+        dependsOn: [],
+      }],
+    }),
+    [],
+  );
+
+  assert.deepEqual(plan.tasks[0]?.requiredCapabilities, ["anything_goes"]);
+});
+
 test("rejects a malformed requiredTools field", () => {
   assert.throws(
     () => parseOllamaPlan(

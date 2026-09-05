@@ -29,6 +29,8 @@ export interface AgentExecutionContext {
     title: string;
     description: string;
     dependencies: AgentDependencyResult[];
+    /** Tool ids delegation determined this specific task needs. */
+    requiredTools?: string[];
   };
 
   context: Record<string, unknown>;

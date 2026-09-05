@@ -98,13 +98,25 @@ export class DefaultAgentRuntime
     const availableTools = this.toolRegistry
       ? this.toolRegistry.getMany(definition.toolIds)
       : [];
+    // Delegation already guarantees this agent is authorized for every tool
+    // in requiredTools; this is the per-task mandate that offering the tool
+    // alone doesn't communicate.
+    const requiredTools = context.task.requiredTools ?? [];
+
+    const systemInstructionSections = [definition.systemInstructions];
+
+    if (availableTools.length > 0) {
+      systemInstructionSections.push(this.buildToolProtocol(availableTools));
+    }
+
+    if (requiredTools.length > 0) {
+      systemInstructionSections.push(this.buildRequiredToolsMandate(requiredTools));
+    }
 
     const messages: ModelMessage[] = [
       {
         role: "system",
-        content: availableTools.length > 0
-          ? `${definition.systemInstructions}\n\n${this.buildToolProtocol(availableTools)}`
-          : definition.systemInstructions,
+        content: systemInstructionSections.join("\n\n"),
       },
       {
         role: "user",
@@ -113,6 +125,7 @@ export class DefaultAgentRuntime
     ];
 
     const toolCalls: AgentToolCall[] = [];
+    const satisfiedRequiredTools = new Set<string>();
 
     try {
       let iteration = 0;
@@ -147,6 +160,28 @@ export class DefaultAgentRuntime
           : parseToolCallRequest(response.content, availableTools);
 
         if (!toolCallRequest) {
+          const unsatisfiedRequiredTools = requiredTools.filter(
+            (toolId) => !satisfiedRequiredTools.has(toolId),
+          );
+
+          // The model answered in plain text without calling a tool this
+          // task mandates. Reject the answer and force it to try again
+          // instead of silently accepting a guessed/self-computed result -
+          // this is the actual enforcement, not just a prompt hint.
+          if (unsatisfiedRequiredTools.length > 0 && !finalTurn) {
+            messages.push({ role: "assistant", content: response.content });
+            messages.push({
+              role: "user",
+              content: [
+                `Your answer is rejected: this task requires calling the tool(s) ${unsatisfiedRequiredTools.join(", ")} before you finish, and you have not called ${unsatisfiedRequiredTools.length === 1 ? "it" : "them"} yet.`,
+                "Do not compute, estimate, or restate this result yourself.",
+                `Call ${unsatisfiedRequiredTools.length === 1 ? "it" : "one of them"} now using the tool_call JSON format.`,
+              ].join(" "),
+            });
+            iteration += 1;
+            continue;
+          }
+
           return {
             status: "completed",
             output: response.content,
@@ -156,6 +191,8 @@ export class DefaultAgentRuntime
               usage: response.usage,
               startedAt,
               completedAt: new Date(),
+              requiredTools,
+              requiredToolsSatisfied: unsatisfiedRequiredTools.length === 0,
               ...response.metadata,
             },
           };
@@ -177,6 +214,10 @@ export class DefaultAgentRuntime
           toolCallRequest.input,
           toolContext,
         );
+
+        if (result.status === "completed" && requiredTools.includes(result.toolId)) {
+          satisfiedRequiredTools.add(result.toolId);
+        }
 
         toolCalls.push({
           toolId: result.toolId,
@@ -258,6 +299,16 @@ export class DefaultAgentRuntime
       "Available tools:",
       catalog,
     ].join("\n");
+  }
+
+  private buildRequiredToolsMandate(
+    requiredTools: string[],
+  ): string {
+    return [
+      `This specific task REQUIRES calling the following tool(s) at least once before you give your final answer: ${requiredTools.join(", ")}.`,
+      "Do not calculate, estimate, or look up this information yourself, even if you are confident in the answer - call the tool and use its returned result instead.",
+      "A final answer that skips a required tool call will be rejected and you will be asked to try again.",
+    ].join(" ");
   }
 
   private buildUserPrompt(

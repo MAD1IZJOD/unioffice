@@ -80,9 +80,7 @@ export class DefaultDelegator implements Delegator {
 
     if (!candidate) {
       throw new Error(
-        requiredTools.length > 0
-          ? `No eligible agent is authorized for the required tool(s): ${requiredTools.join(", ")} (task: ${context.task.id})`
-          : `No eligible agents available for task: ${context.task.id}`,
+        this.noEligibleAgentMessage(context, requiredCapabilities, requiredTools),
       );
     }
 
@@ -134,6 +132,35 @@ export class DefaultDelegator implements Delegator {
         ? "preferred"
         : "compatible",
     };
+  }
+
+  /**
+   * Distinguishes "no agent has this tool" from "no agent has this
+   * capability" from "no agent is active/in this workspace at all" - the
+   * generic "no eligible agents" message this replaced made all three look
+   * identical, which is exactly the kind of thing that costs real time
+   * diagnosing a live delegation failure.
+   */
+  private noEligibleAgentMessage(
+    context: DelegationContext,
+    requiredCapabilities: string[],
+    requiredTools: string[],
+  ): string {
+    if (requiredTools.length === 0 && requiredCapabilities.length === 0) {
+      return `No eligible agents available for task: ${context.task.id}`;
+    }
+
+    const reasons: string[] = [];
+
+    if (requiredTools.length > 0) {
+      reasons.push(`is authorized for the required tool(s): ${requiredTools.join(", ")}`);
+    }
+
+    if (requiredCapabilities.length > 0) {
+      reasons.push(`has the required capability(ies): ${requiredCapabilities.join(", ")}`);
+    }
+
+    return `No eligible agent ${reasons.join(" and ")} (task: ${context.task.id})`;
   }
 
   private selectionReason(

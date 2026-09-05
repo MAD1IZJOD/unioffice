@@ -167,6 +167,7 @@ export class TaskExecutionService {
             title: runningTask.title,
             description: runningTask.description,
             dependencies: await this.dependencyResults(runningTask),
+            requiredTools: requiredToolsFromTask(runningTask),
           },
           context: {
             taskMetadata: runningTask.metadata,
@@ -476,4 +477,18 @@ function errorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : String(error);
+}
+
+function requiredToolsFromTask(task: Task): string[] {
+  const routing = task.metadata.routing;
+
+  if (typeof routing !== "object" || routing === null) {
+    return [];
+  }
+
+  const requiredTools = (routing as Record<string, unknown>).requiredTools;
+
+  return Array.isArray(requiredTools)
+    ? requiredTools.filter((tool): tool is string => typeof tool === "string")
+    : [];
 }

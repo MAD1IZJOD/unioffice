@@ -27,6 +27,7 @@ export class OllamaPlanner implements Planner {
     context: PlanningContext,
   ): Promise<WorkPlan> {
     const availableTools = context.availableTools ?? [];
+    const availableCapabilities = context.availableCapabilities ?? [];
 
     const response =
       await this.modelProvider.generate({
@@ -45,7 +46,10 @@ export class OllamaPlanner implements Planner {
               "ref must be a unique short identifier such as research or analysis.",
               "dependsOn must contain task refs, never UUIDs.",
               "assignedAgentId is optional and must be one of the available agent IDs when present.",
-              "requiredCapabilities must be an array of capabilities that the assignee must have; use an empty array when none are mandatory.",
+              "requiredCapabilities must be an array containing ONLY capabilities from the list below that the assignee must have; use an empty array when none are mandatory. Never invent a capability that is not in the list - an invented capability can never be satisfied and the task will fail to route.",
+              availableCapabilities.length > 0
+                ? `Available capabilities (use only these exact strings): ${availableCapabilities.join(", ")}.`
+                : "No agent capabilities are registered; requiredCapabilities must always be an empty array.",
               "requiredTools must be an array of tool ids (from the tools list below) that the assignee MUST be authorized to use to complete this task correctly. Use requiredTools whenever the task depends on an exact calculation, a date/time lookup, or another deterministic operation a tool performs - never estimate or compute those yourself in the plan, and never have the executing agent guess when a tool exists for it. Use an empty array when no tool is required.",
               availableTools.length > 0
                 ? [
@@ -81,6 +85,7 @@ export class OllamaPlanner implements Planner {
       response.content,
       context.availableAgentIds,
       availableTools,
+      availableCapabilities,
     );
 
     const idsByRef = new Map(
@@ -176,6 +181,7 @@ export function parseOllamaPlan(
   content: string,
   availableAgentIds: AgentId[],
   availableTools: PlanningToolDescriptor[] = [],
+  availableCapabilities: string[] = [],
 ): ParsedOllamaPlan {
   const parsed = parseJsonPlan(content);
 
@@ -193,9 +199,15 @@ export function parseOllamaPlan(
   const availableToolIds = new Set(
     availableTools.map((tool) => tool.id),
   );
+  // Empty means "no vocabulary supplied" (e.g. a caller that doesn't care
+  // about this check) rather than "no capability is ever valid" - callers
+  // that want enforcement pass the real, non-empty capability set.
+  const knownCapabilities = new Set(
+    availableCapabilities.map((capability) => capability.toLocaleLowerCase()),
+  );
 
   const tasks = parsed.tasks.map((task, index) =>
-    parseTask(task, index, availableAgents, availableToolIds),
+    parseTask(task, index, availableAgents, availableToolIds, knownCapabilities),
   );
 
   validateGraph(tasks);
@@ -228,6 +240,7 @@ function parseTask(
   index: number,
   availableAgents: Set<AgentId>,
   availableToolIds: Set<string>,
+  knownCapabilities: Set<string>,
 ): RawPlannedTask {
   if (!isRecord(task)) {
     throw new Error(
@@ -252,6 +265,7 @@ function parseTask(
   const requiredCapabilities = parseCapabilities(
     task.requiredCapabilities,
     index,
+    knownCapabilities,
   );
   const requiredTools = parseTools(
     task.requiredTools,
@@ -289,7 +303,11 @@ function parseTask(
   };
 }
 
-function parseCapabilities(value: unknown, index: number): string[] {
+function parseCapabilities(
+  value: unknown,
+  index: number,
+  knownCapabilities: Set<string>,
+): string[] {
   if (!Array.isArray(value)) {
     throw new Error(
       `Planner task ${index + 1} must include a requiredCapabilities array.`,
@@ -316,6 +334,16 @@ function parseCapabilities(value: unknown, index: number): string[] {
     throw new Error(
       `Planner task ${index + 1} repeats a required capability.`,
     );
+  }
+
+  if (knownCapabilities.size > 0) {
+    for (const capability of capabilities) {
+      if (!knownCapabilities.has(capability)) {
+        throw new Error(
+          `Planner task ${index + 1} requires an unknown capability: ${capability}`,
+        );
+      }
+    }
   }
 
   return capabilities;
