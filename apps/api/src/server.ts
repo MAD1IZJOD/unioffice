@@ -204,6 +204,22 @@ export function buildApiServer(
     return { approval };
   });
 
+  app.get("/agents", async (request) => {
+    const query = objectBody(request.query);
+    const organizationId = optionalText(query.organizationId) ??
+      services.developmentOrganizationId;
+
+    if (!organizationId) {
+      throw new ApiError(400, "organizationId is required when no development workforce is seeded.");
+    }
+
+    const agents = await services.workQueryService.getAgents(
+      organizationId as OrganizationId,
+    );
+
+    return { agents };
+  });
+
   app.get("/activity", async (request) => {
     const query = objectBody(request.query);
     const organizationId = optionalText(query.organizationId) ??

@@ -1,4 +1,5 @@
 import type {
+  Agent,
   Event,
   Artifact,
   OrganizationId,
@@ -8,6 +9,7 @@ import type {
 } from "@unioffice/core";
 
 import type {
+  AgentRepository,
   EventRepository,
   ArtifactRepository,
   TaskRepository,
@@ -20,6 +22,7 @@ export class WorkQueryService {
     private readonly taskRepository: TaskRepository,
     private readonly eventRepository: EventRepository,
     private readonly artifactRepository: ArtifactRepository,
+    private readonly agentRepository: AgentRepository,
   ) {}
 
   async getWork(workId: WorkId): Promise<Work> {
@@ -56,5 +59,9 @@ export class WorkQueryService {
     limit?: number,
   ): Promise<Event[]> {
     return this.eventRepository.findByOrganization(organizationId, limit);
+  }
+
+  async getAgents(organizationId: OrganizationId): Promise<Agent[]> {
+    return this.agentRepository.findByOrganization(organizationId);
   }
 }

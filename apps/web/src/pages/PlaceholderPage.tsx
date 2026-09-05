@@ -19,7 +19,17 @@ import {
 } from "lucide-react";
 
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import {
+  ApiError,
+  fetchActivity,
+  fetchAgents,
+  fetchMemory,
+  formatRelativeTime,
+  type ActivityEvent,
+  type AgentSummary,
+} from "../lib/api";
 
 type Accent = "cyan" | "violet" | "emerald" | "amber";
 
@@ -109,15 +119,104 @@ function WorkPage() {
   return <div className="mt-8 overflow-x-auto pb-2"><div className="grid min-w-[900px] grid-cols-4 gap-4">{columns.map(([stage, tone, work]) => <div key={stage} className="rounded-2xl border border-[#202b35] bg-[#0b1117]/75 p-3"><div className="flex items-center justify-between px-1 pb-3"><div className="flex items-center gap-2"><span className={["h-2 w-2 rounded-full", tone === "cyan" ? "bg-cyan-300" : tone === "violet" ? "bg-violet-300" : tone === "amber" ? "bg-amber-300" : "bg-emerald-300"].join(" ")} /><span className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">{stage}</span></div><span className="font-mono-ui text-[8px] text-slate-600">0{work.length}</span></div><div className="space-y-3">{work.map((item, index) => <button key={item} type="button" className="w-full rounded-xl border border-[#263440] bg-[#10171e] p-4 text-left transition hover:border-cyan-300/25 hover:bg-[#131e27]"><div className="flex items-start justify-between gap-3"><span className="text-[11px] font-semibold leading-5 text-slate-200">{item}</span><ArrowUpRight size={13} className="shrink-0 text-slate-600" /></div><div className="mt-4 flex items-center gap-2"><span className="flex h-5 w-5 items-center justify-center rounded-md bg-cyan-300/[0.08] text-cyan-300"><Bot size={10} /></span><span className="font-mono-ui text-[8px] text-slate-500">{index % 2 ? "FORGE" : "ATLAS"}</span><span className="ml-auto text-[8px] text-slate-600">{index + 1}h ago</span></div></button>)}</div></div>)}</div></div>;
 }
 
+type LoadState<T> =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "loaded"; data: T };
+
+function useLoad<T>(load: () => Promise<T>, deps: unknown[]): LoadState<T> {
+  const [state, setState] = useState<LoadState<T>>({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    load()
+      .then((data) => { if (!cancelled) setState({ status: "loaded", data }); })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setState({
+          status: "error",
+          message: error instanceof ApiError ? error.message : "Could not reach the UNI-OFFICE API.",
+        });
+      });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return state;
+}
+
+function splitMemoryContent(content: string): { title: string; detail: string } {
+  const separatorIndex = content.indexOf(": ");
+  if (separatorIndex === -1) return { title: content, detail: "" };
+  return { title: content.slice(0, separatorIndex), detail: content.slice(separatorIndex + 2) };
+}
+
 function BrainPage() {
-  const memories = [["Product launch decision", "Q4 launch will focus on self-serve activation before enterprise expansion.", "Decision", "2m ago"], ["Customer signal", "Enterprise customers request SSO during onboarding more often than any other feature.", "Insight", "18m ago"], ["Operating convention", "All spending commitments above $5,000 require Ledger approval.", "Policy", "1h ago"]];
-  return <div className="mt-8 grid gap-5 xl:grid-cols-[1.45fr_0.85fr]"><div className="glass-panel rounded-2xl p-5 sm:p-6"><div className="flex items-center justify-between"><div><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">Context stream</div><div className="mt-1.5 text-[14px] font-semibold text-slate-200">What the company knows right now</div></div><Database size={18} className="text-cyan-300" /></div><div className="mt-6 space-y-3">{memories.map(([title, detail, kind, time]) => <div key={title} className="rounded-xl border border-[#263440] bg-[#0d141b] p-4"><div className="flex items-center justify-between gap-3"><span className="rounded-full border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-1 font-mono-ui text-[8px] uppercase tracking-[0.11em] text-cyan-200">{kind}</span><span className="font-mono-ui text-[8px] text-slate-600">{time}</span></div><div className="mt-3 text-[12px] font-semibold text-slate-200">{title}</div><p className="mt-1.5 text-[10px] leading-5 text-slate-500">{detail}</p></div>)}</div></div><aside className="space-y-4"><div className="panel-muted rounded-2xl p-5"><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">Memory health</div><div className="mt-5 flex items-end justify-between"><span className="text-[32px] font-semibold tracking-[-0.04em] text-slate-100">128</span><span className="mb-1 text-[10px] text-emerald-300">+12 this week</span></div><div className="mt-2 text-[10px] text-slate-500">indexed organizational memories</div></div><div className="panel-muted rounded-2xl p-5"><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">Connected to work</div><div className="mt-4 space-y-3">{["Product positioning", "Approval policy", "Customer onboarding"].map((topic) => <div key={topic} className="flex items-center gap-3 text-[10px] text-slate-400"><span className="status-dot status-dot-live" />{topic}<ArrowUpRight size={12} className="ml-auto text-slate-600" /></div>)}</div></div></aside></div>;
+  const state = useLoad(() => fetchMemory(8), []);
+  const memories = state.status === "loaded" ? state.data : [];
+
+  return <div className="mt-8 grid gap-5 xl:grid-cols-[1.45fr_0.85fr]"><div className="glass-panel rounded-2xl p-5 sm:p-6"><div className="flex items-center justify-between"><div><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">Context stream</div><div className="mt-1.5 text-[14px] font-semibold text-slate-200">What the company knows right now</div></div><Database size={18} className="text-cyan-300" /></div>
+    {state.status === "error" && <div className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-[10px] text-amber-200">{state.message}</div>}
+    {state.status === "loaded" && memories.length === 0 && <p className="mt-6 text-[11px] text-slate-500">No memories recorded yet. They accumulate automatically as work completes.</p>}
+    <div className="mt-6 space-y-3">{memories.map((memory) => { const { title, detail } = splitMemoryContent(memory.content); return <div key={memory.id} className="rounded-xl border border-[#263440] bg-[#0d141b] p-4"><div className="flex items-center justify-between gap-3"><span className="rounded-full border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-1 font-mono-ui text-[8px] uppercase tracking-[0.11em] text-cyan-200">{memory.type}</span><span className="font-mono-ui text-[8px] text-slate-600">{formatRelativeTime(memory.createdAt)}</span></div><div className="mt-3 text-[12px] font-semibold text-slate-200">{title}</div>{detail && <p className="mt-1.5 text-[10px] leading-5 text-slate-500">{detail}</p>}</div>; })}</div></div>
+    <aside className="space-y-4"><div className="panel-muted rounded-2xl p-5"><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">Memory health</div><div className="mt-5 flex items-end justify-between"><span className="text-[32px] font-semibold tracking-[-0.04em] text-slate-100">{state.status === "loaded" ? memories.length : "—"}</span></div><div className="mt-2 text-[10px] text-slate-500">recently retrieved organizational memories</div></div><div className="panel-muted rounded-2xl p-5"><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">How this works</div><p className="mt-4 text-[10px] leading-5 text-slate-400">Every completed or failed task writes a memory automatically. Agents retrieve relevant prior memories before starting related work.</p></div></aside>
+  </div>;
 }
 
 function ApprovalPage() {
   const [approved, setApproved] = useState<string[]>([]);
   const gates = [["Approve vendor renewal", "Ledger recommends renewing the analytics vendor at $3,600 per month.", "Financial commitment", "Medium"], ["Authorize customer outreach", "Relay prepared a follow-up sequence for 24 at-risk enterprise accounts.", "External communication", "Low"]];
   return <div className="mt-8 grid gap-5 xl:grid-cols-[1.45fr_0.85fr]"><div className="space-y-4">{gates.map(([title, detail, type, risk]) => { const isApproved = approved.includes(title); return <div key={title} className={["glass-panel rounded-2xl p-5 transition", isApproved ? "border-emerald-400/25" : ""].join(" ")}><div className="flex flex-wrap items-start justify-between gap-4"><div className="flex gap-3"><span className={["flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border", isApproved ? accentClasses.emerald : accentClasses.amber].join(" ")}>{isApproved ? <Check size={18} /> : <AlertTriangle size={18} />}</span><div><div className="text-[13px] font-semibold text-slate-100">{title}</div><p className="mt-1.5 max-w-xl text-[10px] leading-5 text-slate-500">{isApproved ? "Approval recorded. Atlas can continue the work when execution is connected." : detail}</p></div></div><span className="rounded-full border border-[#303d49] bg-[#111920] px-2.5 py-1 font-mono-ui text-[8px] uppercase tracking-[0.12em] text-slate-400">{type}</span></div><div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#202b35] pt-4"><span className="font-mono-ui text-[8px] uppercase tracking-[0.13em] text-slate-500">Risk: <span className={risk === "Medium" ? "text-amber-300" : "text-emerald-300"}>{risk}</span></span>{!isApproved && <div className="flex gap-2"><button type="button" className="rounded-lg border border-[#2f3d49] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition hover:text-slate-200">Review</button><button type="button" onClick={() => setApproved((current) => [...current, title])} className="rounded-lg border border-emerald-300/25 bg-emerald-400/[0.08] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-200 transition hover:bg-emerald-400/[0.15]">Approve</button></div>}</div></div>})}</div><aside className="panel-muted rounded-2xl p-5"><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">Governance rule</div><div className="mt-4 text-[14px] font-semibold leading-6 text-slate-200">Humans keep the final say.</div><p className="mt-2 text-[10px] leading-5 text-slate-500">Approval gates are a first-class workflow state. They keep agents fast without making actions invisible or irreversible.</p><div className="mt-5 rounded-xl border border-[#263440] bg-[#0b1117] p-4"><div className="flex justify-between text-[10px]"><span className="text-slate-500">Pending gates</span><span className="font-mono-ui text-amber-300">{gates.length - approved.length}</span></div><div className="mt-3 flex justify-between text-[10px]"><span className="text-slate-500">Approved today</span><span className="font-mono-ui text-emerald-300">{approved.length}</span></div></div></aside></div>;
+}
+
+function describeEvent(
+  event: ActivityEvent,
+  agentNames: Record<string, string>,
+): { agent: string; action: string; tone: string } {
+  const agent = (event.agentId && agentNames[event.agentId]) ??
+    (event.actorType === "user" ? "You" : "Atlas");
+  const title = typeof event.payload.title === "string" ? event.payload.title : undefined;
+  const toolId = typeof event.payload.toolId === "string" ? event.payload.toolId : "a tool";
+
+  switch (event.type) {
+    case "work.created": return { agent, action: "submitted a new objective", tone: "cyan" };
+    case "work.planning_started": return { agent: "Atlas", action: "started planning the objective", tone: "cyan" };
+    case "work.planning_completed": return { agent: "Atlas", action: `built a plan (${String(event.payload.taskCount ?? "several")} tasks)`, tone: "cyan" };
+    case "work.started": return { agent: "Atlas", action: "started executing the plan", tone: "cyan" };
+    case "work.completed": return { agent: "Atlas", action: "completed the objective", tone: "emerald" };
+    case "work.failed": return { agent: "Atlas", action: "reported the objective as failed", tone: "amber" };
+    case "task.created": return { agent, action: `created a task${title ? `: ${title}` : ""}`, tone: "slate" };
+    case "task.ready": return { agent, action: `queued a task${title ? `: ${title}` : ""}`, tone: "slate" };
+    case "task.started": return { agent, action: `started${title ? `: ${title}` : " a task"}`, tone: "cyan" };
+    case "task.completed": return { agent, action: `completed${title ? `: ${title}` : " a task"}`, tone: "emerald" };
+    case "task.failed": return { agent, action: `failed${title ? `: ${title}` : " a task"}`, tone: "amber" };
+    case "agent.assigned": return { agent, action: "was assigned a task", tone: "violet" };
+    case "artifact.created": return { agent, action: "produced a new artifact", tone: "violet" };
+    case "approval.requested": return { agent, action: "requested human approval", tone: "amber" };
+    case "approval.approved": return { agent: "A reviewer", action: "approved a pending gate", tone: "emerald" };
+    case "approval.rejected": return { agent: "A reviewer", action: "rejected a pending gate", tone: "amber" };
+    case "tool.completed": return { agent, action: `used the ${toolId} tool`, tone: "cyan" };
+    case "tool.failed": return { agent, action: `tried the ${toolId} tool and it failed`, tone: "amber" };
+    default: return { agent, action: event.type, tone: "slate" };
+  }
+}
+
+function ActivityPage() {
+  const state = useLoad(async () => {
+    const [events, agents] = await Promise.all([fetchActivity(12), fetchAgents()]);
+    return { events, agentNames: Object.fromEntries(agents.map((agent: AgentSummary) => [agent.id, agent.name])) };
+  }, []);
+  const events = state.status === "loaded" ? state.data.events : [];
+  const agentNames = state.status === "loaded" ? state.data.agentNames : {};
+
+  return <div className="mt-8 grid gap-5 xl:grid-cols-[1.45fr_0.85fr]"><div className="glass-panel rounded-2xl p-5"><div className="flex items-center justify-between"><div><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">Live surface</div><div className="mt-1.5 text-[14px] font-semibold text-slate-200">Recent company signals</div></div><Activity size={17} className="text-cyan-300" /></div>
+    {state.status === "error" && <div className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-[10px] text-amber-200">{state.message}</div>}
+    {state.status === "loaded" && events.length === 0 && <p className="mt-6 text-[11px] text-slate-500">No activity recorded yet. Submit an objective to see the workforce in action here.</p>}
+    <div className="mt-6 space-y-3">{events.map((event) => { const { agent, action, tone } = describeEvent(event, agentNames); return <div key={event.id} className="flex gap-3 rounded-xl border border-[#263440] bg-[#0d141b] p-4"><span className={["mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border", toneClasses(tone)].join(" ")}><Bot size={13} /></span><div className="min-w-0 flex-1"><div className="text-[11px] leading-5 text-slate-300"><span className="font-semibold text-slate-100">{agent}</span> {action}</div><div className="mt-1 font-mono-ui text-[8px] text-slate-600">{formatRelativeTime(event.timestamp)}</div></div><ArrowUpRight size={13} className="mt-1 text-slate-600" /></div>; })}</div></div>
+    <aside className="space-y-4"><div className="panel-muted rounded-2xl p-5"><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">System readiness</div><div className="mt-5 flex items-center gap-3"><span className="status-dot status-dot-live" /><div><div className="text-[13px] font-semibold text-slate-200">Connected to the runtime</div><div className="mt-1 text-[10px] text-slate-500">Live events from the organization's event stream</div></div></div></div><div className="panel-muted rounded-2xl p-5"><div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">What's recorded</div><p className="mt-3 text-[10px] leading-5 text-slate-500">Every planning step, task transition, tool call, artifact and approval decision is recorded as an event and shown here in real time.</p></div></aside>
+  </div>;
 }
 
 function GenericPage({ data }: { data: PageConfig }) {
@@ -129,5 +228,5 @@ export default function PlaceholderPage({ title }: { title: string }) {
   const data = pageData[title] ?? pageData.Work;
   const [notice, setNotice] = useState("");
   function handleAction() { setNotice(`${data.action} is ready to connect to the live runtime.`); window.setTimeout(() => setNotice(""), 2600); }
-  return <div className="mx-auto max-w-[1380px] fade-up"><PageHeader data={data} onAction={handleAction} />{notice && <div className="mt-5 flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-3 text-[10px] text-cyan-100"><Check size={13} />{notice}</div>}{title === "Organization" ? <OrganizationMap /> : title === "Agents" ? <AgentsPage /> : title === "Work" ? <WorkPage /> : title === "Company Brain" ? <BrainPage /> : title === "Approvals" ? <ApprovalPage /> : <GenericPage data={data} />}</div>;
+  return <div className="mx-auto max-w-[1380px] fade-up"><PageHeader data={data} onAction={handleAction} />{notice && <div className="mt-5 flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-3 text-[10px] text-cyan-100"><Check size={13} />{notice}</div>}{title === "Organization" ? <OrganizationMap /> : title === "Agents" ? <AgentsPage /> : title === "Work" ? <WorkPage /> : title === "Company Brain" ? <BrainPage /> : title === "Approvals" ? <ApprovalPage /> : title === "Activity" ? <ActivityPage /> : <GenericPage data={data} />}</div>;
 }

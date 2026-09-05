@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  Agent,
   Artifact,
   Event,
   EventId,
@@ -12,6 +13,7 @@ import type {
 } from "@unioffice/core";
 
 import type {
+  AgentRepository,
   ArtifactRepository,
   EventRepository,
   TaskRepository,
@@ -45,6 +47,14 @@ const artifactRepository: ArtifactRepository = {
   async findById() { return null; },
   async findByWork() { return []; },
   async findByTask() { return []; },
+};
+
+const noAgentsRepository: AgentRepository = {
+  async create(agent) { return agent; },
+  async findById() { return null; },
+  async findByOrganization() { return []; },
+  async update(agent) { return agent; },
+  async delete() {},
 };
 
 function makeEvent(overrides: Partial<Event>): Event {
@@ -81,6 +91,7 @@ test("getOrganizationActivity returns only events for the requested organization
     taskRepository,
     eventRepository,
     artifactRepository,
+    noAgentsRepository,
   );
 
   const activity = await service.getOrganizationActivity(organizationId);
@@ -105,9 +116,51 @@ test("getOrganizationActivity forwards a limit to the repository", async () => {
     taskRepository,
     eventRepository,
     artifactRepository,
+    noAgentsRepository,
   );
 
   await service.getOrganizationActivity(organizationId, 5);
 
   assert.equal(receivedLimit, 5);
+});
+
+test("getAgents returns the organization's agent directory", async () => {
+  const agents: Agent[] = [{
+    id: "agent-1" as Agent["id"],
+    organizationId,
+    name: "Ledger",
+    description: "Operations analysis.",
+    type: "specialist",
+    status: "active",
+    capabilities: ["analysis"],
+    toolIds: ["calculator"],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    metadata: {},
+  }];
+  const agentRepository: AgentRepository = {
+    async create(agent) { return agent; },
+    async findById() { return null; },
+    async findByOrganization(id) {
+      return id === organizationId ? agents : [];
+    },
+    async update(agent) { return agent; },
+    async delete() {},
+  };
+  const eventRepository: EventRepository = {
+    async create(event) { return event; },
+    async findByWork() { return []; },
+    async findByOrganization() { return []; },
+  };
+  const service = new WorkQueryService(
+    workRepository,
+    taskRepository,
+    eventRepository,
+    artifactRepository,
+    agentRepository,
+  );
+
+  const result = await service.getAgents(organizationId);
+
+  assert.deepEqual(result, agents);
 });

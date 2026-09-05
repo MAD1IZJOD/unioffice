@@ -162,6 +162,7 @@ export async function createApiServer() {
     taskRepository,
     eventRepository,
     artifactRepository,
+    agentRepository,
   );
 
   const developmentOrganization =
