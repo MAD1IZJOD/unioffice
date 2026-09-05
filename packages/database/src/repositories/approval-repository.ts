@@ -17,4 +17,10 @@ export interface ApprovalRepository {
   ): Promise<ApprovalRequest[]>;
 
   update(approval: ApprovalRequest): Promise<ApprovalRequest>;
+
+  /**
+   * Persists a decision only while the request is still pending. A null result
+   * means another actor already resolved it.
+   */
+  resolvePending(approval: ApprovalRequest): Promise<ApprovalRequest | null>;
 }
