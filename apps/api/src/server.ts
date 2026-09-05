@@ -74,14 +74,26 @@ export function buildApiServer(
     return reply.status(204).send();
   });
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const resolvedError = toError(error);
     const statusCode = statusForError(resolvedError);
+
+    // Only intentionally client-facing errors (ApiError, domain 404/409s)
+    // carry a message safe to return as-is. An unmapped error could be
+    // anything bubbling up from the database driver or model provider, so
+    // the client gets a generic message while the real one is logged.
+    const message = statusCode === 500
+      ? "An internal error occurred."
+      : resolvedError.message;
+
+    if (statusCode === 500) {
+      request.log.error(resolvedError);
+    }
 
     return reply.status(statusCode).send({
       error: {
         code: errorCode(statusCode),
-        message: resolvedError.message,
+        message,
       },
     });
   });
