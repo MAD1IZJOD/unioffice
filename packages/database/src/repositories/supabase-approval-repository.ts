@@ -88,6 +88,24 @@ export class SupabaseApprovalRepository implements ApprovalRepository {
     if (error) throw new Error(`Failed to update approval: ${error.message}`);
     return fromRow(data as ApprovalRow);
   }
+
+  async resolvePending(
+    approval: ApprovalRequest,
+  ): Promise<ApprovalRequest | null> {
+    // The `status = pending` predicate is evaluated by Postgres inside the same
+    // statement that writes the decision, so concurrent deciders contend on the
+    // row lock and exactly one of them matches a row.
+    const { data, error } = await this.client
+      .from("approval_requests")
+      .update(toRow(approval))
+      .eq("id", approval.id)
+      .eq("status", "pending")
+      .select()
+      .maybeSingle();
+
+    if (error) throw new Error(`Failed to resolve approval: ${error.message}`);
+    return data ? fromRow(data as ApprovalRow) : null;
+  }
 }
 
 function toRow(approval: ApprovalRequest) {

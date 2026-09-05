@@ -29,6 +29,8 @@ import type {
   WorkApprovalService,
 } from "./work-approval-service.js";
 
+import { ApprovalConflictError } from "./work-approval-service.js";
+
 const developmentRequesterId =
   "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09" as UserId;
 
@@ -296,6 +298,10 @@ function objectMetadata(
 function statusForError(error: Error): number {
   if (error instanceof ApiError) {
     return error.statusCode;
+  }
+
+  if (error instanceof ApprovalConflictError) {
+    return 409;
   }
 
   if (error.message.startsWith("Work not found:")) {

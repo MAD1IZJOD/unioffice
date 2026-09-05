@@ -18,6 +18,20 @@ export interface ApprovalCoordinator {
   requestApproval(work: Work, task: Task): Promise<Task>;
 }
 
+/**
+ * Raised when an approval was already resolved by another actor. This is a
+ * caller-visible conflict rather than a server fault, so the API maps it to 409.
+ */
+export class ApprovalConflictError extends Error {
+  readonly approvalId: ApprovalId;
+
+  constructor(approvalId: ApprovalId) {
+    super(`Approval is already resolved: ${approvalId}`);
+    this.name = "ApprovalConflictError";
+    this.approvalId = approvalId;
+  }
+}
+
 /** Coordinates durable approval decisions with the work and task lifecycle. */
 export class WorkApprovalService implements ApprovalCoordinator {
   constructor(
@@ -106,12 +120,16 @@ export class WorkApprovalService implements ApprovalCoordinator {
   ): Promise<ApprovalRequest> {
     const { approval, task, work } = await this.loadPendingApproval(approvalId);
     const now = new Date();
-    const resolvedApproval = await this.approvalRepository.update({
+    // Claim the transition first. If another decider already won, we must not
+    // run any of the task/work/event side effects below.
+    const resolvedApproval = await this.approvalRepository.resolvePending({
       ...approval,
       status: "approved",
       resolvedAt: now,
       resolvedBy,
     });
+
+    if (!resolvedApproval) throw new ApprovalConflictError(approvalId);
 
     await this.taskRepository.update({
       ...task,
@@ -158,12 +176,15 @@ export class WorkApprovalService implements ApprovalCoordinator {
   ): Promise<ApprovalRequest> {
     const { approval, task, work } = await this.loadPendingApproval(approvalId);
     const now = new Date();
-    const resolvedApproval = await this.approvalRepository.update({
+    // Same claim-before-effects ordering as approve().
+    const resolvedApproval = await this.approvalRepository.resolvePending({
       ...approval,
       status: "rejected",
       resolvedAt: now,
       resolvedBy,
     });
+
+    if (!resolvedApproval) throw new ApprovalConflictError(approvalId);
 
     await this.taskRepository.update({
       ...task,
@@ -219,8 +240,10 @@ export class WorkApprovalService implements ApprovalCoordinator {
     work: Work;
   }> {
     const approval = await this.getApproval(approvalId);
+    // Cheap pre-check only. resolvePending is what actually enforces the
+    // invariant, because this read cannot be atomic with the later write.
     if (approval.status !== "pending") {
-      throw new Error(`Approval is already resolved: ${approvalId}`);
+      throw new ApprovalConflictError(approvalId);
     }
 
     const task = await this.taskRepository.findById(approval.taskId);

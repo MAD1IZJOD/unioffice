@@ -42,6 +42,7 @@ import {
 } from "./work-execution-service.js";
 
 import {
+  ApprovalConflictError,
   WorkApprovalService,
 } from "./work-approval-service.js";
 
@@ -197,6 +198,16 @@ class MemoryApprovalRepository implements ApprovalRepository {
   }
 
   async update(approval: ApprovalRequest): Promise<ApprovalRequest> {
+    this.approvals.set(approval.id, approval);
+    return approval;
+  }
+
+  /** Mirrors the `status = pending` guard the Postgres update relies on. */
+  async resolvePending(
+    approval: ApprovalRequest,
+  ): Promise<ApprovalRequest | null> {
+    const current = this.approvals.get(approval.id);
+    if (!current || current.status !== "pending") return null;
     this.approvals.set(approval.id, approval);
     return approval;
   }
@@ -744,6 +755,62 @@ test("fails work when an approval is rejected", async () => {
   assert.equal(rejected.status, "rejected");
   assert.equal((await taskRepository.findById(task.id))?.status, "failed");
   assert.equal((await workRepository.findById(work.id))?.status, "failed");
+});
+
+test("resolves a pending approval exactly once under concurrent decisions", async () => {
+  const workRepository = new MemoryWorkRepository();
+  const taskRepository = new MemoryTaskRepository();
+  const approvalRepository = new MemoryApprovalRepository();
+  const { recorder, repository: eventRepository } = createRecorder();
+  const work = makeWork();
+  const task = makeTask("task-race" as TaskId, {
+    status: "waiting",
+    metadata: { approval: { required: true, reason: "Review", status: "pending" } },
+  });
+  await workRepository.create({ ...work, status: "waiting_approval" });
+  await taskRepository.create(task);
+  const approvalService = new WorkApprovalService(
+    approvalRepository,
+    taskRepository,
+    workRepository,
+    recorder,
+  );
+  const pending = await approvalService.requestApproval(work, task);
+  const approvalId = (pending.metadata.approval as { requestId: ApprovalId }).requestId;
+
+  // Both deciders read the approval while it is still pending, so both clear
+  // the pre-check. Only the conditional write may take effect.
+  const [approveResult, rejectResult] = await Promise.allSettled([
+    approvalService.approve(approvalId, "user-1"),
+    approvalService.reject(approvalId, "user-2"),
+  ]);
+
+  const outcomes = [approveResult, rejectResult];
+  const winners = outcomes.filter((outcome) => outcome.status === "fulfilled");
+  const losers = outcomes.filter((outcome) => outcome.status === "rejected");
+
+  assert.equal(winners.length, 1, "exactly one decision must succeed");
+  assert.equal(losers.length, 1, "the losing decision must be refused");
+  assert.ok(
+    (losers[0] as PromiseRejectedResult).reason instanceof ApprovalConflictError,
+    "the loser must surface a conflict, not a generic failure",
+  );
+
+  // The stored approval must match the winner and never be rewritten after.
+  const stored = await approvalRepository.findById(approvalId);
+  const winningStatus =
+    approveResult.status === "fulfilled" ? "approved" : "rejected";
+  assert.equal(stored?.status, winningStatus);
+  assert.equal(
+    stored?.resolvedBy,
+    approveResult.status === "fulfilled" ? "user-1" : "user-2",
+  );
+
+  // The loser must not have produced any side effects.
+  const terminalEvents = eventRepository.events
+    .map((event) => event.type)
+    .filter((type) => type === "approval.approved" || type === "approval.rejected");
+  assert.deepEqual(terminalEvents, [`approval.${winningStatus}`]);
 });
 
 test("marks work as failed when a task fails", async () => {
