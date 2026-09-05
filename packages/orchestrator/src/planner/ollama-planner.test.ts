@@ -183,3 +183,20 @@ test("rejects malformed capability and approval fields", () => {
     /approvalReason/,
   );
 });
+
+test("ignores an inactive approval reason", () => {
+  const plan = parseOllamaPlan(JSON.stringify({
+    tasks: [{
+      ref: "research",
+      title: "Research",
+      description: "Collect facts.",
+      requiredCapabilities: [],
+      requiresApproval: false,
+      approvalReason: "This should not create a gate.",
+      dependsOn: [],
+    }],
+  }), []);
+
+  assert.equal(plan.tasks[0]?.requiresApproval, false);
+  assert.equal(plan.tasks[0]?.approvalReason, undefined);
+});
