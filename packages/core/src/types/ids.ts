@@ -37,3 +37,7 @@ export type ApprovalId = string & {
 export type EventId = string & {
   readonly __brand: "EventId";
 };
+
+export type MemoryId = string & {
+  readonly __brand: "MemoryId";
+};

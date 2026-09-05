@@ -9,10 +9,15 @@ import {
   SupabaseApprovalRepository,
   SupabaseArtifactRepository,
   SupabaseEventRepository,
+  SupabaseMemoryRepository,
   SupabaseOrganizationRepository,
   SupabaseTaskRepository,
   SupabaseWorkRepository,
 } from "@unioffice/database";
+
+import {
+  DefaultMemoryRetriever,
+} from "@unioffice/memory";
 
 import {
   DefaultDelegator,
@@ -47,6 +52,10 @@ import {
 import {
   buildApiServer,
 } from "./server.js";
+
+import {
+  CompanyBrainService,
+} from "./company-brain-service.js";
 
 import {
   TaskExecutionService,
@@ -86,6 +95,13 @@ export async function createApiServer() {
   const eventRepository =
     new SupabaseEventRepository(supabase);
   const eventRecorder = new EventRecorder(eventRepository);
+  const memoryRepository =
+    new SupabaseMemoryRepository(supabase);
+  const memoryRetriever = new DefaultMemoryRetriever(memoryRepository);
+  const companyBrainService = new CompanyBrainService(
+    memoryRepository,
+    memoryRetriever,
+  );
   const modelProvider = new OllamaModelProvider({
     baseUrl: config.ollamaBaseUrl,
     defaultModel: config.ollamaModel,
@@ -126,6 +142,7 @@ export async function createApiServer() {
     agentRepository,
     executionEngine,
     eventRecorder,
+    companyBrainService,
   );
   const workApprovalService = new WorkApprovalService(
     approvalRepository,
@@ -161,6 +178,7 @@ export async function createApiServer() {
     workExecutionService,
     workApprovalService,
     workQueryService,
+    companyBrainService,
     developmentOrganizationId:
       developmentOrganization?.organization.id,
     corsOrigins: config.corsOrigins,

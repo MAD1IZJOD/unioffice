@@ -234,6 +234,9 @@ importers:
       '@unioffice/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@unioffice/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
       '@unioffice/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
@@ -336,6 +339,9 @@ importers:
       '@unioffice/core':
         specifier: workspace:*
         version: link:../core
+      '@unioffice/database':
+        specifier: workspace:*
+        version: link:../database
 
   packages/orchestrator:
     dependencies:

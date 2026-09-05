@@ -1,7 +1,10 @@
 import type {
   AgentId,
+  MemoryId,
   OrganizationId,
-} from "@unioffice/core";
+  TaskId,
+  WorkId,
+} from "../types/ids.js";
 
 export type MemoryScope =
   | "company"
@@ -15,12 +18,17 @@ export type MemoryType =
   | "experience"
   | "document";
 
+/** A retrievable unit of organizational context: a fact, decision, or past outcome. */
 export interface Memory {
-  id: string;
+  id: MemoryId;
 
   organizationId: OrganizationId;
 
   agentId?: AgentId;
+
+  workId?: WorkId;
+
+  taskId?: TaskId;
 
   scope: MemoryScope;
 
@@ -30,6 +38,7 @@ export interface Memory {
 
   source?: string;
 
+  /** 0-1. Higher-importance memories can surface even without a keyword match. */
   importance: number;
 
   createdAt: Date;

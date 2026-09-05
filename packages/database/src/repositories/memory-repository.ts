@@ -1,13 +1,11 @@
 import type {
   AgentId,
-  OrganizationId,
-} from "@unioffice/core";
-
-import type {
   Memory,
+  MemoryId,
   MemoryScope,
   MemoryType,
-} from "../memory.js";
+  OrganizationId,
+} from "@unioffice/core";
 
 export interface MemoryQuery {
   organizationId: OrganizationId;
@@ -21,14 +19,15 @@ export interface MemoryQuery {
   limit?: number;
 }
 
-export interface MemoryStore {
+export interface MemoryRepository {
   create(memory: Memory): Promise<Memory>;
 
-  getById(id: string): Promise<Memory | null>;
+  findById(id: MemoryId): Promise<Memory | null>;
 
+  /** Most recently created memories matching the filters, newest first. */
   query(query: MemoryQuery): Promise<Memory[]>;
 
   update(memory: Memory): Promise<Memory>;
 
-  delete(id: string): Promise<void>;
+  delete(id: MemoryId): Promise<void>;
 }

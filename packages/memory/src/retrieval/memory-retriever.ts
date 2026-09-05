@@ -1,11 +1,8 @@
 import type {
   AgentId,
+  Memory,
   OrganizationId,
 } from "@unioffice/core";
-
-import type {
-  Memory,
-} from "../memory.js";
 
 export interface MemoryRetrievalContext {
   organizationId: OrganizationId;

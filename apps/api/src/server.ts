@@ -31,6 +31,10 @@ import type {
 
 import { ApprovalConflictError } from "./work-approval-service.js";
 
+import type {
+  CompanyBrainService,
+} from "./company-brain-service.js";
+
 const developmentRequesterId =
   "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09" as UserId;
 
@@ -40,6 +44,7 @@ export interface ApiServices {
   workExecutionService: WorkExecutionService;
   workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
+  companyBrainService: CompanyBrainService;
   healthCheck: () => Promise<Record<string, unknown>>;
   developmentOrganizationId?: OrganizationId;
   corsOrigins: string[];
@@ -199,6 +204,30 @@ export function buildApiServer(
     return { approval };
   });
 
+  app.get("/memory", async (request) => {
+    const query = objectBody(request.query);
+    const organizationId = optionalText(query.organizationId) ??
+      services.developmentOrganizationId;
+
+    if (!organizationId) {
+      throw new ApiError(400, "organizationId is required when no development workforce is seeded.");
+    }
+
+    const searchQuery = optionalText(query.query);
+
+    const memories = searchQuery
+      ? await services.companyBrainService.retrieveRelevant({
+          organizationId: organizationId as OrganizationId,
+          query: searchQuery,
+          limit: parseOptionalLimit(query.limit),
+        })
+      : await services.companyBrainService.listByOrganization(
+          organizationId as OrganizationId,
+        );
+
+    return { memories };
+  });
+
   return app;
 }
 
@@ -262,6 +291,22 @@ function optionalText(value: unknown): string | undefined {
   }
 
   return value.trim();
+}
+
+function parseOptionalLimit(value: unknown): number | undefined {
+  const text = optionalText(value);
+
+  if (text === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number(text);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ApiError(400, "limit must be a positive integer.");
+  }
+
+  return parsed;
 }
 
 function parsePriority(value: unknown): WorkPriority | undefined {

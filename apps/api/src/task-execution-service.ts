@@ -26,6 +26,10 @@ import {
 } from "./agent-definition.js";
 
 import type {
+  CompanyBrainService,
+} from "./company-brain-service.js";
+
+import type {
   EventRecorder,
 } from "./event-recorder.js";
 
@@ -48,6 +52,9 @@ export class TaskExecutionService {
 
     private readonly eventRecorder:
       EventRecorder,
+
+    private readonly companyBrainService?:
+      CompanyBrainService,
   ) {}
 
   async executeTask(
@@ -137,6 +144,12 @@ export class TaskExecutionService {
     });
 
     try {
+      const relevantMemory = await this.retrieveRelevantMemory(
+        agent.organizationId,
+        agent.id,
+        runningTask,
+      );
+
       const result =
         await this.executionEngine.execute({
           workId: runningTask.workId,
@@ -157,6 +170,7 @@ export class TaskExecutionService {
           },
           context: {
             taskMetadata: runningTask.metadata,
+            relevantMemory,
           },
         });
 
@@ -227,6 +241,8 @@ export class TaskExecutionService {
             title: resolvedTask.title,
           },
         });
+
+        await this.recordOutcomeMemory(agent, resolvedTask, "completed", stringifyResult(result.output));
       } else if (persistedTask.status === "failed") {
         await this.eventRecorder.record({
           organizationId: agent.organizationId,
@@ -239,6 +255,13 @@ export class TaskExecutionService {
             error: result.error,
           },
         });
+
+        await this.recordOutcomeMemory(
+          agent,
+          persistedTask,
+          "failed",
+          result.error?.message ?? "Execution failed without a specific error.",
+        );
       }
 
       return resolvedTask;
@@ -276,7 +299,63 @@ export class TaskExecutionService {
         },
       });
 
+      await this.recordOutcomeMemory(agent, persistedTask, "failed", errorMessage(error));
+
       return persistedTask;
+    }
+  }
+
+  private async retrieveRelevantMemory(
+    organizationId: Agent["organizationId"],
+    agentId: Agent["id"],
+    task: Task,
+  ): Promise<unknown[]> {
+    if (!this.companyBrainService) {
+      return [];
+    }
+
+    try {
+      const memories = await this.companyBrainService.retrieveRelevant({
+        organizationId,
+        agentId,
+        query: `${task.title} ${task.description}`,
+        limit: 5,
+      });
+
+      return memories.map((memory) => ({
+        type: memory.type,
+        content: memory.content,
+      }));
+    } catch {
+      // Memory retrieval is an enhancement, not a dependency. A failure here
+      // must not block task execution.
+      return [];
+    }
+  }
+
+  private async recordOutcomeMemory(
+    agent: Agent,
+    task: Task,
+    status: "completed" | "failed",
+    summary: string,
+  ): Promise<void> {
+    if (!this.companyBrainService) {
+      return;
+    }
+
+    try {
+      await this.companyBrainService.recordTaskOutcome({
+        organizationId: agent.organizationId,
+        agentId: agent.id,
+        workId: task.workId,
+        taskId: task.id,
+        title: task.title,
+        status,
+        summary,
+      });
+    } catch {
+      // Best-effort: the task's own persisted status remains the source of
+      // truth even if the company brain write fails.
     }
   }
 
@@ -379,6 +458,18 @@ export class TaskExecutionService {
 
 function isStructured(value: unknown): boolean {
   return typeof value === "object" && value !== null;
+}
+
+function stringifyResult(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value) ?? "No result was produced.";
+  } catch {
+    return "Result could not be serialized.";
+  }
 }
 
 function errorMessage(error: unknown): string {

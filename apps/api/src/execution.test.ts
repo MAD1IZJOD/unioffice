@@ -9,6 +9,8 @@ import type {
   Artifact,
   ArtifactId,
   Event,
+  Memory,
+  MemoryId,
   OrganizationId,
   Task,
   TaskId,
@@ -21,13 +23,21 @@ import type {
   ApprovalRepository,
   ArtifactRepository,
   EventRepository,
+  MemoryQuery,
+  MemoryRepository,
   TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
 
+import { DefaultMemoryRetriever } from "@unioffice/memory";
+
 import type {
   ExecutionEngine,
 } from "@unioffice/orchestrator";
+
+import {
+  CompanyBrainService,
+} from "./company-brain-service.js";
 
 import {
   EventRecorder,
@@ -210,6 +220,34 @@ class MemoryApprovalRepository implements ApprovalRepository {
     if (!current || current.status !== "pending") return null;
     this.approvals.set(approval.id, approval);
     return approval;
+  }
+}
+
+class FakeMemoryRepository implements MemoryRepository {
+  readonly memories = new Map<MemoryId, Memory>();
+
+  async create(memory: Memory): Promise<Memory> {
+    this.memories.set(memory.id, memory);
+    return memory;
+  }
+
+  async findById(id: MemoryId): Promise<Memory | null> {
+    return this.memories.get(id) ?? null;
+  }
+
+  async query(query: MemoryQuery): Promise<Memory[]> {
+    return [...this.memories.values()]
+      .filter((memory) => memory.organizationId === query.organizationId)
+      .slice(0, query.limit);
+  }
+
+  async update(memory: Memory): Promise<Memory> {
+    this.memories.set(memory.id, memory);
+    return memory;
+  }
+
+  async delete(id: MemoryId): Promise<void> {
+    this.memories.delete(id);
   }
 }
 
@@ -882,4 +920,138 @@ test("returns an already completed work item without re-executing tasks", async 
   assert.equal(result.work.status, "completed");
   assert.equal(result.tasks[0]?.id, task.id);
   assert.equal(eventRepository.events.length, 0);
+});
+
+test("records a company memory when a task completes and surfaces it to a later related task", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const memoryRepository = new FakeMemoryRepository();
+  const companyBrainService = new CompanyBrainService(
+    memoryRepository,
+    new DefaultMemoryRetriever(memoryRepository),
+  );
+  const { recorder, repository: eventRepository } = createRecorder();
+  const firstTask = makeTask("task-onboarding-1" as TaskId, {
+    title: "Draft onboarding SSO plan",
+    status: "ready",
+  });
+  await taskRepository.create(firstTask);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const completingEngine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: "SSO is required for enterprise onboarding.",
+        toolCalls: [],
+        metadata: {},
+      };
+    },
+  };
+  const firstService = new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    completingEngine,
+    recorder,
+    companyBrainService,
+  );
+
+  await firstService.executeTask(firstTask.id);
+
+  assert.equal(memoryRepository.memories.size, 1);
+  const stored = [...memoryRepository.memories.values()][0];
+  assert.equal(stored?.type, "experience");
+  assert.match(stored?.content ?? "", /SSO is required for enterprise onboarding/);
+
+  let capturedContext: Record<string, unknown> | undefined;
+  const secondTask = makeTask("task-onboarding-2" as TaskId, {
+    title: "Review onboarding SSO requirements",
+    status: "ready",
+  });
+  await taskRepository.create(secondTask);
+  const observingEngine: ExecutionEngine = {
+    async execute(request) {
+      capturedContext = request.context;
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: "Reviewed.",
+        toolCalls: [],
+        metadata: {},
+      };
+    },
+  };
+  const secondService = new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    observingEngine,
+    recorder,
+    companyBrainService,
+  );
+
+  await secondService.executeTask(secondTask.id);
+
+  const relevantMemory = capturedContext?.relevantMemory as Array<{ content: string }> | undefined;
+  assert.ok(relevantMemory && relevantMemory.length > 0, "expected prior task outcome to be retrieved as context");
+  assert.match(relevantMemory![0]!.content, /SSO is required for enterprise onboarding/);
+});
+
+test("records a failure memory without blocking task failure when a task fails", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const memoryRepository = new FakeMemoryRepository();
+  const companyBrainService = new CompanyBrainService(
+    memoryRepository,
+    new DefaultMemoryRetriever(memoryRepository),
+  );
+  const { recorder } = createRecorder();
+  const task = makeTask("task-brain-failure" as TaskId, { status: "ready" });
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const failingEngine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "failed",
+        error: { code: "MODEL_ERROR", message: "Model timed out." },
+        toolCalls: [],
+        metadata: {},
+      };
+    },
+  };
+  const service = new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    failingEngine,
+    recorder,
+    companyBrainService,
+  );
+
+  const result = await service.executeTask(task.id);
+
+  assert.equal(result.status, "failed");
+  assert.equal(memoryRepository.memories.size, 1);
+  const stored = [...memoryRepository.memories.values()][0];
+  assert.equal(stored?.type, "decision");
+  assert.match(stored?.content ?? "", /Model timed out/);
 });
