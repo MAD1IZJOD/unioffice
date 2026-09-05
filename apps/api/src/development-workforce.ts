@@ -96,41 +96,67 @@ export async function ensureDevelopmentWorkforce(
     await agentRepository.findByOrganization(
       organization.id,
     );
-  const existingIds = new Set(
-    existing.map((agent) => agent.id),
+  const existingById = new Map(
+    existing.map((agent) => [agent.id, agent]),
   );
 
   for (const blueprint of workforce) {
-    if (existingIds.has(blueprint.id as AgentId)) {
+    const toolIds = blueprint.toolIds;
+    const systemInstructions = [
+      `You are ${blueprint.name}, a UNI-OFFICE ${blueprint.type}.`,
+      blueprint.description,
+      "Complete the assigned task using the supplied context.",
+      "Be concise and explicit about assumptions.",
+      toolIds.length > 0
+        ? "Use your available tools for calculations or lookups instead of guessing; never claim to have used a tool you did not actually call."
+        : "You do not have tools unless they are explicitly listed. Do not claim external tool use.",
+    ].join("\n");
+
+    const currentAgent = existingById.get(blueprint.id as AgentId);
+
+    if (!currentAgent) {
+      await agentRepository.create({
+        id: blueprint.id as AgentId,
+        organizationId: organization.id,
+        name: blueprint.name,
+        description: blueprint.description,
+        type: blueprint.type,
+        status: "active",
+        capabilities: blueprint.capabilities,
+        toolIds,
+        createdAt: now,
+        updatedAt: now,
+        metadata: {
+          developmentSeed: true,
+          systemInstructions,
+        },
+      });
       continue;
     }
 
-    const toolIds = blueprint.toolIds;
+    // The blueprint (capabilities, granted tools, instructions) can change
+    // between deploys; an agent seeded before toolIds existed must not be
+    // stuck without them forever just because its row already exists.
+    const isOutOfDate =
+      JSON.stringify([...currentAgent.toolIds].sort()) !== JSON.stringify([...toolIds].sort()) ||
+      JSON.stringify([...currentAgent.capabilities].sort()) !== JSON.stringify([...blueprint.capabilities].sort()) ||
+      currentAgent.description !== blueprint.description ||
+      currentAgent.metadata.systemInstructions !== systemInstructions;
 
-    await agentRepository.create({
-      id: blueprint.id as AgentId,
-      organizationId: organization.id,
-      name: blueprint.name,
-      description: blueprint.description,
-      type: blueprint.type,
-      status: "active",
-      capabilities: blueprint.capabilities,
-      toolIds,
-      createdAt: now,
-      updatedAt: now,
-      metadata: {
-        developmentSeed: true,
-        systemInstructions: [
-          `You are ${blueprint.name}, a UNI-OFFICE ${blueprint.type}.`,
-          blueprint.description,
-          "Complete the assigned task using the supplied context.",
-          "Be concise and explicit about assumptions.",
-          toolIds.length > 0
-            ? "Use your available tools for calculations or lookups instead of guessing; never claim to have used a tool you did not actually call."
-            : "You do not have tools unless they are explicitly listed. Do not claim external tool use.",
-        ].join("\n"),
-      },
-    });
+    if (isOutOfDate) {
+      await agentRepository.update({
+        ...currentAgent,
+        description: blueprint.description,
+        capabilities: blueprint.capabilities,
+        toolIds,
+        updatedAt: now,
+        metadata: {
+          ...currentAgent.metadata,
+          developmentSeed: true,
+          systemInstructions,
+        },
+      });
+    }
   }
 
   return {
