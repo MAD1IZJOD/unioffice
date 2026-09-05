@@ -76,6 +76,20 @@ test("returns a validation error with its intended message for bad input", async
   assert.match(body.error.message, /objective is required/);
 });
 
+test("rate limits a client that exceeds the request budget", async () => {
+  const app = buildApiServer(baseServices());
+  await app.ready();
+
+  let lastResponse;
+  for (let i = 0; i < 121; i += 1) {
+    lastResponse = await app.inject({ method: "GET", url: "/health" });
+  }
+
+  assert.equal(lastResponse!.statusCode, 429);
+  const body = lastResponse!.json();
+  assert.equal(body.error.code, "RATE_LIMITED");
+});
+
 test("returns the created work for a valid request", async () => {
   const now = new Date();
   const work: Work = {

@@ -11,6 +11,7 @@
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.0",
     "@unioffice/agents": "workspace:*",
     "@unioffice/core": "workspace:*",
     "@unioffice/database": "workspace:*",
