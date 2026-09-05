@@ -405,6 +405,71 @@ test("persists a completed task execution result", async () => {
   );
 });
 
+test("records an observable event for every tool call the agent made", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder, repository: eventRepository } = createRecorder();
+  const task = makeTask("task-tool-observability" as TaskId, { status: "ready" });
+
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: "564",
+        toolCalls: [
+          {
+            toolId: "calculator",
+            input: { expression: "47 * 12" },
+            output: { expression: "47 * 12", result: 564 },
+            status: "completed",
+            startedAt: new Date(),
+            completedAt: new Date(),
+          },
+          {
+            toolId: "calculator",
+            input: { expression: "1 / 0" },
+            error: { code: "TOOL_EXECUTION_FAILED", message: "Division by zero." },
+            status: "failed",
+            startedAt: new Date(),
+            completedAt: new Date(),
+          },
+        ],
+        metadata: {},
+      };
+    },
+  };
+  const service = new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+  );
+
+  const result = await service.executeTask(task.id);
+
+  assert.equal(result.status, "completed");
+  const toolEvents = eventRepository.events.filter((event) => event.type.startsWith("tool."));
+  assert.deepEqual(toolEvents.map((event) => event.type), ["tool.completed", "tool.failed"]);
+  assert.equal(toolEvents[0]?.payload.toolId, "calculator");
+  assert.deepEqual(toolEvents[0]?.payload.output, { expression: "47 * 12", result: 564 });
+  assert.deepEqual(toolEvents[1]?.payload.error, { code: "TOOL_EXECUTION_FAILED", message: "Division by zero." });
+  assert.deepEqual(
+    (result.metadata.execution as { toolCalls: unknown[] }).toolCalls.length,
+    2,
+  );
+});
+
 test("persists failed agent execution", async () => {
   const taskRepository = new MemoryTaskRepository();
   const artifactRepository = new MemoryArtifactRepository();

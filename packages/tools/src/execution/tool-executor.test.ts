@@ -99,3 +99,22 @@ test("captures a thrown execution error without crashing the caller", async () =
   assert.equal(result.error?.code, "TOOL_EXECUTION_FAILED");
   assert.equal(result.error?.message, "boom");
 });
+
+test("captures a validate() that throws instead of crashing the caller", async () => {
+  const registry = new DefaultToolRegistry();
+  const malformedTool: ToolDefinition = {
+    ...echoTool,
+    id: "malformed",
+    validate: () => {
+      throw new TypeError("cannot read property of undefined");
+    },
+  };
+  registry.register(malformedTool);
+  const executor = new ToolExecutor(registry);
+
+  const result = await executor.execute("malformed", { anything: true }, context(["malformed"]));
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error?.code, "TOOL_INPUT_INVALID");
+  assert.match(result.error?.message ?? "", /cannot read property of undefined/);
+});

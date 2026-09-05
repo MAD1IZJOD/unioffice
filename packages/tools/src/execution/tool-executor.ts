@@ -78,7 +78,20 @@ export class ToolExecutor {
       );
     }
 
-    const validation = tool.validate(input);
+    let validation: ReturnType<typeof tool.validate>;
+
+    try {
+      validation = tool.validate(input);
+    } catch (error) {
+      return this.failed(
+        toolId,
+        startedAt,
+        "TOOL_INPUT_INVALID",
+        `Validating input for tool ${toolId} threw an error: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
 
     if (!validation.valid) {
       return this.failed(

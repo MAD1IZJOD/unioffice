@@ -42,6 +42,7 @@ const MAX_OBJECTIVE_CHARS = 3_000;
 const MAX_TASK_CHARS = 4_000;
 const MAX_DEPENDENCY_CHARS = 6_000;
 const MAX_OPERATIONAL_CONTEXT_CHARS = 4_000;
+const MAX_TOOL_RESULT_CHARS = 3_000;
 const MAX_VALUE_DEPTH = 5;
 const MAX_OBJECT_KEYS = 32;
 const MAX_ARRAY_ITEMS = 24;
@@ -193,10 +194,15 @@ export class DefaultAgentRuntime
           role: "user",
           content: [
             `Tool result for "${result.toolId}":`,
-            JSON.stringify(
+            // A tool's output size is entirely determined by its input (e.g.
+            // json_transform echoing back a large array), so it gets the same
+            // bounding as every other piece of injected context before it can
+            // reach the model.
+            this.stringify(
               result.status === "completed"
                 ? { status: result.status, output: result.output }
                 : { status: result.status, error: result.error },
+              MAX_TOOL_RESULT_CHARS,
             ),
             "Continue reasoning, call another tool if needed, or give your final answer as plain text.",
           ].join("\n"),

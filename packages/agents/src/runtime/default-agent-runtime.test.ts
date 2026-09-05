@@ -290,3 +290,45 @@ test("records a failed tool execution without crashing the agent loop", async ()
   assert.equal(result.toolCalls[0]?.error?.code, "TOOL_INPUT_INVALID");
   assert.equal(result.output, "Recovered after the tool error.");
 });
+
+test("bounds an oversized tool output before it is fed back into the model", async () => {
+  const registry = new DefaultToolRegistry();
+  const hugeOutputTool: ToolDefinition<Record<string, never>, { text: string }> = {
+    id: "dump",
+    name: "Dump",
+    description: "Returns a large amount of text.",
+    version: "1.0.0",
+    inputSchema: { type: "object" },
+    validate: () => ({ valid: true, value: {} }),
+    async execute() {
+      return { text: "x".repeat(50_000) };
+    },
+  };
+  registry.register(hugeOutputTool);
+  const requests: ModelRequest[] = [];
+  let turn = 0;
+  const provider: ModelProvider = {
+    async generate(request) {
+      requests.push(request);
+      turn += 1;
+
+      if (turn === 1) {
+        return {
+          model: "test-model",
+          content: JSON.stringify({ tool_call: { id: "dump", input: {} } }),
+          metadata: {},
+        };
+      }
+
+      return { model: "test-model", content: "Done.", metadata: {} };
+    },
+  };
+  const runtime = new DefaultAgentRuntime(provider, { model: "test-model", toolRegistry: registry });
+
+  const result = await runtime.execute(toolDefinition(["dump"]), baseContext());
+
+  assert.equal(result.status, "completed");
+  const followUpPrompt = requests[1]?.messages.at(-1)?.content ?? "";
+  assert.ok(followUpPrompt.length < 5_000, "the tool result message must be bounded, not the raw 50,000-char output");
+  assert.match(followUpPrompt, /truncated/);
+});
