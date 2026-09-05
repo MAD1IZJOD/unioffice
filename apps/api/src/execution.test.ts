@@ -181,6 +181,14 @@ class MemoryEventRepository implements EventRepository {
   async findByWork(id: WorkId): Promise<Event[]> {
     return this.events.filter((event) => event.workId === id);
   }
+
+  async findByOrganization(id: OrganizationId, limit = 50): Promise<Event[]> {
+    return this.events
+      .filter((event) => event.organizationId === id)
+      .slice()
+      .reverse()
+      .slice(0, limit);
+  }
 }
 
 class MemoryApprovalRepository implements ApprovalRepository {

@@ -1,6 +1,7 @@
 import type {
   Event,
   EventId,
+  OrganizationId,
   WorkId,
 } from "@unioffice/core";
 
@@ -59,6 +60,29 @@ export class SupabaseEventRepository
     if (error) {
       throw new Error(
         `Failed to find work events: ${error.message}`,
+      );
+    }
+
+    return (data ?? []).map(
+      (row) => this.mapRow(row),
+    );
+  }
+
+  async findByOrganization(
+    organizationId: OrganizationId,
+    limit = 50,
+  ): Promise<Event[]> {
+    const { data, error } =
+      await this.client
+        .from("events")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .order("timestamp", { ascending: false })
+        .limit(limit);
+
+    if (error) {
+      throw new Error(
+        `Failed to find organization activity: ${error.message}`,
       );
     }
 

@@ -1,6 +1,7 @@
 import type {
   Event,
   Artifact,
+  OrganizationId,
   Task,
   Work,
   WorkId,
@@ -47,5 +48,13 @@ export class WorkQueryService {
     await this.getWork(workId);
 
     return this.artifactRepository.findByWork(workId);
+  }
+
+  /** The most recent events across the organization, newest first. */
+  async getOrganizationActivity(
+    organizationId: OrganizationId,
+    limit?: number,
+  ): Promise<Event[]> {
+    return this.eventRepository.findByOrganization(organizationId, limit);
   }
 }
