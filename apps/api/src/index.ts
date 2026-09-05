@@ -21,6 +21,10 @@ import {
 } from "@unioffice/orchestrator";
 
 import {
+  createDefaultToolRegistry,
+} from "@unioffice/tools";
+
+import {
   fileURLToPath,
 } from "node:url";
 
@@ -91,11 +95,13 @@ export async function createApiServer() {
     config.ollamaModel,
   );
   const delegator = new DefaultDelegator(agentRepository);
+  const toolRegistry = createDefaultToolRegistry();
   const agentRuntime = new DefaultAgentRuntime(
     modelProvider,
     {
       model: config.ollamaModel,
       think: false,
+      toolRegistry,
     },
   );
   const executionEngine = new DefaultExecutionEngine(

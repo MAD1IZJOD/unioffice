@@ -328,6 +328,7 @@ test("persists a completed task execution result", async () => {
         agentId: request.agentId,
         status: "completed",
         output: "Completed output.",
+        toolCalls: [],
         metadata: { model: "test" },
       };
     },
@@ -384,6 +385,7 @@ test("persists failed agent execution", async () => {
           code: "MODEL_ERROR",
           message: "Model failed.",
         },
+        toolCalls: [],
         metadata: {},
       };
     },
@@ -427,6 +429,7 @@ test("retains a completed task result when artifact projection fails", async () 
         agentId: request.agentId,
         status: "completed",
         output: "Durable task result.",
+        toolCalls: [],
         metadata: {},
       };
     },
@@ -480,6 +483,7 @@ test("claims a task once when execution is requested concurrently", async () => 
         agentId: request.agentId,
         status: "completed",
         output: "Only one model invocation.",
+        toolCalls: [],
         metadata: {},
       };
     },

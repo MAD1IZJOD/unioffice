@@ -23,6 +23,7 @@ const workforce = [
     type: "orchestrator" as const,
     description: "Coordinates company work, plans execution and keeps outcomes aligned to the objective.",
     capabilities: ["planning", "analysis", "decision_support"],
+    toolIds: [] as string[],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c502",
@@ -30,6 +31,7 @@ const workforce = [
     type: "specialist" as const,
     description: "Delivers engineering analysis, implementation plans and technical artifacts.",
     capabilities: ["coding", "analysis", "writing"],
+    toolIds: ["calculator", "datetime", "json_transform"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c503",
@@ -37,6 +39,7 @@ const workforce = [
     type: "specialist" as const,
     description: "Performs careful financial, operational and decision analysis.",
     capabilities: ["analysis", "decision_support", "writing"],
+    toolIds: ["calculator", "datetime"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c504",
@@ -44,6 +47,7 @@ const workforce = [
     type: "specialist" as const,
     description: "Researches markets, customers, competitors and strategic questions using available context only.",
     capabilities: ["research", "analysis", "writing"],
+    toolIds: ["datetime", "json_transform"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c505",
@@ -51,6 +55,7 @@ const workforce = [
     type: "specialist" as const,
     description: "Supports people operations, process design and internal communication.",
     capabilities: ["communication", "analysis", "writing"],
+    toolIds: ["datetime"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c506",
@@ -58,6 +63,7 @@ const workforce = [
     type: "specialist" as const,
     description: "Prepares clear customer and stakeholder communications without sending them externally.",
     capabilities: ["communication", "writing", "analysis"],
+    toolIds: ["datetime"],
   },
 ];
 
@@ -99,6 +105,8 @@ export async function ensureDevelopmentWorkforce(
       continue;
     }
 
+    const toolIds = blueprint.toolIds;
+
     await agentRepository.create({
       id: blueprint.id as AgentId,
       organizationId: organization.id,
@@ -107,7 +115,7 @@ export async function ensureDevelopmentWorkforce(
       type: blueprint.type,
       status: "active",
       capabilities: blueprint.capabilities,
-      toolIds: [],
+      toolIds,
       createdAt: now,
       updatedAt: now,
       metadata: {
@@ -116,7 +124,10 @@ export async function ensureDevelopmentWorkforce(
           `You are ${blueprint.name}, a UNI-OFFICE ${blueprint.type}.`,
           blueprint.description,
           "Complete the assigned task using the supplied context.",
-          "Be concise, explicit about assumptions, and do not claim external tool use.",
+          "Be concise and explicit about assumptions.",
+          toolIds.length > 0
+            ? "Use your available tools for calculations or lookups instead of guessing; never claim to have used a tool you did not actually call."
+            : "You do not have tools unless they are explicitly listed. Do not claim external tool use.",
         ].join("\n"),
       },
     });

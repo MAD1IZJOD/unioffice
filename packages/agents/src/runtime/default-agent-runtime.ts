@@ -6,11 +6,19 @@ import type {
   AgentExecutionContext,
   AgentExecutionResult,
   AgentRuntime,
+  AgentToolCall,
 } from "./agent-runtime.js";
 
 import type {
+  ModelMessage,
   ModelProvider,
 } from "./model-provider.js";
+
+import {
+  ToolExecutor,
+  type ToolDefinition,
+  type ToolRegistry,
+} from "@unioffice/tools";
 
 export interface DefaultAgentRuntimeOptions {
   model?: string;
@@ -20,7 +28,15 @@ export interface DefaultAgentRuntimeOptions {
   maxTokens?: number;
 
   think?: boolean;
+
+  /** Tools available to agents that are granted access via toolIds. */
+  toolRegistry?: ToolRegistry;
+
+  /** Bounds the reason -> tool call -> result loop per task execution. */
+  maxToolCalls?: number;
 }
+
+const DEFAULT_MAX_TOOL_CALLS = 3;
 
 const MAX_OBJECTIVE_CHARS = 3_000;
 const MAX_TASK_CHARS = 4_000;
@@ -42,6 +58,12 @@ export class DefaultAgentRuntime
 
   private readonly think: boolean;
 
+  private readonly toolRegistry?: ToolRegistry;
+
+  private readonly toolExecutor?: ToolExecutor;
+
+  private readonly maxToolCalls: number;
+
   constructor(
     private readonly modelProvider: ModelProvider,
     options: DefaultAgentRuntimeOptions = {},
@@ -59,82 +81,129 @@ export class DefaultAgentRuntime
       this.think =
         options.think ??
         false;
+
+    this.toolRegistry = options.toolRegistry;
+    this.toolExecutor = options.toolRegistry
+      ? new ToolExecutor(options.toolRegistry)
+      : undefined;
+    this.maxToolCalls = options.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
   }
 
   async execute(
     definition: AgentDefinition,
     context: AgentExecutionContext,
   ): Promise<AgentExecutionResult> {
-    const startedAt =
-      new Date();
+    const startedAt = new Date();
+    const availableTools = this.toolRegistry
+      ? this.toolRegistry.getMany(definition.toolIds)
+      : [];
+
+    const messages: ModelMessage[] = [
+      {
+        role: "system",
+        content: availableTools.length > 0
+          ? `${definition.systemInstructions}\n\n${this.buildToolProtocol(availableTools)}`
+          : definition.systemInstructions,
+      },
+      {
+        role: "user",
+        content: this.buildUserPrompt(context),
+      },
+    ];
+
+    const toolCalls: AgentToolCall[] = [];
 
     try {
-      const response =
-        await this.modelProvider.generate({
+      let iteration = 0;
+
+      for (;;) {
+        const finalTurn = iteration >= this.maxToolCalls;
+
+        if (finalTurn) {
+          messages.push({
+            role: "user",
+            content:
+              "You have used the maximum number of tool calls for this task. " +
+              "Give your final answer now as plain text, without calling another tool.",
+          });
+        }
+
+        const response = await this.modelProvider.generate({
           model: this.model,
-
-          messages: [
-            {
-              role: "system",
-
-              content:
-                definition.systemInstructions,
-            },
-
-            {
-              role: "user",
-
-              content:
-                this.buildUserPrompt(
-                  context,
-                ),
-            },
-          ],
-
-          temperature:
-            this.temperature,
-
-          maxTokens:
-            this.maxTokens,
-
-            think:
-                 this.think,
-
-            metadata: {
-            agentId:
-              context.agentId,
-
-            taskId:
-              context.taskId,
-
-            workId:
-              context.workId,
+          messages,
+          temperature: this.temperature,
+          maxTokens: this.maxTokens,
+          think: this.think,
+          metadata: {
+            agentId: context.agentId,
+            taskId: context.taskId,
+            workId: context.workId,
           },
         });
 
-      return {
-        status: "completed",
+        const toolCallRequest = finalTurn
+          ? null
+          : parseToolCallRequest(response.content, availableTools);
 
-        output:
-          response.content,
+        if (!toolCallRequest) {
+          return {
+            status: "completed",
+            output: response.content,
+            toolCalls,
+            metadata: {
+              model: response.model,
+              usage: response.usage,
+              startedAt,
+              completedAt: new Date(),
+              ...response.metadata,
+            },
+          };
+        }
 
-        toolCalls: [],
+        messages.push({ role: "assistant", content: response.content });
 
-        metadata: {
-          model:
-            response.model,
+        const toolContext = {
+          organizationId: context.work.organizationId,
+          agentId: context.agentId,
+          workId: context.workId,
+          taskId: context.taskId,
+          authorizedToolIds: definition.toolIds,
+          metadata: {},
+        };
 
-          usage:
-            response.usage,
+        const result = await this.toolExecutor!.execute(
+          toolCallRequest.id,
+          toolCallRequest.input,
+          toolContext,
+        );
 
-          startedAt,
+        toolCalls.push({
+          toolId: result.toolId,
+          input: toolCallRequest.input,
+          output: result.output,
+          error: result.error
+            ? { code: result.error.code, message: result.error.message }
+            : undefined,
+          status: result.status,
+          startedAt: result.startedAt,
+          completedAt: result.completedAt,
+        });
 
-          completedAt:
-            new Date(),
+        messages.push({
+          role: "user",
+          content: [
+            `Tool result for "${result.toolId}":`,
+            JSON.stringify(
+              result.status === "completed"
+                ? { status: result.status, output: result.output }
+                : { status: result.status, error: result.error },
+            ),
+            "Continue reasoning, call another tool if needed, or give your final answer as plain text.",
+          ].join("\n"),
+        });
 
-          ...response.metadata,
-        },
-      };
+        iteration += 1;
+      }
     } catch (error) {
       return {
         status: "failed",
@@ -149,7 +218,7 @@ export class DefaultAgentRuntime
               : String(error),
         },
 
-        toolCalls: [],
+        toolCalls,
 
         metadata: {
           startedAt,
@@ -159,6 +228,30 @@ export class DefaultAgentRuntime
         },
       };
     }
+  }
+
+  private buildToolProtocol(
+    tools: ToolDefinition[],
+  ): string {
+    const catalog = tools
+      .map((tool) => [
+        `- id: ${tool.id}`,
+        `  name: ${tool.name}`,
+        `  description: ${tool.description}`,
+        `  input schema: ${JSON.stringify(tool.inputSchema)}`,
+      ].join("\n"))
+      .join("\n");
+
+    return [
+      "You have access to tools. To call one, respond with ONLY a single JSON object of this exact shape and nothing else:",
+      '{"tool_call": {"id": "<tool id>", "input": { ... }}}',
+      "After you receive a tool result, you may call another tool the same way, or give your final answer as plain text (not JSON) when you are done.",
+      "Never fabricate a tool result yourself — always wait for the tool result message before continuing.",
+      "Only use tool ids from the list below.",
+      "",
+      "Available tools:",
+      catalog,
+    ].join("\n");
   }
 
   private buildUserPrompt(
@@ -313,4 +406,57 @@ export class DefaultAgentRuntime
       ? value
       : `${value.slice(0, maxChars)}… [truncated]`;
   }
+}
+
+interface ToolCallRequest {
+  id: string;
+
+  input: unknown;
+}
+
+/**
+ * Looks for a `{"tool_call": {"id": ..., "input": ...}}` envelope in the
+ * model's response. Anything else — plain prose, malformed JSON, an unknown
+ * tool id — is treated as a final answer rather than a tool call, so a model
+ * that ignores the protocol degrades to ordinary text output instead of
+ * silently "pretending" to call a tool.
+ */
+function parseToolCallRequest(
+  content: string,
+  availableTools: ToolDefinition[],
+): ToolCallRequest | null {
+  const start = content.indexOf("{");
+  const end = content.lastIndexOf("}");
+
+  if (start === -1 || end === -1 || end < start) {
+    return null;
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(content.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+
+  const toolCall = (parsed as Record<string, unknown>).tool_call;
+
+  if (typeof toolCall !== "object" || toolCall === null) {
+    return null;
+  }
+
+  const id = (toolCall as Record<string, unknown>).id;
+
+  if (typeof id !== "string" || !availableTools.some((tool) => tool.id === id)) {
+    return null;
+  }
+
+  const input = (toolCall as Record<string, unknown>).input;
+
+  return { id, input: input ?? {} };
 }

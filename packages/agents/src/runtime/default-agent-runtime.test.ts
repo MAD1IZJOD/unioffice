@@ -1,9 +1,62 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { DefaultToolRegistry, type ToolDefinition } from "@unioffice/tools";
+
 import type { AgentDefinition } from "../definitions/agent-definition.js";
 import type { ModelRequest, ModelProvider } from "./model-provider.js";
 import { DefaultAgentRuntime } from "./default-agent-runtime.js";
+
+const echoTool: ToolDefinition<{ value: number }, { doubled: number }> = {
+  id: "double",
+  name: "Double",
+  description: "Doubles a number.",
+  version: "1.0.0",
+  inputSchema: { type: "object" },
+  validate(input) {
+    if (typeof input === "object" && input !== null && typeof (input as Record<string, unknown>).value === "number") {
+      return { valid: true, value: input as { value: number } };
+    }
+    return { valid: false, errors: [{ path: "value", message: "value must be a number." }] };
+  },
+  async execute(input) {
+    return { doubled: input.value * 2 };
+  },
+};
+
+function toolDefinition(toolIds: string[]): AgentDefinition {
+  return {
+    id: "agent-1",
+    name: "Ledger",
+    description: "Performs calculations.",
+    type: "specialist",
+    systemInstructions: "Use tools when they help.",
+    capabilities: ["analysis"],
+    toolIds,
+    constraints: {},
+    metadata: {},
+  };
+}
+
+function baseContext() {
+  return {
+    agentId: "agent-1" as never,
+    workId: "work-1" as never,
+    taskId: "task-1" as never,
+    work: {
+      objective: "Compute a result.",
+      organizationId: "org-1" as never,
+      priority: "normal",
+      metadata: {},
+    },
+    task: {
+      title: "Double the number 21",
+      description: "Use the double tool.",
+      dependencies: [],
+    },
+    context: {},
+  };
+}
 
 test("provides the model with structured work and dependency context", async () => {
   let request: ModelRequest | undefined;
@@ -112,4 +165,128 @@ test("bounds oversized and circular dependency context before model execution", 
   assert.match(prompt, /truncated/);
   assert.match(prompt, /circular reference omitted/);
   assert.doesNotMatch(prompt, /SENTINEL_TAIL/);
+});
+
+test("executes an authorized tool call and feeds the result back to the model", async () => {
+  const registry = new DefaultToolRegistry();
+  registry.register(echoTool);
+  const calls: ModelRequest[] = [];
+  let turn = 0;
+  const provider: ModelProvider = {
+    async generate(request) {
+      calls.push(request);
+      turn += 1;
+
+      if (turn === 1) {
+        return {
+          model: "test-model",
+          content: JSON.stringify({ tool_call: { id: "double", input: { value: 21 } } }),
+          metadata: {},
+        };
+      }
+
+      return { model: "test-model", content: "The result is 42.", metadata: {} };
+    },
+  };
+  const runtime = new DefaultAgentRuntime(provider, { model: "test-model", toolRegistry: registry });
+
+  const result = await runtime.execute(toolDefinition(["double"]), baseContext());
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.output, "The result is 42.");
+  assert.equal(result.toolCalls.length, 1);
+  assert.equal(result.toolCalls[0]?.toolId, "double");
+  assert.equal(result.toolCalls[0]?.status, "completed");
+  assert.deepEqual(result.toolCalls[0]?.output, { doubled: 42 });
+  assert.equal(calls.length, 2);
+  assert.match(calls[1]?.messages.at(-1)?.content ?? "", /Tool result for "double"/);
+});
+
+test("refuses a tool call for a tool id the agent was not granted", async () => {
+  const registry = new DefaultToolRegistry();
+  registry.register(echoTool);
+  let turn = 0;
+  const provider: ModelProvider = {
+    async generate() {
+      turn += 1;
+
+      if (turn === 1) {
+        return {
+          model: "test-model",
+          content: JSON.stringify({ tool_call: { id: "double", input: { value: 21 } } }),
+          metadata: {},
+        };
+      }
+
+      return { model: "test-model", content: "Done without the tool.", metadata: {} };
+    },
+  };
+  // Registry has "double" registered, but this agent was never granted it.
+  const runtime = new DefaultAgentRuntime(provider, { model: "test-model", toolRegistry: registry });
+
+  const result = await runtime.execute(toolDefinition([]), baseContext());
+
+  // With no granted tools, no tool catalog is offered and the first response
+  // is treated as the final answer rather than parsed as a tool call.
+  assert.equal(result.status, "completed");
+  assert.equal(result.toolCalls.length, 0);
+});
+
+test("forces a final answer once the tool call budget is exhausted", async () => {
+  const registry = new DefaultToolRegistry();
+  registry.register(echoTool);
+  let turn = 0;
+  const provider: ModelProvider = {
+    async generate() {
+      turn += 1;
+      // Always tries to call the tool again, never gives a final answer.
+      return {
+        model: "test-model",
+        content: JSON.stringify({ tool_call: { id: "double", input: { value: turn } } }),
+        metadata: {},
+      };
+    },
+  };
+  const runtime = new DefaultAgentRuntime(provider, {
+    model: "test-model",
+    toolRegistry: registry,
+    maxToolCalls: 2,
+  });
+
+  const result = await runtime.execute(toolDefinition(["double"]), baseContext());
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.toolCalls.length, 2);
+  // The final turn's raw (still tool-call-shaped) content is surfaced as-is
+  // rather than looping forever.
+  assert.match(result.output as string, /tool_call/);
+});
+
+test("records a failed tool execution without crashing the agent loop", async () => {
+  const registry = new DefaultToolRegistry();
+  registry.register(echoTool);
+  let turn = 0;
+  const provider: ModelProvider = {
+    async generate() {
+      turn += 1;
+
+      if (turn === 1) {
+        return {
+          model: "test-model",
+          content: JSON.stringify({ tool_call: { id: "double", input: { value: "not-a-number" } } }),
+          metadata: {},
+        };
+      }
+
+      return { model: "test-model", content: "Recovered after the tool error.", metadata: {} };
+    },
+  };
+  const runtime = new DefaultAgentRuntime(provider, { model: "test-model", toolRegistry: registry });
+
+  const result = await runtime.execute(toolDefinition(["double"]), baseContext());
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.toolCalls[0]?.status, "failed");
+  assert.equal(result.toolCalls[0]?.error?.code, "TOOL_INPUT_INVALID");
+  assert.equal(result.output, "Recovered after the tool error.");
 });

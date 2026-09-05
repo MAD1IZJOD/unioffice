@@ -237,6 +237,9 @@ importers:
       '@unioffice/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
+      '@unioffice/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -307,6 +310,9 @@ importers:
       '@unioffice/core':
         specifier: workspace:*
         version: link:../core
+      '@unioffice/tools':
+        specifier: workspace:*
+        version: link:../tools
 
   packages/core: {}
 

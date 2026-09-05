@@ -11,6 +11,7 @@ import type {
   AgentExecutionContext,
   AgentExecutionResult,
   AgentRuntime,
+  AgentToolCall,
 } from "@unioffice/agents";
 
 export interface ExecutionRequest {
@@ -68,6 +69,8 @@ export interface ExecutionResult {
     message: string;
   };
 
+  toolCalls: AgentToolCall[];
+
   metadata: Record<string, unknown>;
 }
 
@@ -103,6 +106,7 @@ export class DefaultExecutionEngine
       status: result.status,
       output: result.output,
       error: result.error,
+      toolCalls: result.toolCalls,
       metadata: result.metadata,
     };
   }

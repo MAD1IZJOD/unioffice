@@ -160,6 +160,22 @@ export class TaskExecutionService {
           },
         });
 
+      for (const toolCall of result.toolCalls) {
+        await this.eventRecorder.record({
+          organizationId: agent.organizationId,
+          workId: runningTask.workId,
+          taskId: runningTask.id,
+          agentId: agent.id,
+          type: toolCall.status === "completed" ? "tool.completed" : "tool.failed",
+          payload: {
+            toolId: toolCall.toolId,
+            input: toolCall.input,
+            output: toolCall.output,
+            error: toolCall.error,
+          },
+        });
+      }
+
       const completedAt = new Date();
       const status =
         result.status === "completed"
@@ -184,6 +200,7 @@ export class TaskExecutionService {
             status: result.status,
             error: result.error,
             metadata: result.metadata,
+            toolCalls: result.toolCalls,
           },
         },
       };

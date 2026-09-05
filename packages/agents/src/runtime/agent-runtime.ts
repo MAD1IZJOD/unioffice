@@ -65,6 +65,11 @@ export interface AgentToolCall {
 
   output?: unknown;
 
+  error?: {
+    code: string;
+    message: string;
+  };
+
   status:
     | "completed"
     | "failed";
