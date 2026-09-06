@@ -124,7 +124,7 @@ export default function Command() {
 
   return (
     <div className="mx-auto max-w-[1420px] fade-up">
-      <div className="mb-6">
+      <div className="mb-5">
         <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/[0.045] px-3 py-1.5">
           <span
             className={`pill-dot ${overview.error ? "tone-error" : "tone-live"}`}
@@ -134,17 +134,50 @@ export default function Command() {
           </span>
         </div>
 
-        <h2 className="mt-4 max-w-[820px] text-[32px] font-semibold leading-[1.15] tracking-[-0.04em] text-slate-100 max-sm:text-[25px]">
+        <h2 className="mt-3.5 max-w-[820px] text-[28px] font-semibold leading-[1.15] tracking-[-0.04em] text-slate-100 max-sm:text-[22px]">
           Direct the company, not another chatbot.
         </h2>
 
-        <p className="mt-2.5 max-w-[680px] text-[12.5px] leading-[1.65] text-slate-400">
+        <p className="mt-2 max-w-[660px] text-[12px] leading-[1.6] text-slate-400">
           State an objective. UNI-OFFICE plans the work, routes each task to the
           specialist that holds the right tools, and keeps consequential steps
           behind your approval.
         </p>
       </div>
 
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric
+          label="Active work"
+          tone={activeWork.length > 0 ? "active" : "idle"}
+          value={overview.loading ? "—" : activeWork.length}
+          detail={`${data?.work.total ?? 0} objectives all time`}
+        />
+
+        <Metric
+          label="Agents working"
+          tone={workingAgents.length > 0 ? "active" : "live"}
+          value={overview.loading ? "—" : workingAgents.length}
+          detail={`${data?.agents.length ?? 0} in the workforce`}
+        />
+
+        <Metric
+          label="Pending approvals"
+          tone={pendingApprovals.length > 0 ? "warning" : "idle"}
+          value={overview.loading ? "—" : pendingApprovals.length}
+          detail="Require a human decision"
+        />
+
+        <Metric
+          label="Tool calls"
+          tone="live"
+          value={
+            overview.loading
+              ? "—"
+              : (data?.tools.reduce((total, tool) => total + tool.callCount, 0) ?? 0)
+          }
+          detail="In recent activity"
+        />
+      </div>
       <div className="command-grid">
         <div className="min-w-0 space-y-4">
           <Panel
@@ -334,7 +367,7 @@ export default function Command() {
                     className="row-link"
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <p className="line-clamp-2 text-[12px] leading-[1.6] text-slate-300">
+                      <p className="line-clamp-1 text-[11.5px] leading-[1.6] text-slate-400">
                         {work.objective}
                       </p>
 
@@ -525,39 +558,6 @@ export default function Command() {
         </aside>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
-        <Metric
-          label="Active work"
-          tone={activeWork.length > 0 ? "active" : "idle"}
-          value={overview.loading ? "—" : activeWork.length}
-          detail={`${data?.work.total ?? 0} objectives all time`}
-        />
-
-        <Metric
-          label="Agents working"
-          tone={workingAgents.length > 0 ? "active" : "live"}
-          value={overview.loading ? "—" : workingAgents.length}
-          detail={`${data?.agents.length ?? 0} in the workforce`}
-        />
-
-        <Metric
-          label="Pending approvals"
-          tone={pendingApprovals.length > 0 ? "warning" : "idle"}
-          value={overview.loading ? "—" : pendingApprovals.length}
-          detail="Require a human decision"
-        />
-
-        <Metric
-          label="Tool calls"
-          tone="live"
-          value={
-            overview.loading
-              ? "—"
-              : (data?.tools.reduce((total, tool) => total + tool.callCount, 0) ?? 0)
-          }
-          detail="In recent activity"
-        />
-      </div>
     </div>
   );
 }
