@@ -44,6 +44,19 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
         detail: text("objective"),
       };
 
+    case "work.queued":
+      return {
+        category: "work",
+        tone: "tone-idle",
+        title: "Queued for a worker",
+        detail:
+          payload.reason === "approval_resumed"
+            ? "resumed after approval"
+            : payload.reason === "retry"
+              ? "retry"
+              : undefined,
+      };
+
     case "work.planning_started":
       return {
         category: "work",
