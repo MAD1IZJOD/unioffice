@@ -90,6 +90,101 @@ export function Panel({
   );
 }
 
+/**
+ * The opening of a route.
+ *
+ * Every page begins the same way the Command Center does - an oversized
+ * statement, a single line of plain detail, and an optional reading strip -
+ * so moving between surfaces feels like turning a page in one document rather
+ * than loading a different app.
+ */
+export function PageOpening({
+  eyebrow,
+  title,
+  lead,
+  detail,
+  action,
+  meta,
+  tone = "quiet",
+}: {
+  eyebrow: string;
+  /** First line, set in the page's ink colour. */
+  title: string;
+  /** Second line, set in the tone colour. Carries the idea of the page. */
+  lead?: string;
+  detail?: string;
+  action?: ReactNode;
+  meta?: ReactNode;
+  tone?: "quiet" | "moving" | "waiting" | "broken";
+}) {
+  return (
+    <header className={`dispatch dispatch-${tone} dispatch-page`}>
+      <div className="dispatch-inner">
+        <div className="flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <div className="t-eyebrow mb-4">{eyebrow}</div>
+
+            <h2 className="statement statement-page">
+              <span className="statement-line">{title}</span>
+              {lead && <span className="statement-line">{lead}</span>}
+            </h2>
+
+            {detail && <p className="statement-detail">{detail}</p>}
+          </div>
+
+          {action && <div className="shrink-0 pt-1">{action}</div>}
+        </div>
+
+        {meta && <div className="dispatch-meta">{meta}</div>}
+      </div>
+    </header>
+  );
+}
+
+/** One reading in a page opening's strip. */
+export function Reading({
+  label,
+  value,
+  tone = "idle",
+  live = false,
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: Tone;
+  live?: boolean;
+}) {
+  return (
+    <div className={`dispatch-stat ${toneClass[tone]}`}>
+      <div
+        className={`dispatch-stat-value${live ? " dispatch-stat-value-live" : ""}`}
+      >
+        {value}
+      </div>
+      <div className="dispatch-stat-label">{label}</div>
+    </div>
+  );
+}
+
+/** A chapter rule that opens a block within a page. */
+export function Chapter({
+  index,
+  title,
+  action,
+}: {
+  index: string;
+  title: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="chapter">
+      <span className="chapter-index">{index}</span>
+      <span className="chapter-title">{title}</span>
+      <span className="chapter-rule" />
+      {action && <span className="chapter-action">{action}</span>}
+    </div>
+  );
+}
+
 export function SectionHeading({
   title,
   description,

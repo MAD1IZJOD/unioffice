@@ -1720,8 +1720,8 @@
 
 .roster-mark {
   display: flex;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -1990,5 +1990,45 @@
   .agent-sigil-active .sigil-core {
     animation: none;
     transition: none;
+  }
+}
+
+/* A page opening is the same device as the Command Center dispatch, pitched
+   one step quieter so the entrance stays the loudest thing in the product. */
+.dispatch-page {
+  /* Breaks out of the page's centred column so the opening runs to the edges
+     of the working surface, while its own content stays aligned with the
+     column below it. */
+  margin: -24px 0 28px;
+  padding: 44px 0 30px;
+  border-radius: 0;
+}
+
+.dispatch-page .dispatch-inner {
+  max-width: none;
+}
+
+.statement-page {
+  font-size: clamp(30px, 4.6vw, 54px);
+}
+
+.dispatch-page .statement-detail {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.dispatch-page .dispatch-meta {
+  margin-top: 26px;
+  padding-top: 18px;
+}
+
+@media (max-width: 640px) {
+  .dispatch-page {
+    padding: 30px 14px 24px;
+    margin-bottom: 20px;
+  }
+
+  .statement-page {
+    font-size: clamp(24px, 8vw, 34px);
   }
 }

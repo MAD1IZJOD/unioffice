@@ -15,10 +15,11 @@ import { safeStringify } from "../lib/events";
 
 import {
   Chip,
+  PageOpening,
+  Reading,
   EmptyState,
   ErrorState,
   Panel,
-  SectionHeading,
   Skeleton,
 } from "../components/primitives";
 
@@ -33,9 +34,12 @@ export default function Artifacts() {
 
   return (
     <div className="mx-auto max-w-[1080px] fade-up">
-      <SectionHeading
-        title="Artifacts"
-        description="Durable outputs produced by completed tasks. Every one is attributable to the agent and the work that created it."
+      <PageOpening
+        eyebrow="System"
+        title="WHAT THE COMPANY"
+        lead="HAS PRODUCED."
+        detail="Durable outputs from completed tasks, each attributable to the agent and the work that created it."
+        meta={<Reading label="Artifacts" value={artifacts.loading ? "—" : items.length} tone="live" />}
       />
 
       <Panel padded={false}>

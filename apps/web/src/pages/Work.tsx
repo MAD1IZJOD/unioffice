@@ -14,9 +14,10 @@ import { useResource } from "../lib/useResource";
 
 import {
   EmptyState,
+  PageOpening,
+  Reading,
   ErrorState,
   Panel,
-  SectionHeading,
   Skeleton,
   StatusPill,
 } from "../components/primitives";
@@ -69,12 +70,41 @@ export default function Work() {
   }, [work.data]);
 
   return (
-    <div className="mx-auto max-w-[1180px] fade-up">
-      <SectionHeading
-        title="Work"
-        description="Every objective the company has been given, from the plan it produced to the result it delivered."
+    <div className="fade-up">
+      <PageOpening
+        eyebrow="Operate"
+        title="EVERY OBJECTIVE"
+        lead="THE COMPANY HAS TAKEN."
+        detail="From the plan it produced to the result it delivered."
+        tone={
+          counts.executing > 0 ? "moving" : counts.failed > 0 ? "broken" : "quiet"
+        }
+        meta={
+          <>
+            <Reading
+              label="Executing"
+              value={counts.executing ?? 0}
+              tone="active"
+              live={(counts.executing ?? 0) > 0}
+            />
+            <Reading
+              label="Waiting"
+              value={counts.waiting_approval ?? 0}
+              tone="warning"
+              live={(counts.waiting_approval ?? 0) > 0}
+            />
+            <Reading label="Completed" value={counts.completed ?? 0} tone="live" />
+            <Reading
+              label="Failed"
+              value={counts.failed ?? 0}
+              tone="error"
+              live={(counts.failed ?? 0) > 0}
+            />
+          </>
+        }
       />
 
+      <div className="mx-auto max-w-[1180px]">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="filter-group">
           {filters.map((entry) => (
@@ -191,6 +221,7 @@ export default function Work() {
           </div>
         )}
       </Panel>
+      </div>
     </div>
   );
 }

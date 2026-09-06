@@ -1,4 +1,4 @@
-import { Activity as ActivityIcon, RefreshCw } from "lucide-react";
+import { Activity as ActivityIcon } from "lucide-react";
 
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -19,9 +19,10 @@ import {
 
 import {
   EmptyState,
+  PageOpening,
+  Reading,
   ErrorState,
   Panel,
-  SectionHeading,
   Skeleton,
 } from "../components/primitives";
 
@@ -59,22 +60,12 @@ export default function Activity() {
 
   return (
     <div className="mx-auto max-w-[1080px] fade-up">
-      <SectionHeading
-        title="Activity"
-        description="The company's own record of what it did: every plan, delegation, tool call, approval and artifact, in the order it happened."
-        action={
-          <button
-            type="button"
-            onClick={activity.reload}
-            className="button-quiet"
-          >
-            <RefreshCw
-              size={12}
-              className={activity.refreshing ? "spin-slow" : undefined}
-            />
-            Refresh
-          </button>
-        }
+      <PageOpening
+        eyebrow="Intelligence"
+        title="WHAT THE COMPANY"
+        lead="ACTUALLY DID."
+        detail="Every plan, delegation, tool call, approval and artifact, in the order it happened."
+        meta={<Reading label="Recorded events" value={activity.loading ? "—" : described.length} tone="active" />}
       />
 
       <div className="filter-group mb-4">

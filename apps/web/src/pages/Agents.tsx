@@ -11,13 +11,16 @@ import {
 
 import { useResource } from "../lib/useResource";
 
+import { AgentSigil } from "../components/AgentSigil";
+
 import {
   Chip,
+  PageOpening,
+  Reading,
   EmptyState,
   ErrorState,
   Panel,
   Section,
-  SectionHeading,
   Skeleton,
   StatusPill,
 } from "../components/primitives";
@@ -48,9 +51,19 @@ export default function Agents() {
 
   return (
     <div className="mx-auto max-w-[1240px] fade-up">
-      <SectionHeading
-        title="Agents"
-        description="The company's workforce: what each agent is responsible for, which tools it is authorized to call, and what it is doing now."
+      <PageOpening
+        eyebrow="Workforce"
+        title="THE WORKFORCE"
+        lead="AND WHAT IT HOLDS."
+        detail="What each agent is responsible for, which tools it is authorized to call, and what it is doing now."
+        tone={agents.some((a) => a.presence === "working") ? "moving" : "quiet"}
+        meta={
+          <>
+            <Reading label="Working" value={agents.filter((a) => a.presence === "working").length} tone="active" live={agents.some((a) => a.presence === "working")} />
+            <Reading label="Available" value={agents.filter((a) => a.presence === "available").length} tone="live" />
+            <Reading label="Tools granted" value={agents.reduce((total, a) => total + a.toolIds.length, 0)} tone="idle" />
+          </>
+        }
       />
 
       {overview.loading ? (
@@ -102,7 +115,13 @@ export default function Agents() {
                         <span
                           className={`roster-mark ${toneClass[presenceTone(agent.presence)]}`}
                         >
-                          {agent.name.slice(0, 1)}
+                          <AgentSigil
+                            agentId={agent.agentId}
+                            capabilities={agent.capabilities}
+                            tools={agent.toolIds.length}
+                            size={26}
+                            active={agent.presence === "working"}
+                          />
                         </span>
 
                         <span className="min-w-0 flex-1 text-left">

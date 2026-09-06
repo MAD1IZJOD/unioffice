@@ -13,12 +13,11 @@ import { useResource } from "../lib/useResource";
 
 import {
   Chip,
+  PageOpening,
+  Reading,
   EmptyState,
   ErrorState,
-  Metric,
   Panel,
-  Readout,
-  SectionHeading,
   Skeleton,
 } from "../components/primitives";
 
@@ -64,9 +63,18 @@ export default function Brain() {
 
   return (
     <div className="mx-auto max-w-[1180px] fade-up">
-      <SectionHeading
-        title="Company Brain"
-        description="Organizational memory. Every completed and failed task writes here, and agents retrieve from it before starting related work."
+      <PageOpening
+        eyebrow="Intelligence"
+        title="YOUR COMPANY"
+        lead="HAS A MEMORY."
+        detail="Every completed and failed task writes here, and agents retrieve from it before starting related work."
+        meta={
+          <>
+            <Reading label="Memories" value={memory.loading ? "—" : memories.length} tone="active" />
+            <Reading label="Decisions" value={memory.loading ? "—" : (byType.decision ?? 0)} tone="warning" />
+            <Reading label="Experience" value={memory.loading ? "—" : (byType.experience ?? 0)} tone="live" />
+          </>
+        }
       />
 
       <form
@@ -103,31 +111,6 @@ export default function Brain() {
           </button>
         )}
       </form>
-
-      <div className="mb-5">
-        <Readout>
-        <Metric
-          label="Memories"
-          tone="live"
-          value={memory.loading ? "—" : memories.length}
-          detail={submitted ? `recalled for “${submitted}”` : "in the company brain"}
-        />
-
-        <Metric
-          label="Decisions"
-          tone="warning"
-          value={memory.loading ? "—" : (byType.decision ?? 0)}
-          detail="Choices the company has made"
-        />
-
-        <Metric
-          label="Experience"
-          tone="active"
-          value={memory.loading ? "—" : (byType.experience ?? 0)}
-          detail="Outcomes recorded from real tasks"
-        />
-        </Readout>
-      </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
         <Panel

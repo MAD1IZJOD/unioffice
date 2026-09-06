@@ -14,9 +14,10 @@ import { useResource } from "../lib/useResource";
 
 import {
   EmptyState,
+  PageOpening,
+  Reading,
   ErrorState,
   Panel,
-  SectionHeading,
   Skeleton,
   StatusPill,
 } from "../components/primitives";
@@ -63,9 +64,13 @@ export default function Approvals() {
 
   return (
     <div className="mx-auto max-w-[980px] fade-up">
-      <SectionHeading
-        title="Approvals"
-        description="Tasks the planner marked as consequential stop here. Approving one resumes its work immediately; rejecting one leaves it recorded and unexecuted."
+      <PageOpening
+        eyebrow="Operate"
+        title={pending.length === 0 ? "NOTHING IS" : "THE COMPANY"}
+        lead={pending.length === 0 ? "WAITING ON YOU." : "HAS STOPPED."}
+        detail="Tasks the planner marked as consequential stop here. The company will not take these steps without a person."
+        tone={pending.length > 0 ? "waiting" : "quiet"}
+        meta={<Reading label="Awaiting a decision" value={approvals.loading ? "—" : pending.length} tone="warning" live={pending.length > 0} />}
       />
 
       {error && <div className="callout callout-error mb-4">{error}</div>}

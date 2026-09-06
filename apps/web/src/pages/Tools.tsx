@@ -15,10 +15,11 @@ import { safeStringify } from "../lib/events";
 
 import {
   Chip,
+  PageOpening,
+  Reading,
   EmptyState,
   ErrorState,
   Panel,
-  SectionHeading,
   Skeleton,
 } from "../components/primitives";
 
@@ -43,9 +44,17 @@ export default function Tools() {
 
   return (
     <div className="mx-auto max-w-[1080px] fade-up">
-      <SectionHeading
-        title="Tools"
-        description="The typed capabilities agents can actually invoke. A tool call is validated against its schema, checked against the calling agent's authorization, and recorded as an event."
+      <PageOpening
+        eyebrow="System"
+        title="THE MACHINERY"
+        lead="AGENTS CAN REACH."
+        detail="A tool call is validated against its schema, checked against the calling agent's authorization, and recorded as an event."
+        meta={
+          <>
+            <Reading label="Registered" value={tools.loading ? "—" : (tools.data?.length ?? 0)} tone="active" />
+            <Reading label="Recent calls" value={(overview.data?.tools ?? []).reduce((total, tool) => total + tool.callCount, 0)} tone="live" />
+          </>
+        }
       />
 
       {tools.loading ? (
