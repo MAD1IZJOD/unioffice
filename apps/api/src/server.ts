@@ -35,6 +35,10 @@ import type {
 import { ApprovalConflictError } from "./work-approval-service.js";
 
 import type {
+  WorkRecoveryService,
+} from "./work-recovery-service.js";
+
+import type {
   CompanyBrainService,
 } from "./company-brain-service.js";
 
@@ -55,6 +59,7 @@ export interface ApiServices {
   workExecutionService: WorkExecutionService;
   workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
+  workRecoveryService: WorkRecoveryService;
   companyBrainService: CompanyBrainService;
   companyOverviewService: CompanyOverviewService;
   toolRegistry: ToolRegistry;
@@ -232,6 +237,12 @@ export function buildApiServer(
       );
     });
   
+    instance.post("/work/:id/retry", async (request) => {
+      return services.workRecoveryService.retryWork(
+        parameterId(request.params),
+      );
+    });
+
     instance.get("/work/:id/tasks", async (request) => {
       const tasks = await services.workQueryService.getTasks(
         parameterId(request.params),
@@ -506,7 +517,8 @@ function statusForError(error: Error): number {
   if (
     error.message.includes("cannot execute") ||
     error.message.includes("cannot be planned") ||
-    error.message.includes("without planned tasks")
+    error.message.includes("without planned tasks") ||
+    error.message.includes("Only failed work can be retried")
   ) {
     return 409;
   }

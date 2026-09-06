@@ -78,6 +78,10 @@ import {
 } from "./work-query-service.js";
 
 import {
+  WorkRecoveryService,
+} from "./work-recovery-service.js";
+
+import {
   WorkService,
 } from "./work-service.js";
 
@@ -178,6 +182,11 @@ export async function createApiServer() {
     agentRepository,
     approvalRepository,
   );
+  const workRecoveryService = new WorkRecoveryService(
+    workRepository,
+    taskRepository,
+    eventRecorder,
+  );
   const companyOverviewService = new CompanyOverviewService(
     workRepository,
     taskRepository,
@@ -202,6 +211,7 @@ export async function createApiServer() {
     workExecutionService,
     workApprovalService,
     workQueryService,
+    workRecoveryService,
     companyBrainService,
     companyOverviewService,
     toolRegistry,
