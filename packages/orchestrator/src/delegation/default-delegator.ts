@@ -36,12 +36,17 @@ export class DefaultDelegator implements Delegator {
     const requiredTools = normalizeTools(
       context.task.requiredTools,
     );
+    // Tool authorization and workspace/status are hard boundaries. Required
+    // capabilities are NOT: the planner routinely over-specifies them (asking
+    // for "planning" and "coding" on one task when no single agent holds
+    // both), and treating that as a filter failed the entire objective rather
+    // than routing to the closest-matching agent. Capabilities therefore rank
+    // candidates below, and a partial match is reported rather than rejected.
     const eligibleAgents = agents.filter(
       (agent) =>
         availableAgentIds.has(agent.id) &&
         agent.status === "active" &&
         isWorkspaceCompatible(agent, context.workspaceId) &&
-        hasCapabilities(agent, requiredCapabilities) &&
         hasTools(agent, requiredTools),
     );
 
@@ -56,6 +61,13 @@ export class DefaultDelegator implements Delegator {
         );
       }
 
+      const explicitScore = this.score(
+        assignedAgent,
+        context,
+        requiredCapabilities,
+        requiredTools,
+      );
+
       return {
         taskId: context.task.id,
         agentId: assignedAgent.id,
@@ -65,7 +77,9 @@ export class DefaultDelegator implements Delegator {
             "The planner explicitly assigned this active, compatible agent.",
           requiredCapabilities,
           requiredTools,
-          score: this.score(assignedAgent, context, requiredCapabilities, requiredTools),
+          capabilityFit: explicitScore.capabilityFit,
+          unmatchedCapabilities: explicitScore.unmatchedCapabilities,
+          score: explicitScore,
         },
       };
     }
@@ -80,7 +94,7 @@ export class DefaultDelegator implements Delegator {
 
     if (!candidate) {
       throw new Error(
-        this.noEligibleAgentMessage(context, requiredCapabilities, requiredTools),
+        this.noEligibleAgentMessage(context, requiredTools),
       );
     }
 
@@ -96,6 +110,9 @@ export class DefaultDelegator implements Delegator {
         ),
         requiredCapabilities,
         requiredTools,
+        capabilityFit: candidate.score.capabilityFit,
+        matchedCapabilities: candidate.score.matchedCapabilities,
+        unmatchedCapabilities: candidate.score.unmatchedCapabilities,
         score: candidate.score,
         consideredAgentCount: rankedAgents.length,
       },
@@ -115,6 +132,10 @@ export class DefaultDelegator implements Delegator {
       ),
     );
 
+    const unmatchedCapabilities = requiredCapabilities.filter(
+      (capability) => !matchedCapabilities.includes(capability),
+    );
+
     return {
       workspace: workspaceRank(agent, context.workspaceId),
       capabilities: matchedCapabilities.length,
@@ -124,6 +145,11 @@ export class DefaultDelegator implements Delegator {
       ),
       availability: availabilityRank(agent),
       matchedCapabilities,
+      unmatchedCapabilities,
+      capabilityFit: capabilityFit(
+        requiredCapabilities.length,
+        matchedCapabilities.length,
+      ),
       workspaceCompatibility: workspaceCompatibility(
         agent,
         context.workspaceId,
@@ -135,32 +161,20 @@ export class DefaultDelegator implements Delegator {
   }
 
   /**
-   * Distinguishes "no agent has this tool" from "no agent has this
-   * capability" from "no agent is active/in this workspace at all" - the
-   * generic "no eligible agents" message this replaced made all three look
-   * identical, which is exactly the kind of thing that costs real time
-   * diagnosing a live delegation failure.
+   * Capability shortfalls no longer reach here (they degrade to a partial
+   * match instead), so the only way to have zero candidates is a hard
+   * boundary: tool authorization, workspace scope, or no active agent at
+   * all. Saying which one costs real time to rediscover in a live failure.
    */
   private noEligibleAgentMessage(
     context: DelegationContext,
-    requiredCapabilities: string[],
     requiredTools: string[],
   ): string {
-    if (requiredTools.length === 0 && requiredCapabilities.length === 0) {
-      return `No eligible agents available for task: ${context.task.id}`;
+    if (requiredTools.length === 0) {
+      return `No active agent is available for task: ${context.task.id}`;
     }
 
-    const reasons: string[] = [];
-
-    if (requiredTools.length > 0) {
-      reasons.push(`is authorized for the required tool(s): ${requiredTools.join(", ")}`);
-    }
-
-    if (requiredCapabilities.length > 0) {
-      reasons.push(`has the required capability(ies): ${requiredCapabilities.join(", ")}`);
-    }
-
-    return `No eligible agent ${reasons.join(" and ")} (task: ${context.task.id})`;
+    return `No eligible agent is authorized for the required tool(s): ${requiredTools.join(", ")} (task: ${context.task.id})`;
   }
 
   private selectionReason(
@@ -168,9 +182,11 @@ export class DefaultDelegator implements Delegator {
     requiredCapabilities: string[],
     requiredTools: string[],
   ): string {
-    const capabilityDetail = requiredCapabilities.length
-      ? ` It satisfies: ${score.matchedCapabilities.join(", ")}.`
-      : " No mandatory capability was specified.";
+    const capabilityDetail = requiredCapabilities.length === 0
+      ? " No mandatory capability was specified."
+      : score.capabilityFit === "exact"
+        ? ` It satisfies every required capability: ${score.matchedCapabilities.join(", ")}.`
+        : ` It is the closest available match: it satisfies ${score.matchedCapabilities.join(", ") || "none of the required capabilities"} but not ${score.unmatchedCapabilities.join(", ")}.`;
     const toolDetail = requiredTools.length
       ? ` It is authorized for the required tool(s): ${requiredTools.join(", ")}.`
       : "";
@@ -185,12 +201,23 @@ export class DefaultDelegator implements Delegator {
   }
 }
 
+function capabilityFit(
+  requiredCount: number,
+  matchedCount: number,
+): DelegationScore["capabilityFit"] {
+  if (requiredCount === 0) return "unconstrained";
+  if (matchedCount === requiredCount) return "exact";
+  return matchedCount === 0 ? "none" : "partial";
+}
+
 interface DelegationScore {
   workspace: number;
   capabilities: number;
   agentType: number;
   availability: number;
   matchedCapabilities: string[];
+  unmatchedCapabilities: string[];
+  capabilityFit: "exact" | "partial" | "none" | "unconstrained";
   workspaceCompatibility: "exact" | "organization-wide" | "not-scoped";
   agentTypeSuitability: "preferred" | "compatible";
 }
@@ -218,16 +245,6 @@ function normalizeCapabilities(
       .map((capability) => capability.trim().toLocaleLowerCase())
       .filter(Boolean),
   )];
-}
-
-function hasCapabilities(agent: Agent, requiredCapabilities: string[]): boolean {
-  const agentCapabilities = new Set(
-    agent.capabilities.map((capability) => capability.toLocaleLowerCase()),
-  );
-
-  return requiredCapabilities.every((capability) =>
-    agentCapabilities.has(capability),
-  );
 }
 
 function normalizeTools(

@@ -127,11 +127,57 @@ test("excludes workspace-incompatible agents", async () => {
   assert.equal(result.agentId, forgeId);
 });
 
-test("fails when no eligible agent has all required capabilities", async () => {
-  const delegator = new DefaultDelegator(repository([agent(atlasId), agent(forgeId)]));
+test("routes to the closest match instead of failing when no agent has every required capability", async () => {
+  // The planner regularly over-specifies capabilities (e.g. "planning" AND
+  // "coding" on one task). Failing the whole objective over that is worse
+  // than routing to the best-qualified agent and saying so.
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { capabilities: ["planning"] }),
+    agent(forgeId, "active", { capabilities: ["coding", "analysis"] }),
+  ]));
+
+  const result = await delegator.delegate(context({
+    requiredCapabilities: ["coding", "analysis", "planning"],
+  }));
+
+  assert.equal(result.agentId, forgeId);
+  assert.equal(result.metadata.capabilityFit, "partial");
+  assert.deepEqual(result.metadata.matchedCapabilities, ["coding", "analysis"]);
+  assert.deepEqual(result.metadata.unmatchedCapabilities, ["planning"]);
+  assert.match(
+    String(result.metadata.selectionReason),
+    /closest available match/,
+  );
+});
+
+test("reports an exact capability fit when the agent satisfies every requirement", async () => {
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { capabilities: ["planning"] }),
+    agent(forgeId, "active", { capabilities: ["coding", "analysis"] }),
+  ]));
+
+  const result = await delegator.delegate(context({
+    requiredCapabilities: ["coding", "analysis"],
+  }));
+
+  assert.equal(result.agentId, forgeId);
+  assert.equal(result.metadata.capabilityFit, "exact");
+  assert.deepEqual(result.metadata.unmatchedCapabilities, []);
+});
+
+test("still refuses to route a tool-required task to an unauthorized agent", async () => {
+  // Capability shortfalls degrade; tool authorization must not.
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { capabilities: ["planning", "coding"] }),
+    agent(forgeId, "active", { capabilities: ["coding"] }),
+  ]));
+
   await assert.rejects(
-    () => delegator.delegate(context({ requiredCapabilities: ["coding"] })),
-    /No eligible agent has the required capability\(ies\): coding/,
+    () => delegator.delegate(context({
+      requiredCapabilities: ["coding"],
+      requiredTools: ["calculator"],
+    })),
+    /No eligible agent is authorized for the required tool\(s\): calculator/,
   );
 });
 
@@ -153,7 +199,7 @@ test("routes a tool-required task to the tool-authorized agent even when the orc
   assert.deepEqual(result.metadata.requiredTools, ["calculator"]);
 });
 
-test("fails with a combined message when both a capability and a tool are unmet", async () => {
+test("reports the tool boundary as the failure cause when a capability is also unmet", async () => {
   const delegator = new DefaultDelegator(repository([
     agent(atlasId, "active", { type: "orchestrator" }),
     agent(forgeId, "active", { type: "specialist", capabilities: ["coding"] }),
@@ -161,7 +207,16 @@ test("fails with a combined message when both a capability and a tool are unmet"
 
   await assert.rejects(
     () => delegator.delegate(context({ requiredCapabilities: ["finance"], requiredTools: ["calculator"] })),
-    /No eligible agent is authorized for the required tool\(s\): calculator and has the required capability\(ies\): finance/,
+    /No eligible agent is authorized for the required tool\(s\): calculator/,
+  );
+});
+
+test("fails clearly when no active agent exists at all", async () => {
+  const delegator = new DefaultDelegator(repository([agent(atlasId, "disabled")]));
+
+  await assert.rejects(
+    () => delegator.delegate(context({ availableAgentIds: [atlasId] })),
+    /No active agent is available for task/,
   );
 });
 

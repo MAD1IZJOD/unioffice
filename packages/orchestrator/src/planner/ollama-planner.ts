@@ -46,7 +46,8 @@ export class OllamaPlanner implements Planner {
               "ref must be a unique short identifier such as research or analysis.",
               "dependsOn must contain task refs, never UUIDs.",
               "assignedAgentId is optional and must be one of the available agent IDs when present.",
-              "requiredCapabilities must be an array containing ONLY capabilities from the list below that the assignee must have; use an empty array when none are mandatory. Never invent a capability that is not in the list - an invented capability can never be satisfied and the task will fail to route.",
+              "requiredCapabilities must be an array containing ONLY capabilities from the list below that the assignee must have; use an empty array when none are mandatory. Never invent a capability that is not in the list.",
+              "Keep requiredCapabilities minimal - list at most ONE capability, the single most essential one for the task. Requiring several capabilities at once describes a whole team rather than one assignee, and routes the task to a weaker match.",
               availableCapabilities.length > 0
                 ? `Available capabilities (use only these exact strings): ${availableCapabilities.join(", ")}.`
                 : "No agent capabilities are registered; requiredCapabilities must always be an empty array.",
