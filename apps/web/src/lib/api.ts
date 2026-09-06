@@ -419,11 +419,17 @@ export async function planWork(workId: string): Promise<{
   return post(`/work/${workId}/plan`);
 }
 
+/**
+ * Starts execution and returns as soon as the run is scheduled. Progress is
+ * observed by polling the work detail, which is why this does not need the
+ * long model timeout.
+ */
 export async function executeWork(workId: string): Promise<{
   work: WorkItem;
   tasks: TaskItem[];
+  started: boolean;
 }> {
-  return post(`/work/${workId}/execute`);
+  return post(`/work/${workId}/execute`, {}, READ_TIMEOUT_MS);
 }
 
 export async function retryWork(workId: string): Promise<RetryResult> {

@@ -78,6 +78,10 @@ import {
 } from "./work-query-service.js";
 
 import {
+  ExecutionScheduler,
+} from "./execution-scheduler.js";
+
+import {
   WorkRecoveryService,
 } from "./work-recovery-service.js";
 
@@ -182,6 +186,12 @@ export async function createApiServer() {
     agentRepository,
     approvalRepository,
   );
+  const executionScheduler = new ExecutionScheduler(
+    workExecutionService,
+    workRepository,
+    taskRepository,
+    eventRecorder,
+  );
   const workRecoveryService = new WorkRecoveryService(
     workRepository,
     taskRepository,
@@ -212,6 +222,7 @@ export async function createApiServer() {
     workApprovalService,
     workQueryService,
     workRecoveryService,
+    executionScheduler,
     companyBrainService,
     companyOverviewService,
     toolRegistry,

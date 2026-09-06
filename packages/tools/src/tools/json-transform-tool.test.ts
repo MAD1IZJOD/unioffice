@@ -69,3 +69,64 @@ test("rejects mismatched data shapes at validation time", () => {
     false,
   );
 });
+
+test("pick applies to every item when given an array of objects", async () => {
+  // The regression this exists for: an agent asked to keep name and region
+  // from a list of records found pick rejected arrays, cycled through every
+  // other operation, and gave up after exhausting its tool budget.
+  const validation = jsonTransformTool.validate({
+    operation: "pick",
+    data: [
+      { name: "Acme", region: "EMEA", arr: 120000, owner: "kim" },
+      { name: "Globex", region: "APAC", arr: 88000, owner: "ravi" },
+    ],
+    keys: ["name", "region"],
+  });
+
+  assert.ok(validation.valid);
+  const output = await jsonTransformTool.execute(validation.value, context);
+
+  assert.deepEqual(output, [
+    { name: "Acme", region: "EMEA" },
+    { name: "Globex", region: "APAC" },
+  ]);
+});
+
+test("omit applies to every item when given an array of objects", async () => {
+  const validation = jsonTransformTool.validate({
+    operation: "omit",
+    data: [
+      { name: "Acme", secret: "x" },
+      { name: "Globex", secret: "y" },
+    ],
+    keys: ["secret"],
+  });
+
+  assert.ok(validation.valid);
+  const output = await jsonTransformTool.execute(validation.value, context);
+
+  assert.deepEqual(output, [{ name: "Acme" }, { name: "Globex" }]);
+});
+
+test("pick still works on a single object", async () => {
+  const validation = jsonTransformTool.validate({
+    operation: "pick",
+    data: { name: "Acme", region: "EMEA", arr: 120000 },
+    keys: ["name", "region"],
+  });
+
+  assert.ok(validation.valid);
+  const output = await jsonTransformTool.execute(validation.value, context);
+
+  assert.deepEqual(output, { name: "Acme", region: "EMEA" });
+});
+
+test("pick rejects an array that is not entirely objects", async () => {
+  const result = jsonTransformTool.validate({
+    operation: "pick",
+    data: [{ name: "Acme" }, "not an object"],
+    keys: ["name"],
+  });
+
+  assert.equal(result.valid, false);
+});

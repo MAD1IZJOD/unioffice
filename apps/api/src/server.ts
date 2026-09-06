@@ -39,6 +39,10 @@ import type {
 } from "./work-recovery-service.js";
 
 import type {
+  ExecutionScheduler,
+} from "./execution-scheduler.js";
+
+import type {
   CompanyBrainService,
 } from "./company-brain-service.js";
 
@@ -60,6 +64,7 @@ export interface ApiServices {
   workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
   workRecoveryService: WorkRecoveryService;
+  executionScheduler: ExecutionScheduler;
   companyBrainService: CompanyBrainService;
   companyOverviewService: CompanyOverviewService;
   toolRegistry: ToolRegistry;
@@ -231,8 +236,11 @@ export function buildApiServer(
       );
     });
   
+    // Starts execution and returns immediately. Callers watch progress
+    // through /work/:id/detail, which reads the same rows the executor is
+    // writing, rather than holding a request open for minutes of model time.
     instance.post("/work/:id/execute", async (request) => {
-      return services.workExecutionService.executeWork(
+      return services.executionScheduler.startExecution(
         parameterId(request.params),
       );
     });
@@ -288,9 +296,10 @@ export function buildApiServer(
         parameterApprovalId(request.params),
         resolverId(request.body),
       );
-      const execution = await services.workExecutionService.executeWork(
+      const execution = await services.executionScheduler.startExecution(
         approval.workId,
       );
+
       return { approval, ...execution };
     });
   

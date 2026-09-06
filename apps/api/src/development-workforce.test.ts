@@ -100,10 +100,11 @@ test("does not rewrite an agent that already matches the blueprint", async () =>
     id: ledgerId,
     organizationId,
     name: "Ledger",
-    description: "Performs careful financial, operational and decision analysis.",
+    description:
+      "Performs exact calculation and financial, operational and decision analysis.",
     type: "specialist",
     status: "active",
-    capabilities: ["analysis", "decision_support", "writing"],
+    capabilities: ["calculation", "financial_analysis", "decision_support"],
     toolIds: ["calculator", "datetime"],
     createdAt: now,
     updatedAt: now,
@@ -111,7 +112,7 @@ test("does not rewrite an agent that already matches the blueprint", async () =>
       developmentSeed: true,
       systemInstructions: [
         "You are Ledger, a UNI-OFFICE specialist.",
-        "Performs careful financial, operational and decision analysis.",
+        "Performs exact calculation and financial, operational and decision analysis.",
         "Complete the assigned task using the supplied context.",
         "Be concise and explicit about assumptions.",
         "Use your available tools for calculations or lookups instead of guessing; never claim to have used a tool you did not actually call.",

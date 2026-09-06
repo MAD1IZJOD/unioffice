@@ -50,15 +50,16 @@ import { describeEvent } from "../lib/events";
  * The launch pipeline mirrors the real API calls, one stage per call. Nothing
  * here is timed or simulated - a stage advances only when the request behind
  * it actually returns, which is why planning visibly takes as long as the
- * model takes.
+ * model takes. Once execution is scheduled the page hands off to the work
+ * detail view, which watches the same rows the executor is writing.
  */
 type LaunchStage = "idle" | "creating" | "planning" | "executing" | "done";
 
 const stageCopy: Record<Exclude<LaunchStage, "idle">, string> = {
   creating: "Recording the objective",
   planning: "Atlas is building the work plan",
-  executing: "Specialists are executing the plan",
-  done: "Execution finished",
+  executing: "Handing the plan to the specialists",
+  done: "Execution is under way",
 };
 
 const suggestions = [
@@ -104,6 +105,10 @@ export default function Command() {
       setStage("done");
       setObjective("");
       overview.reload();
+
+      // Execution now runs in the background, so the useful thing to show is
+      // the live work view rather than a spinner on this page.
+      navigate(`/work/${work.id}`);
     } catch (error) {
       setLaunchError((error as Error).message);
       setStage("idle");
@@ -638,8 +643,9 @@ function LaunchPipeline({
       {stage !== "done" && !error && (
         <p className="mt-4 flex items-center gap-2 text-[10.5px] text-slate-500">
           <LoaderCircle size={12} className="spin-slow text-cyan-300" />
-          Planning and execution run a local model to completion, so this takes
-          a couple of minutes rather than a couple of seconds.
+          Planning runs a local model to completion, so it takes a minute or
+          two. Execution then continues in the background and you will be
+          taken to the live view.
         </p>
       )}
 

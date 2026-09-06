@@ -10,7 +10,7 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
@@ -49,15 +49,32 @@ import {
 // requester rather than inventing an identity the backend cannot verify.
 const RESOLVER_ID = "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09";
 
+/** Work that can still change is watched closely; settled work is not. */
+const LIVE_POLL_MS = 4_000;
+const SETTLED_POLL_MS = 30_000;
+
 export default function WorkDetail() {
   const { workId = "" } = useParams();
   const [action, setAction] = useState<string>();
   const [actionError, setActionError] = useState<string>();
+  const [pollMs, setPollMs] = useState(LIVE_POLL_MS);
 
   const detail = useResource<WorkDetailData>(
     useCallback(() => fetchWorkDetail(workId), [workId]),
-    { pollMs: 10_000, enabled: Boolean(workId) },
+    { pollMs, enabled: Boolean(workId) },
   );
+
+  const status = detail.data?.work.status;
+
+  useEffect(() => {
+    if (!status) return;
+
+    setPollMs(
+      status === "completed" || status === "failed" || status === "cancelled"
+        ? SETTLED_POLL_MS
+        : LIVE_POLL_MS,
+    );
+  }, [status]);
 
   async function run(label: string, operation: () => Promise<unknown>) {
     setAction(label);

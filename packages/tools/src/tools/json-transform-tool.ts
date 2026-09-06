@@ -3,11 +3,13 @@ import type {
   ToolValidationResult,
 } from "../tool.js";
 
+type JsonObject = Record<string, unknown>;
+
 export type JsonTransformInput =
-  | { operation: "pick"; data: Record<string, unknown>; keys: string[] }
-  | { operation: "omit"; data: Record<string, unknown>; keys: string[] }
-  | { operation: "filter_equals"; data: Record<string, unknown>[]; field: string; equals: unknown }
-  | { operation: "map_field"; data: Record<string, unknown>[]; field: string };
+  | { operation: "pick"; data: JsonObject | JsonObject[]; keys: string[] }
+  | { operation: "omit"; data: JsonObject | JsonObject[]; keys: string[] }
+  | { operation: "filter_equals"; data: JsonObject[]; field: string; equals: unknown }
+  | { operation: "map_field"; data: JsonObject[]; field: string };
 
 export type JsonTransformOutput = unknown;
 
@@ -25,14 +27,17 @@ export const jsonTransformTool: ToolDefinition<
   id: "json_transform",
   name: "JSON Transform",
   description:
-    "Applies a structural transform (pick, omit, filter_equals, map_field) to JSON data.",
+    "Applies a structural transform to JSON data. 'pick'/'omit' keep or drop keys and accept either one object or an array of objects (applied to every item); 'filter_equals' keeps matching items; 'map_field' projects one field from every item.",
   version: "1.0.0",
   inputSchema: {
     type: "object",
     required: ["operation", "data"],
     properties: {
       operation: { type: "string", enum: OPERATIONS },
-      data: { description: "Object for pick/omit, array of objects for filter_equals/map_field." },
+      data: {
+        description:
+          "An object or an array of objects for pick/omit; an array of objects for filter_equals/map_field.",
+      },
       keys: { type: "array", items: { type: "string" }, description: "Required for pick/omit." },
       field: { type: "string", description: "Required for filter_equals/map_field." },
       equals: { description: "Required for filter_equals." },
@@ -61,10 +66,23 @@ export const jsonTransformTool: ToolDefinition<
       const data = value.data;
       const keys = value.keys;
 
-      if (typeof data !== "object" || data === null || Array.isArray(data)) {
+      // Selecting the same fields from every row is the common case, and
+      // rejecting an array here left it inexpressible: an agent asked to keep
+      // two fields from a list of records looped through every operation the
+      // tool had and gave up. An array now applies the transform per item.
+      const isObject =
+        typeof data === "object" && data !== null && !Array.isArray(data);
+      const isObjectArray =
+        Array.isArray(data) &&
+        data.every((item) => typeof item === "object" && item !== null && !Array.isArray(item));
+
+      if (!isObject && !isObjectArray) {
         return {
           valid: false,
-          errors: [{ path: "data", message: `data must be an object for '${operation}'.` }],
+          errors: [{
+            path: "data",
+            message: `data must be an object or an array of objects for '${operation}'.`,
+          }],
         };
       }
 
@@ -77,7 +95,11 @@ export const jsonTransformTool: ToolDefinition<
 
       return {
         valid: true,
-        value: { operation, data: data as Record<string, unknown>, keys },
+        value: {
+          operation,
+          data: data as JsonObject | JsonObject[],
+          keys,
+        },
       };
     }
 
@@ -102,30 +124,39 @@ export const jsonTransformTool: ToolDefinition<
     if (operation === "map_field") {
       return {
         valid: true,
-        value: { operation: "map_field", data: data as Record<string, unknown>[], field },
+        value: { operation: "map_field", data: data as JsonObject[], field },
       };
     }
 
     return {
       valid: true,
-      value: { operation: "filter_equals", data: data as Record<string, unknown>[], field, equals: value.equals },
+      value: { operation: "filter_equals", data: data as JsonObject[], field, equals: value.equals },
     };
   },
 
   async execute(input): Promise<JsonTransformOutput> {
     if (input.operation === "pick") {
-      return Object.fromEntries(
-        input.keys
-          .filter((key) => key in input.data)
-          .map((key) => [key, input.data[key]]),
-      );
+      const keys = input.keys;
+      const pick = (item: JsonObject) =>
+        Object.fromEntries(
+          keys.filter((key) => key in item).map((key) => [key, item[key]]),
+        );
+
+      return Array.isArray(input.data)
+        ? input.data.map(pick)
+        : pick(input.data);
     }
 
     if (input.operation === "omit") {
       const excluded = new Set(input.keys);
-      return Object.fromEntries(
-        Object.entries(input.data).filter(([key]) => !excluded.has(key)),
-      );
+      const omit = (item: JsonObject) =>
+        Object.fromEntries(
+          Object.entries(item).filter(([key]) => !excluded.has(key)),
+        );
+
+      return Array.isArray(input.data)
+        ? input.data.map(omit)
+        : omit(input.data);
     }
 
     if (input.operation === "filter_equals") {
