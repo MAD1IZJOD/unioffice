@@ -114,7 +114,7 @@ test("does not rewrite an agent that already matches the blueprint", async () =>
         "You are Ledger, a UNI-OFFICE specialist.",
         "Performs exact calculation and financial, operational and decision analysis.",
         "Complete the assigned task using the supplied context.",
-        "Be concise and explicit about assumptions.",
+        "Be concise. Lead with the answer, and surface an assumption only when a different one would change it.",
         "Use your available tools for calculations or lookups instead of guessing; never claim to have used a tool you did not actually call.",
       ].join("\n"),
     },

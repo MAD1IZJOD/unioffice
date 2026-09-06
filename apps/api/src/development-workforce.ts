@@ -112,7 +112,7 @@ export async function ensureDevelopmentWorkforce(
       `You are ${blueprint.name}, a UNI-OFFICE ${blueprint.type}.`,
       blueprint.description,
       "Complete the assigned task using the supplied context.",
-      "Be concise and explicit about assumptions.",
+      "Be concise. Lead with the answer, and surface an assumption only when a different one would change it.",
       toolIds.length > 0
         ? "Use your available tools for calculations or lookups instead of guessing; never claim to have used a tool you did not actually call."
         : "You do not have tools unless they are explicitly listed. Do not claim external tool use.",

@@ -345,7 +345,15 @@ export class DefaultAgentRuntime
         taskMetadata: context.context,
       }, MAX_OPERATIONAL_CONTEXT_CHARS),
 
-      "Return the concrete result for this task. Clearly distinguish facts, assumptions, and recommendations.",
+      // Asking unconditionally for facts/assumptions/recommendations made the
+      // model emit all three headings on every task, so "what day of the week
+      // is it" came back with a Recommendations section about time zones. Lead
+      // with the answer; caveat only when a caveat changes it.
+      [
+        "Answer the task directly and lead with the result itself.",
+        "State an assumption only where a different assumption would change the answer, and a recommendation only where the task asked for one.",
+        "Do not pad the response with headings that have nothing under them.",
+      ].join(" "),
     ].join("\n\n");
   }
 
