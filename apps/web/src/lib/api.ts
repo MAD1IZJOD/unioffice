@@ -169,6 +169,26 @@ export interface ToolDescriptor {
   inputSchema: Record<string, unknown>;
 }
 
+export type ExecutionJobStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+/** The durable queue row backing this work item, when one is active. */
+export interface ExecutionJobSummary {
+  id: string;
+  status: ExecutionJobStatus;
+  reason: "requested" | "approval_resumed" | "retry" | "recovered";
+  attempts: number;
+  maxAttempts: number;
+  claimedBy?: string;
+  leaseExpiresAt?: string;
+  lastError?: string;
+  createdAt: string;
+}
+
 export interface WorkDetail {
   work: WorkItem;
   tasks: TaskItem[];
@@ -176,6 +196,8 @@ export interface WorkDetail {
   artifacts: ArtifactItem[];
   approvals: ApprovalItem[];
   agents: AgentSummary[];
+  /** Present only while a job for this work is queued or running. */
+  executionJob?: ExecutionJobSummary | null;
 }
 
 export interface AgentPresenceSummary extends AgentSummary {
@@ -427,7 +449,8 @@ export async function planWork(workId: string): Promise<{
 export async function executeWork(workId: string): Promise<{
   work: WorkItem;
   tasks: TaskItem[];
-  started: boolean;
+  job: ExecutionJobSummary;
+  enqueued: boolean;
 }> {
   return post(`/work/${workId}/execute`, {}, READ_TIMEOUT_MS);
 }

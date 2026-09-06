@@ -8,7 +8,10 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "test": "turbo test"
+    "test": "turbo test",
+    "worker": "pnpm --filter @unioffice/worker dev",
+    "api": "pnpm --filter @unioffice/api dev",
+    "web": "pnpm --filter web dev"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

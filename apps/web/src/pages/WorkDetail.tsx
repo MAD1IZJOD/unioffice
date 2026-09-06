@@ -135,7 +135,8 @@ export default function WorkDetail() {
     );
   }
 
-  const { work, tasks, events, artifacts, approvals, agents } = detail.data;
+  const { work, tasks, events, artifacts, approvals, agents, executionJob } =
+    detail.data;
   const agentName = (id?: string) =>
     agents.find((agent) => agent.id === id)?.name ?? "Unassigned";
 
@@ -269,15 +270,32 @@ export default function WorkDetail() {
               </button>
             )}
 
-          {tasks.length > 0 && inFlight && (
+          {executionJob?.status === "queued" && (
             <span className="running-indicator">
               <LoaderCircle size={13} className="spin-slow" />
-              Executing in the background
+              {executionJob.attempts > 0
+                ? `Requeued for attempt ${executionJob.attempts + 1}`
+                : "Queued for a worker"}
+            </span>
+          )}
+
+          {executionJob?.status === "running" && (
+            <span className="running-indicator">
+              <LoaderCircle size={13} className="spin-slow" />
+              Running on {executionJob.claimedBy ?? "a worker"}
+            </span>
+          )}
+
+          {!executionJob && tasks.length > 0 && inFlight && (
+            <span className="running-indicator">
+              <LoaderCircle size={13} className="spin-slow" />
+              Executing
             </span>
           )}
 
           {tasks.length > 0 &&
             !inFlight &&
+            !executionJob &&
             (work.status === "queued" || work.status === "executing") && (
               <button
                 type="button"
@@ -329,6 +347,15 @@ export default function WorkDetail() {
             Refresh
           </button>
         </div>
+
+        {executionJob?.lastError && executionJob.status === "queued" && (
+          <div className="callout callout-warning mt-4">
+            <div className="detail-label mb-1.5">
+              Attempt {executionJob.attempts} did not finish
+            </div>
+            {executionJob.lastError} It is queued to be tried again.
+          </div>
+        )}
 
         {actionError && (
           <div className="callout callout-error mt-4">{actionError}</div>
