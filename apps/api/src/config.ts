@@ -19,6 +19,12 @@ export interface ApiConfig {
   ollamaModel: string;
   seedDevelopmentWorkforce: boolean;
   corsOrigins: string[];
+  /**
+   * How long a mid-run work item must sit untouched before startup treats it
+   * as abandoned by a dead process. Well past the longest real run, so a
+   * second live instance's work is never reclaimed out from under it.
+   */
+  staleRunAfterMs: number;
 }
 
 export function loadApiConfig(
@@ -46,7 +52,26 @@ export function loadApiConfig(
     seedDevelopmentWorkforce:
       env.SEED_DEVELOPMENT_WORKFORCE === "true",
     corsOrigins: parseCorsOrigins(env.API_CORS_ORIGINS),
+    staleRunAfterMs: parseStaleRunMinutes(
+      env.EXECUTION_STALE_AFTER_MINUTES,
+    ) * 60_000,
   };
+}
+
+function parseStaleRunMinutes(value: string | undefined): number {
+  if (value === undefined || value.trim() === "") {
+    return 15;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(
+      "EXECUTION_STALE_AFTER_MINUTES must be a positive number of minutes.",
+    );
+  }
+
+  return parsed;
 }
 
 function parseCorsOrigins(value: string | undefined): string[] {

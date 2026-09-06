@@ -214,8 +214,22 @@ export default function WorkDetail() {
         )}
 
         {typeof work.metadata.executionError === "string" && (
-          <div className="callout callout-error mt-4">
-            {work.metadata.executionError}
+          <div
+            className={`callout mt-4 ${
+              work.metadata.interrupted ? "callout-warning" : "callout-error"
+            }`}
+          >
+            {/* An interrupted run is not a failure of the work itself - it
+                stopped because the process did - so it reads as recoverable
+                rather than broken. */}
+            {work.metadata.interrupted ? (
+              <>
+                <div className="detail-label mb-1.5">Interrupted</div>
+                {work.metadata.executionError}
+              </>
+            ) : (
+              work.metadata.executionError
+            )}
           </div>
         )}
 
@@ -278,7 +292,11 @@ export default function WorkDetail() {
               className="button-primary"
             >
               <RotateCcw size={13} />
-              {action === "retry" ? "Retrying…" : "Retry this work"}
+              {action === "retry"
+                ? "Retrying…"
+                : work.metadata.interrupted
+                  ? "Resume this work"
+                  : "Retry this work"}
             </button>
           )}
 

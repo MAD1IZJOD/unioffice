@@ -1,6 +1,7 @@
 import type {
   Work,
   WorkId,
+  WorkStatus,
   OrganizationId,
 } from "@unioffice/core";
 
@@ -11,6 +12,15 @@ export interface WorkRepository {
 
   findByOrganization(
     organizationId: OrganizationId,
+  ): Promise<Work[]>;
+
+  /**
+   * Work in any of the given states, across every organization. Used at
+   * startup to find runs an earlier process left behind.
+   */
+  findByStatuses(
+    statuses: WorkStatus[],
+    limit?: number,
   ): Promise<Work[]>;
 
   update(work: Work): Promise<Work>;

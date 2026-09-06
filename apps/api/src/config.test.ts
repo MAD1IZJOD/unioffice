@@ -28,3 +28,30 @@ test("rejects CORS entries with a path", () => {
     /without paths/,
   );
 });
+
+test("stale-run window defaults to 15 minutes", () => {
+  const config = loadApiConfig(environment());
+
+  assert.equal(config.staleRunAfterMs, 15 * 60_000);
+});
+
+test("stale-run window can be shortened for operators", () => {
+  const config = loadApiConfig({
+    ...environment(),
+    EXECUTION_STALE_AFTER_MINUTES: "2",
+  });
+
+  assert.equal(config.staleRunAfterMs, 2 * 60_000);
+});
+
+test("rejects a stale-run window that is not a positive number", () => {
+  assert.throws(
+    () => loadApiConfig({ ...environment(), EXECUTION_STALE_AFTER_MINUTES: "0" }),
+    /EXECUTION_STALE_AFTER_MINUTES must be a positive number/,
+  );
+
+  assert.throws(
+    () => loadApiConfig({ ...environment(), EXECUTION_STALE_AFTER_MINUTES: "soon" }),
+    /EXECUTION_STALE_AFTER_MINUTES must be a positive number/,
+  );
+});

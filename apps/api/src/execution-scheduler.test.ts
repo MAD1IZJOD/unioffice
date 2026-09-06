@@ -49,6 +49,9 @@ function harness(execute: (id: WorkId) => Promise<unknown>) {
     async create(value) { return value; },
     async findById(id) { return workStore.get(id) ?? null; },
     async findByOrganization() { return [...workStore.values()]; },
+    async findByStatuses(statuses) {
+      return [...workStore.values()].filter((work) => statuses.includes(work.status));
+    },
     async update(value) { workStore.set(value.id, value); return value; },
     async delete() {},
   };

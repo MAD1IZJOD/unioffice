@@ -160,6 +160,12 @@ class MemoryWorkRepository implements WorkRepository {
     );
   }
 
+  async findByStatuses(statuses: Work["status"][]): Promise<Work[]> {
+    return [...this.works.values()].filter(
+      (work) => statuses.includes(work.status),
+    );
+  }
+
   async update(work: Work): Promise<Work> {
     this.works.set(work.id, work);
     return work;

@@ -74,13 +74,27 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
         title: `Work completed across ${count("taskCount") ?? 0} tasks`,
       };
 
-    case "work.failed":
+    case "work.failed": {
+      const interrupted = count("interruptedTaskCount");
+
+      // A run the process abandoned is recoverable, not broken, so it does
+      // not get the same red as a genuine execution failure.
+      if (interrupted !== undefined) {
+        return {
+          category: "work",
+          tone: "tone-warning",
+          title: "Work interrupted by a restart",
+          detail: `${interrupted} unfinished ${interrupted === 1 ? "task" : "tasks"} - can be resumed`,
+        };
+      }
+
       return {
         category: "work",
         tone: "tone-error",
         title: "Work failed",
         detail: text("reason") ?? text("error"),
       };
+    }
 
     case "work.retried":
       return {

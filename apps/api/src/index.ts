@@ -82,6 +82,10 @@ import {
 } from "./execution-scheduler.js";
 
 import {
+  StaleRunReconciler,
+} from "./stale-run-reconciler.js";
+
+import {
   WorkRecoveryService,
 } from "./work-recovery-service.js";
 
@@ -206,6 +210,35 @@ export async function createApiServer() {
     eventRepository,
     toolRegistry,
   );
+
+  // Runs abandoned by a previous process would otherwise sit in "executing"
+  // forever with nothing alive to finish them, and Retry only accepts failed
+  // work. Closing them out at startup puts them back on that path.
+  const staleRunReconciler = new StaleRunReconciler(
+    workRepository,
+    taskRepository,
+    eventRecorder,
+    config.staleRunAfterMs,
+  );
+
+  try {
+    const reconciled = await staleRunReconciler.reconcile();
+
+    if (reconciled.recoveredWork.length > 0) {
+      console.warn(
+        `Recovered ${reconciled.recoveredWork.length} work item(s) interrupted by a previous restart, ` +
+        `covering ${reconciled.interruptedTaskCount} unfinished task(s). They can be retried.`,
+      );
+    }
+  } catch (error) {
+    // Startup must not depend on reconciliation succeeding; the worst case is
+    // that stale work stays stale until the next boot.
+    console.warn(
+      `Could not reconcile interrupted runs: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 
   const developmentOrganization =
     config.seedDevelopmentWorkforce

@@ -2,6 +2,7 @@ import type {
   OrganizationId,
   Work,
   WorkId,
+  WorkStatus,
 } from "@unioffice/core";
 
 import type {
@@ -120,6 +121,31 @@ export class SupabaseWorkRepository
     return data
       ? toWork(data as WorkRow)
       : null;
+  }
+
+  async findByStatuses(
+    statuses: WorkStatus[],
+    limit = 200,
+  ): Promise<Work[]> {
+    if (statuses.length === 0) {
+      return [];
+    }
+
+    const { data, error } =
+      await this.supabase
+        .from("works")
+        .select("*")
+        .in("status", statuses)
+        .order("updated_at", { ascending: true })
+        .limit(limit);
+
+    if (error) {
+      throw new Error(
+        `Failed to find works by status: ${error.message}`,
+      );
+    }
+
+    return (data as WorkRow[] ?? []).map(toWork);
   }
 
   async findByOrganization(

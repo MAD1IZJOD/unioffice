@@ -30,6 +30,7 @@ const workRepository: WorkRepository = {
   async create(work) { return work; },
   async findById() { return null; },
   async findByOrganization() { return []; },
+  async findByStatuses() { return []; },
   async update(work) { return work; },
   async delete() {},
 };
