@@ -41,3 +41,7 @@ export type EventId = string & {
 export type MemoryId = string & {
   readonly __brand: "MemoryId";
 };
+
+export type ExecutionJobId = string & {
+  readonly __brand: "ExecutionJobId";
+};
