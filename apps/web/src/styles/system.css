@@ -1,87 +1,179 @@
 /* ==========================================================================
-   Design tokens
+   UNI-OFFICE design tokens
 
-   The palette was previously inlined as hex literals across every component,
-   which made "a slightly different border grey" the default outcome of any
-   new page. These are the same values, named once.
+   Black carries the interface. Blue and red are semantic, never decorative:
+   blue is the system thinking - agents working, data moving, state that is
+   live. Red is pressure - a decision waiting on a person, something blocked,
+   something that failed. If a colour appears, it means something.
    ========================================================================== */
 
 :root {
-  --surface-0: #080c10;
-  --surface-1: #0a0f14;
-  --surface-2: #0d1319;
-  --surface-3: #111820;
-  --surface-4: #151d26;
+  /* Surfaces. Near-black through graphite; each step is deliberately small so
+     elevation reads as depth rather than as a stack of floating cards. */
+  --surface-0: #06070a;
+  --surface-1: #0a0c11;
+  --surface-2: #0e1116;
+  --surface-3: #13171e;
+  --surface-4: #191e26;
 
-  --line-subtle: #1b252e;
-  --line: #202b35;
-  --line-strong: #2a3844;
+  --line-subtle: #161a21;
+  --line: #1e232b;
+  --line-strong: #2a313c;
 
-  --ink-primary: #f1f5f9;
-  --ink-secondary: #a8b4c3;
-  --ink-muted: #718096;
-  --ink-faint: #566172;
+  --ink-primary: #f2f4f7;
+  --ink-secondary: #a7b0bd;
+  --ink-muted: #6f7887;
+  --ink-faint: #535b68;
 
-  --accent: #22d3ee;
-  --accent-soft: rgba(34, 211, 238, 0.1);
-  --accent-line: rgba(34, 211, 238, 0.22);
-  --accent-ink: #67e8f9;
+  /* Blue - intelligence, activity, live system state. */
+  --blue: #3b82f6;
+  --blue-ink: #84b4fb;
+  --blue-soft: rgba(59, 130, 246, 0.10);
+  --blue-line: rgba(59, 130, 246, 0.28);
 
-  --live: #34d399;
-  --live-soft: rgba(52, 211, 153, 0.09);
-  --live-line: rgba(52, 211, 153, 0.22);
+  /* Red - attention and failure. The brighter tone is "a person is needed",
+     the base tone is "this did not work". Same hue so the interface never
+     turns into a colour wheel; the difference is weight and motion. */
+  --red: #e5484d;
+  --red-ink: #ff7176;
+  --red-soft: rgba(229, 72, 77, 0.10);
+  --red-line: rgba(229, 72, 77, 0.30);
 
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.09);
-  --warning-line: rgba(251, 191, 36, 0.24);
+  /* Restrained positive. Deliberately quiet: finished work should not shout
+     louder than work that needs something. */
+  --success: #2f9e6b;
+  --success-ink: #56c193;
+  --success-soft: rgba(47, 158, 107, 0.09);
+  --success-line: rgba(47, 158, 107, 0.24);
 
-  --error: #f87171;
-  --error-soft: rgba(248, 113, 113, 0.09);
-  --error-line: rgba(248, 113, 113, 0.24);
+  --warning: #d99a2b;
+  --warning-soft: rgba(217, 154, 43, 0.09);
+  --warning-line: rgba(217, 154, 43, 0.24);
 
-  --radius-sm: 7px;
-  --radius: 10px;
-  --radius-lg: 14px;
+  /* Kept as aliases so anything still reaching for the old accent gets blue
+     rather than the retired cyan. */
+  --accent: var(--blue);
+  --accent-ink: var(--blue-ink);
+  --accent-soft: var(--blue-soft);
+  --accent-line: var(--blue-line);
+
+  --live: var(--success);
+  --live-soft: var(--success-soft);
+  --live-line: var(--success-line);
+  --error: var(--red);
+  --error-soft: var(--red-soft);
+  --error-line: var(--red-line);
+
+  --focus: var(--blue-ink);
+
+  /* Corners stay tight. Soft, heavily rounded rectangles read as consumer
+     SaaS; this is closer to instrumentation. */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
 
   --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --rail-width: 236px;
+  --header-height: 56px;
+}
+
+/* --------------------------------------------------------------------------
+   Typography scale
+
+   Hierarchy is carried by size, weight and colour rather than by boxes.
+   Monospace is reserved for machine facts - ids, timestamps, tool names,
+   structured output - so it keeps meaning instead of becoming a texture.
+   -------------------------------------------------------------------------- */
+
+.t-eyebrow {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.t-page-title {
+  color: var(--ink-primary);
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.028em;
+  line-height: 1.15;
+}
+
+.t-section-title {
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+.t-numeric {
+  color: var(--ink-primary);
+  font-size: 26px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.t-body {
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.t-meta {
+  color: var(--ink-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.t-machine {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
 }
 
 /* --------------------------------------------------------------------------
    Status tones
 
-   One vocabulary shared by pills, icons, metrics and chips, so amber always
-   means "a human is needed" and red always means "this did not work". A page
-   that invents its own colours makes the whole control plane harder to scan.
+   One vocabulary shared by pills, icons, rails, metrics and chips. Blue means
+   the system is working on it; red means a person is needed or something
+   broke; green means done and is kept quiet on purpose.
    -------------------------------------------------------------------------- */
 
 .tone-live {
-  --tone: var(--live);
-  --tone-soft: var(--live-soft);
-  --tone-line: var(--live-line);
+  --tone: var(--success-ink);
+  --tone-soft: var(--success-soft);
+  --tone-line: var(--success-line);
 }
 
 .tone-active {
-  --tone: var(--accent-ink);
-  --tone-soft: var(--accent-soft);
-  --tone-line: var(--accent-line);
+  --tone: var(--blue-ink);
+  --tone-soft: var(--blue-soft);
+  --tone-line: var(--blue-line);
 }
 
 .tone-warning {
-  --tone: var(--warning);
-  --tone-soft: var(--warning-soft);
-  --tone-line: var(--warning-line);
+  --tone: var(--red-ink);
+  --tone-soft: var(--red-soft);
+  --tone-line: var(--red-line);
 }
 
 .tone-error {
-  --tone: var(--error);
-  --tone-soft: var(--error-soft);
-  --tone-line: var(--error-line);
+  --tone: var(--red);
+  --tone-soft: var(--red-soft);
+  --tone-line: var(--red-line);
 }
 
 .tone-idle {
-  --tone: #7c8b9c;
-  --tone-soft: rgba(124, 139, 156, 0.09);
-  --tone-line: rgba(124, 139, 156, 0.2);
+  --tone: #78818f;
+  --tone-soft: rgba(120, 129, 143, 0.08);
+  --tone-line: rgba(120, 129, 143, 0.2);
 }
 
 .status-pill {
@@ -159,16 +251,28 @@
 
 /* --------------------------------------------------------------------------
    Panels
+
+   A panel is a bounded region, not a floating card. The old build gave every
+   one a gradient, a drop shadow and a 14px radius, so eight of them on a page
+   read as eight competing objects instead of one page with eight parts.
    -------------------------------------------------------------------------- */
 
 .panel {
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(160deg, #10171e, #0c1218);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 18px 44px rgba(0, 0, 0, 0.16);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+/* Marks a panel as the thing that needs a person. Used sparingly - if two
+   panels claim urgency at once, neither reads as urgent. */
+.panel-attention {
+  border-color: var(--red-line);
+  background: linear-gradient(
+    180deg,
+    var(--red-soft) 0%,
+    var(--surface-1) 90px
+  );
 }
 
 .panel-header {
@@ -176,7 +280,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px 18px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--line-subtle);
 }
 
@@ -185,7 +289,7 @@
   font-family: var(--mono);
   font-size: 8.5px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
@@ -193,7 +297,7 @@
   margin-top: 3px;
   color: var(--ink-primary);
   font-size: 12.5px;
-  font-weight: 620;
+  font-weight: 650;
   letter-spacing: -0.005em;
 }
 
@@ -205,7 +309,40 @@
 }
 
 .panel-body {
-  padding: 18px;
+  padding: 16px;
+}
+
+/* A section is the lighter alternative: a heading and a rule, no border box.
+   Most groupings on a page should be this rather than a panel. */
+.section {
+  margin-bottom: 26px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.section-head-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink-primary);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.section-head-count {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .section-heading {
@@ -213,71 +350,106 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .section-heading-title {
   margin: 0;
   color: var(--ink-primary);
-  font-size: 19px;
-  font-weight: 640;
+  font-size: 21px;
+  font-weight: 650;
   letter-spacing: -0.028em;
 }
 
 .section-heading-description {
-  max-width: 62ch;
-  margin: 5px 0 0;
+  max-width: 64ch;
+  margin: 6px 0 0;
   color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.6;
 }
 
 /* --------------------------------------------------------------------------
-   Metrics
+   Readout
+
+   Operational numbers sit in one bordered strip, divided rather than boxed,
+   so they read as a single instrument panel instead of four cards.
    -------------------------------------------------------------------------- */
+
+.readout {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
 
 .metric {
   position: relative;
-  overflow: hidden;
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-2);
+  padding: 13px 16px;
+  border-left: 1px solid var(--line-subtle);
 }
 
-.metric::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 2px;
-  background: var(--tone);
-  opacity: 0.75;
+.metric:first-child {
+  border-left: none;
 }
 
 .metric-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--ink-faint);
   font-family: var(--mono);
   font-size: 8.5px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.17em;
   text-transform: uppercase;
 }
 
+.metric-label::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tone);
+  opacity: 0.9;
+}
+
 .metric-value {
-  margin-top: 10px;
+  margin-top: 9px;
   color: var(--ink-primary);
-  font-size: 27px;
+  font-size: 25px;
   font-weight: 620;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.035em;
   line-height: 1;
 }
 
+/* The number carries the colour only when it is not zero: "3 approvals
+   waiting" is red, "0 approvals waiting" is just a fact. */
+.metric-live .metric-value {
+  color: var(--tone);
+}
+
 .metric-detail {
-  margin-top: 7px;
+  margin-top: 6px;
   color: var(--ink-muted);
   font-size: 10.5px;
-  line-height: 1.5;
+  line-height: 1.45;
+}
+
+@media (max-width: 860px) {
+  .readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric:nth-child(3) {
+    border-left: none;
+  }
+
+  .metric:nth-child(n + 3) {
+    border-top: 1px solid var(--line-subtle);
+  }
 }
 
 /* --------------------------------------------------------------------------

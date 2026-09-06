@@ -1,35 +1,27 @@
 import {
   Activity,
-  ArrowUpRight,
   Bell,
+  Boxes,
   Brain,
-  ChevronDown,
-  Command,
+  ChevronRight,
+  Command as CommandIcon,
   FileOutput,
-  GitBranch,
-  LayoutDashboard,
+  LayoutGrid,
   Menu,
   Network,
   Search,
   Settings,
-  ShieldCheck,
-  Sparkles,
+  ShieldAlert,
+  Users,
   Wrench,
   X,
 } from "lucide-react";
 
-import {
-  NavLink,
-  Outlet,
-  useLocation,
-} from "react-router-dom";
+import type { LucideIcon } from "lucide-react";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   fetchOverview,
@@ -38,182 +30,197 @@ import {
 } from "./lib/api";
 
 import { useResource } from "./lib/useResource";
-
 import { describeEvent } from "./lib/events";
 
-const navigation = [
-  ["COMMAND", "/command", Command],
-  ["WORK", "/work", GitBranch],
-  ["AGENTS", "/agents", Sparkles],
-  ["TOOLS", "/tools", Wrench],
-  ["COMPANY BRAIN", "/brain", Brain],
-  ["ARTIFACTS", "/artifacts", FileOutput],
-  ["APPROVALS", "/approvals", ShieldCheck],
-  ["ACTIVITY", "/activity", Activity],
-] as const;
+interface NavEntry {
+  label: string;
+  path: string;
+  icon: LucideIcon;
+  /** Where the number beside this surface comes from, if it has one. */
+  badge?: (overview: CompanyOverview) => number;
+}
 
-const organizationNavigation = [
-  ["ORGANIZATION", "/organization", Network],
-  ["GOVERNANCE", "/governance", Settings],
-] as const;
+/**
+ * Navigation grouped by what the person is trying to do, not by which table
+ * the data came from. Running the company, staffing it, understanding it, and
+ * the machinery underneath are four different intents, and the old flat list
+ * of ten equal entries made you read all of them every time.
+ */
+const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
+  {
+    label: "Operate",
+    entries: [
+      { label: "Command Center", path: "/command", icon: CommandIcon },
+      {
+        label: "Work",
+        path: "/work",
+        icon: LayoutGrid,
+        badge: (overview) => overview.work.active.length,
+      },
+      {
+        label: "Approvals",
+        path: "/approvals",
+        icon: ShieldAlert,
+        badge: (overview) => overview.approvals.length,
+      },
+    ],
+  },
+  {
+    label: "Workforce",
+    entries: [
+      { label: "Agents", path: "/agents", icon: Users },
+      { label: "Organization", path: "/organization", icon: Network },
+    ],
+  },
+  {
+    label: "Intelligence",
+    entries: [
+      { label: "Company Brain", path: "/brain", icon: Brain },
+      { label: "Activity", path: "/activity", icon: Activity },
+    ],
+  },
+  {
+    label: "System",
+    entries: [
+      { label: "Tools", path: "/tools", icon: Wrench },
+      { label: "Artifacts", path: "/artifacts", icon: FileOutput },
+      { label: "Governance", path: "/governance", icon: Settings },
+    ],
+  },
+];
 
-const pageTitles: Record<string, string> = {
-  "/": "Command Center",
-  "/command": "Command Center",
-  "/work": "Work",
-  "/agents": "Agents",
-  "/tools": "Tools",
-  "/brain": "Company Brain",
-  "/artifacts": "Artifacts",
-  "/approvals": "Approvals",
-  "/activity": "Activity",
-  "/organization": "Organization",
-  "/governance": "Governance",
-};
+const ALL_ENTRIES = NAV_GROUPS.flatMap((group) => group.entries);
 
+/** The group a route belongs to, shown as context in the header. */
+function locate(pathname: string): { group: string; title: string } {
+  if (pathname.startsWith("/work/")) {
+    return { group: "Operate", title: "Work detail" };
+  }
+
+  for (const group of NAV_GROUPS) {
+    const entry = group.entries.find((candidate) => candidate.path === pathname);
+
+    if (entry) {
+      return { group: group.label, title: entry.label };
+    }
+  }
+
+  return { group: "Operate", title: "Command Center" };
+}
 
 function Navigation({
+  overview,
   onNavigate,
 }: {
+  overview?: CompanyOverview;
   onNavigate?: () => void;
 }) {
   return (
-    <>
-      <div className="space-y-1">
-        {navigation.map(([label, path, Icon]) => (
-          <NavLink
-            key={path}
-            to={path}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              [
-                "nav-item group",
-                isActive
-                  ? "nav-item-active"
-                  : "nav-item-idle",
-              ].join(" ")
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon
-                  size={16}
-                  strokeWidth={1.8}
-                  className={
-                    isActive
-                      ? "text-cyan-300"
-                      : "text-slate-500 group-hover:text-slate-300"
+    <nav>
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label}>
+          <div className="sidebar-section-label">{group.label}</div>
+
+          <div className="space-y-0.5">
+            {group.entries.map((entry) => {
+              const count = overview ? entry.badge?.(overview) ?? 0 : 0;
+
+              return (
+                <NavLink
+                  key={entry.path}
+                  to={entry.path}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    `nav-item ${isActive ? "nav-item-active" : "nav-item-idle"}`
                   }
-                />
+                >
+                  {({ isActive }) => (
+                    <>
+                      <entry.icon
+                        size={14}
+                        strokeWidth={1.9}
+                        className={isActive ? "text-[#84b4fb]" : "opacity-70"}
+                      />
 
-                <span>{label}</span>
+                      <span>{entry.label}</span>
 
-                {isActive && (
-                  <span className="nav-active-indicator" />
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
-      </div>
-
-      <div className="sidebar-section-label">
-        Organization
-      </div>
-
-      <div className="space-y-1">
-        {organizationNavigation.map(
-          ([label, path, Icon]) => (
-            <NavLink
-              key={path}
-              to={path}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                [
-                  "nav-item group",
-                  isActive
-                    ? "nav-item-active"
-                    : "nav-item-idle",
-                ].join(" ")
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon
-                    size={16}
-                    strokeWidth={1.8}
-                    className={
-                      isActive
-                        ? "text-cyan-300"
-                        : "text-slate-500 group-hover:text-slate-300"
-                    }
-                  />
-
-                  <span>{label}</span>
-
-                  {isActive && (
-                    <span className="nav-active-indicator" />
+                      {count > 0 && (
+                        <span className="nav-badge">{count}</span>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-            </NavLink>
-          ),
-        )}
-      </div>
-    </>
+                </NavLink>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
   );
 }
 
-function UserCard() {
+function Brand({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <div className="user-card">
-      <div className="relative">
-        <div className="user-avatar">
-          M
-        </div>
+    <NavLink
+      to="/command"
+      onClick={onNavigate}
+      className="flex items-center gap-2.5"
+    >
+      <span className="brand-icon">
+        <Boxes size={14} strokeWidth={2} />
+      </span>
 
-        <span className="status-dot status-dot-live absolute -bottom-0.5 -right-0.5 border-2 border-[#0b1015]" />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-semibold text-slate-200">
-          Madhavan
-        </div>
-
-        <div className="mt-0.5 font-mono-ui text-[9px] uppercase tracking-[0.12em] text-slate-500">
-          Administrator
-        </div>
-      </div>
-
-      <ChevronDown
-        size={14}
-        className="text-slate-500"
-      />
-    </div>
+      <span>
+        <span className="brand-name block">UNI-OFFICE</span>
+        <span className="brand-subtitle block">OPERATING SYSTEM</span>
+      </span>
+    </NavLink>
   );
 }
 
 export default function App() {
   const location = useLocation();
 
-  const [mobileOpen, setMobileOpen] =
-    useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [attentionOpen, setAttentionOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
 
-  const [commandOpen, setCommandOpen] =
-    useState(false);
-
-  const [notificationsOpen, setNotificationsOpen] =
-    useState(false);
-
-  const [paletteQuery, setPaletteQuery] =
-    useState("");
-
-  // The shell shows the same live counts as every page, so the header can
-  // never claim two approvals are waiting while the queue is empty.
+  // The shell reads the same overview every page reads, so the counts in the
+  // rail can never disagree with the surface they point at.
   const overview = useResource<CompanyOverview>(
     useCallback(() => fetchOverview(12), []),
     { pollMs: 20_000 },
   );
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen(true);
+      }
+
+      if (event.key === "Escape") {
+        setCommandOpen(false);
+        setAttentionOpen(false);
+        setPaletteQuery("");
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Navigating anywhere - including with the browser's back button - closes
+  // the overlays. Adjusted during render rather than in an effect, which is
+  // React's documented way to react to a value the component already has.
+  const [lastPath, setLastPath] = useState(location.pathname);
+
+  if (lastPath !== location.pathname) {
+    setLastPath(location.pathname);
+    setMobileOpen(false);
+    setAttentionOpen(false);
+  }
 
   const attention = useMemo(() => {
     const data = overview.data;
@@ -250,20 +257,18 @@ export default function App() {
     ];
   }, [overview.data]);
 
-  const needsAttentionCount = overview.data?.approvals.length ?? 0;
+  const pendingCount = overview.data?.approvals.length ?? 0;
 
   const paletteResults = useMemo(() => {
     const needle = paletteQuery.trim().toLowerCase();
 
-    const surfaces = [...navigation, ...organizationNavigation].map(
-      ([label, path, icon]) => ({
-        key: path,
-        label,
-        path,
-        icon,
-        kind: "Navigate",
-      }),
-    );
+    const surfaces = ALL_ENTRIES.map((entry) => ({
+      key: entry.path,
+      label: entry.label,
+      path: entry.path,
+      icon: entry.icon,
+      kind: "Go to",
+    }));
 
     const work = (overview.data?.work.active ?? [])
       .concat(overview.data?.work.recentlyCompleted ?? [])
@@ -272,157 +277,75 @@ export default function App() {
         key: item.id,
         label: item.objective,
         path: `/work/${item.id}`,
-        icon: GitBranch,
+        icon: LayoutGrid,
         kind: "Work",
       }));
 
-    return [...surfaces, ...work].filter((entry) =>
-      !needle || entry.label.toLowerCase().includes(needle),
+    return [...surfaces, ...work].filter(
+      (entry) => !needle || entry.label.toLowerCase().includes(needle),
     );
   }, [paletteQuery, overview.data]);
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key.toLowerCase() === "k"
-      ) {
-        event.preventDefault();
-        setCommandOpen(true);
-      }
-
-      if (event.key === "Escape") {
-        setCommandOpen(false);
-        setNotificationsOpen(false);
-        setPaletteQuery("");
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () =>
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-      );
-  }, []);
-
-  const title =
-    pageTitles[location.pathname] ??
-    (location.pathname.startsWith("/work/")
-      ? "Work detail"
-      : "Operating System");
+  const { group, title } = locate(location.pathname);
 
   return (
     <div className="app-shell">
-      {/* Desktop sidebar */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <NavLink
-            to="/command"
-            className="flex items-center gap-3"
-          >
-            <div className="brand-icon">
-              <LayoutDashboard size={17} />
-            </div>
-
-            <div>
-              <div className="brand-name">
-                UNI-OFFICE
-              </div>
-
-              <div className="brand-subtitle">
-                AI OPERATING SYSTEM
-              </div>
-            </div>
-          </NavLink>
+          <Brand />
         </div>
 
         <div className="sidebar-content">
-          <div className="sidebar-section-label mt-0">
-            Workspace
-          </div>
-
-          <nav>
-            <Navigation />
-          </nav>
+          <Navigation overview={overview.data} />
         </div>
 
         <div className="sidebar-footer">
-          <UserCard />
+          <div className="user-card">
+            <span className="user-avatar">M</span>
+
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[11.5px] font-semibold text-[#a7b0bd]">
+                Madhavan
+              </span>
+              <span className="t-machine block">ADMINISTRATOR</span>
+            </span>
+          </div>
         </div>
       </aside>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <button
           type="button"
           aria-label="Close navigation"
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/75 lg:hidden"
         />
       )}
 
-      {/* Mobile sidebar */}
       <aside
-        className={[
-          "mobile-sidebar",
-          mobileOpen
-            ? "translate-x-0"
-            : "-translate-x-full",
-        ].join(" ")}
+        className={`mobile-sidebar ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className="sidebar-brand">
-          <div className="flex items-center justify-between">
-            <NavLink
-              to="/command"
-              onClick={() =>
-                setMobileOpen(false)
-              }
-              className="flex items-center gap-3"
-            >
-              <div className="brand-icon">
-                <LayoutDashboard size={17} />
-              </div>
+        <div className="sidebar-brand justify-between">
+          <Brand onNavigate={() => setMobileOpen(false)} />
 
-              <span className="brand-name">
-                UNI-OFFICE
-              </span>
-            </NavLink>
-
-            <button
-              type="button"
-              onClick={() =>
-                setMobileOpen(false)
-              }
-              className="icon-button"
-              aria-label="Close navigation"
-            >
-              <X size={17} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="icon-button"
+            aria-label="Close navigation"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         <div className="sidebar-content">
-          <div className="sidebar-section-label mt-0">
-            Workspace
-          </div>
-
-          <nav>
-            <Navigation
-              onNavigate={() =>
-                setMobileOpen(false)
-              }
-            />
-          </nav>
-        </div>
-
-        <div className="sidebar-footer">
-          <UserCard />
+          <Navigation
+            overview={overview.data}
+            onNavigate={() => setMobileOpen(false)}
+          />
         </div>
       </aside>
 
-      {/* Mobile top bar */}
       <div className="mobile-topbar">
         <button
           type="button"
@@ -430,27 +353,31 @@ export default function App() {
           className="icon-button"
           aria-label="Open navigation"
         >
-          <Menu size={18} />
+          <Menu size={17} />
         </button>
 
-        <span className="mobile-brand">
-          UNI-OFFICE
-        </span>
+        <span className="mobile-brand">UNI-OFFICE</span>
 
-        <span className="status-dot status-dot-live" />
+        <button
+          type="button"
+          onClick={() => setCommandOpen(true)}
+          className="icon-button"
+          aria-label="Search"
+        >
+          <Search size={15} />
+        </button>
       </div>
 
-      {/* Main */}
       <main className="main-content">
         <header className="topbar">
-          <div>
+          <div className="min-w-0">
             <div className="topbar-eyebrow">
-              UNI-OFFICE / CONTROL PLANE
+              <span>{group}</span>
+              <ChevronRight size={9} />
+              <span className="text-[#6f7887]">{title}</span>
             </div>
 
-            <h1 className="topbar-title">
-              {title}
-            </h1>
+            <h1 className="topbar-title truncate">{title}</h1>
           </div>
 
           <div className="topbar-actions">
@@ -459,69 +386,59 @@ export default function App() {
               className="search-button"
               onClick={() => setCommandOpen(true)}
             >
-              <Search size={14} />
-
+              <Search size={13} />
               <span>Search</span>
-
               <kbd>Ctrl K</kbd>
             </button>
 
             <div className="relative">
               <button
                 type="button"
-                className="icon-button relative"
-                aria-label={`Open notifications (${needsAttentionCount} awaiting approval)`}
-                onClick={() =>
-                  setNotificationsOpen(
-                    (isOpen) => !isOpen,
-                  )
-                }
+                className={`icon-button${pendingCount > 0 ? " icon-button-attention" : ""}`}
+                aria-label={`Attention queue, ${pendingCount} awaiting approval`}
+                onClick={() => setAttentionOpen((open) => !open)}
               >
-                <Bell size={15} />
+                <Bell size={14} />
 
-                {needsAttentionCount > 0 && (
-                  <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.95)]" />
+                {pendingCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#e5484d] px-1 font-mono text-[8px] font-semibold text-white">
+                    {pendingCount}
+                  </span>
                 )}
               </button>
 
-              {notificationsOpen && (
+              {attentionOpen && (
                 <div className="notification-popover">
-                  <div className="flex items-center justify-between border-b border-[#202b35] px-4 py-3">
-                    <span className="mono text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                      Attention queue
-                    </span>
+                  <div className="flex items-center justify-between border-b border-[#1e232b] px-3 py-2.5">
+                    <span className="t-eyebrow">Attention</span>
 
-                    {needsAttentionCount > 0 && (
-                      <span className="rounded-full bg-amber-400/10 px-2 py-1 mono text-[8px] text-amber-300">
-                        {needsAttentionCount} PENDING
+                    {pendingCount > 0 && (
+                      <span className="rounded-sm bg-[rgba(229,72,77,0.1)] px-1.5 py-0.5 font-mono text-[8px] text-[#ff7176]">
+                        {pendingCount} WAITING
                       </span>
                     )}
                   </div>
 
-                  <div className="space-y-1 p-2">
+                  <div className="space-y-0.5 p-1.5">
                     {attention.length === 0 ? (
-                      <div className="px-2 py-4 text-center text-[10px] text-slate-500">
-                        Nothing needs your attention.
+                      <div className="px-2 py-5 text-center text-[10.5px] text-[#6f7887]">
+                        Nothing needs you.
                       </div>
                     ) : (
                       attention.slice(0, 6).map((entry) => (
                         <NavLink
                           key={entry.id}
                           to={entry.to}
-                          onClick={() =>
-                            setNotificationsOpen(false)
-                          }
+                          onClick={() => setAttentionOpen(false)}
                           className="notification-item"
                         >
-                          <span className={`pill-dot ${entry.tone}`} />
+                          <span className={`pill-dot mt-1 ${entry.tone}`} />
 
                           <span className="min-w-0">
-                            <span className="block truncate">
-                              {entry.label}
-                            </span>
+                            <span className="block truncate">{entry.label}</span>
 
                             {entry.detail && (
-                              <span className="mt-0.5 block truncate text-[9px] text-slate-600">
+                              <span className="mt-0.5 block truncate text-[9.5px] text-[#535b68]">
                                 {entry.detail}
                               </span>
                             )}
@@ -539,15 +456,14 @@ export default function App() {
               title={overview.error?.message}
             >
               <span
-                className={`status-dot ${overview.error ? "status-dot-error" : "status-dot-live"}`}
+                className={`pill-dot ${overview.error ? "tone-error" : "tone-active"}`}
               />
-
               <span>
                 {overview.error
-                  ? "API UNREACHABLE"
+                  ? "OFFLINE"
                   : overview.loading
                     ? "CONNECTING"
-                    : "SYSTEM OPERATIONAL"}
+                    : "OPERATIONAL"}
               </span>
             </div>
           </div>
@@ -563,34 +479,32 @@ export default function App() {
           className="command-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="Quick navigation"
+          aria-label="Command palette"
           onClick={() => setCommandOpen(false)}
         >
           <div
             className="command-palette"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center gap-3 border-b border-[#263440] px-4 py-4">
-              <Search size={16} className="text-cyan-300" />
+            <div className="flex items-center gap-3 border-b border-[#1e232b] px-4 py-3.5">
+              <Search size={15} className="text-[#84b4fb]" />
 
               <input
                 autoFocus
                 value={paletteQuery}
-                onChange={(event) =>
-                  setPaletteQuery(event.target.value)
-                }
-                placeholder="Jump to a surface or an objective..."
-                className="min-w-0 flex-1 bg-transparent text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
+                onChange={(event) => setPaletteQuery(event.target.value)}
+                placeholder="Go to a surface, or find an objective..."
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-[#f2f4f7] outline-none placeholder:text-[#535b68]"
               />
 
-              <kbd className="rounded border border-[#2c3945] px-1.5 py-1 mono text-[8px] text-slate-500">
+              <kbd className="rounded-sm border border-[#2a313c] px-1.5 py-0.5 font-mono text-[8px] text-[#535b68]">
                 ESC
               </kbd>
             </div>
 
-            <div className="scroll-area max-h-[380px] p-2">
+            <div className="scroll-area max-h-[360px] p-1.5">
               {paletteResults.length === 0 ? (
-                <div className="px-2 py-6 text-center text-[11px] text-slate-500">
+                <div className="px-2 py-6 text-center text-[11px] text-[#6f7887]">
                   Nothing matches “{paletteQuery}”.
                 </div>
               ) : (
@@ -604,17 +518,13 @@ export default function App() {
                     }}
                     className="palette-item"
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#2a3844] bg-[#10171e] text-slate-400">
-                      <Icon size={14} />
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-[#1e232b] bg-[#0e1116] text-[#6f7887]">
+                      <Icon size={12} />
                     </span>
 
                     <span className="min-w-0 flex-1 truncate">{label}</span>
 
-                    <span className="mono shrink-0 text-[8px] uppercase tracking-[0.12em] text-slate-600">
-                      {kind}
-                    </span>
-
-                    <ArrowUpRight className="shrink-0 text-slate-600" size={14} />
+                    <span className="t-machine shrink-0">{kind}</span>
                   </NavLink>
                 ))
               )}

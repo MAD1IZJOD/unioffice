@@ -113,25 +113,66 @@ export function SectionHeading({
   );
 }
 
+/** The instrument strip the readout numbers sit in. */
+export function Readout({ children }: { children: ReactNode }) {
+  return <div className="readout">{children}</div>;
+}
+
 export function Metric({
   label,
   value,
   detail,
   tone = "idle",
+  live = false,
 }: {
   label: string;
   value: ReactNode;
   detail?: ReactNode;
   tone?: Tone;
+  /** Colours the number. Reserved for a count that is currently non-zero. */
+  live?: boolean;
 }) {
   return (
-    <div className={`metric ${toneClass[tone]}`}>
+    <div className={`metric ${toneClass[tone]}${live ? " metric-live" : ""}`}>
       <div className="metric-label">{label}</div>
 
       <div className="metric-value">{value}</div>
 
       {detail && <div className="metric-detail">{detail}</div>}
     </div>
+  );
+}
+
+/**
+ * A heading with a rule under it. The lighter alternative to a Panel, for the
+ * common case where a group of rows needs a name rather than a border box.
+ */
+export function Section({
+  title,
+  count,
+  action,
+  children,
+}: {
+  title: ReactNode;
+  count?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="section">
+      <header className="section-head">
+        <div className="section-head-title">
+          {title}
+          {count !== undefined && (
+            <span className="section-head-count">{count}</span>
+          )}
+        </div>
+
+        {action}
+      </header>
+
+      {children}
+    </section>
   );
 }
 
