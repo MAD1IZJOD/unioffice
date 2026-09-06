@@ -1,6 +1,34 @@
-// Thin client for the UNI-OFFICE API. No framework, no caching layer - the
-// backend is small enough that a couple of typed fetch calls are the honest
-// amount of infrastructure this needs right now.
+// Typed client for the UNI-OFFICE API. No framework, no caching layer - the
+// backend is small enough that typed fetch calls are the honest amount of
+// infrastructure this needs right now.
+//
+// Every type here mirrors a real API response. Nothing in the web app should
+// invent a shape the backend does not actually return.
+
+export type WorkStatus =
+  | "queued"
+  | "planning"
+  | "executing"
+  | "waiting_approval"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type TaskStatus =
+  | "pending"
+  | "ready"
+  | "running"
+  | "waiting"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type AgentPresence =
+  | "working"
+  | "waiting"
+  | "blocked"
+  | "available"
+  | "disabled";
 
 export interface ActivityEvent {
   id: string;
@@ -17,25 +45,200 @@ export interface ActivityEvent {
 export interface MemoryItem {
   id: string;
   type: string;
+  scope: string;
   content: string;
   importance: number;
   agentId?: string;
+  workId?: string;
+  taskId?: string;
+  source?: string;
   createdAt: string;
+  metadata: Record<string, unknown>;
 }
 
 export interface AgentSummary {
   id: string;
   name: string;
   description: string;
-  type: string;
-  status: string;
+  type: "specialist" | "manager" | "orchestrator";
+  status: "active" | "paused" | "disabled";
   capabilities: string[];
+  toolIds: string[];
+  metadata: Record<string, unknown>;
+}
+
+export interface WorkItem {
+  id: string;
+  organizationId: string;
+  objective: string;
+  status: WorkStatus;
+  priority: "low" | "normal" | "high" | "critical";
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ToolCallRecord {
+  toolId: string;
+  input: unknown;
+  output?: unknown;
+  error?: { code: string; message: string };
+  status: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface TaskItem {
+  id: string;
+  workId: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  assignedAgentId?: string;
+  dependsOn: string[];
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  result?: unknown;
+  metadata: {
+    routing?: {
+      requiredCapabilities?: string[];
+      requiredTools?: string[];
+      suggestedAgentType?: string;
+    };
+    delegation?: {
+      delegation?: string;
+      selectionReason?: string;
+      capabilityFit?: string;
+      matchedCapabilities?: string[];
+      unmatchedCapabilities?: string[];
+    };
+    execution?: {
+      status?: string;
+      error?: { code: string; message: string };
+      toolCalls?: ToolCallRecord[];
+      metadata?: Record<string, unknown>;
+    };
+    approval?: {
+      required?: boolean;
+      reason?: string;
+      status?: string;
+    };
+    plannerRef?: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface ArtifactItem {
+  id: string;
+  workId?: string;
+  taskId?: string;
+  createdByAgentId?: string;
+  name: string;
+  type: string;
+  description?: string;
+  mimeType?: string;
+  version: number;
+  createdAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ApprovalItem {
+  id: string;
+  workId: string;
+  taskId: string;
+  agentId?: string;
+  action: string;
+  resource: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "expired";
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ToolDescriptor {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export interface WorkDetail {
+  work: WorkItem;
+  tasks: TaskItem[];
+  events: ActivityEvent[];
+  artifacts: ArtifactItem[];
+  approvals: ApprovalItem[];
+  agents: AgentSummary[];
+}
+
+export interface AgentPresenceSummary extends AgentSummary {
+  agentId: string;
+  presence: AgentPresence;
+  activeTask?: {
+    id: string;
+    workId: string;
+    title: string;
+    status: TaskStatus;
+    startedAt?: string;
+  };
+  completedTaskCount: number;
+  failedTaskCount: number;
+  lastActiveAt?: string;
+}
+
+export interface CompanyOverview {
+  organizationId: string;
+  generatedAt: string;
+  work: {
+    total: number;
+    byStatus: Record<WorkStatus, number>;
+    active: WorkItem[];
+    recentlyCompleted: WorkItem[];
+  };
+  tasks: {
+    total: number;
+    running: number;
+    waiting: number;
+    completed: number;
+    failed: number;
+  };
+  agents: AgentPresenceSummary[];
+  approvals: ApprovalItem[];
+  artifacts: ArtifactItem[];
+  activity: ActivityEvent[];
+  tools: Array<{
+    id: string;
+    name: string;
+    description: string;
+    authorizedAgentCount: number;
+    callCount: number;
+  }>;
+}
+
+export interface RetryResult {
+  work: WorkItem;
+  tasks: TaskItem[];
+  mode: "replan" | "resume";
 }
 
 // No auth/org-selection UI exists yet, so the client targets the seeded
 // development organization by default. Override with VITE_ORGANIZATION_ID
 // once real organization selection lands.
 const DEFAULT_ORGANIZATION_ID = "2f6b579a-f0f8-45a5-868a-21c08bde1314";
+
+// Planning and execution both run a local model to completion, which takes
+// minutes rather than seconds. A default fetch has no timeout at all, so a
+// dead API would hang the page forever; these bounds are generous enough for
+// real model work and still fail visibly.
+const READ_TIMEOUT_MS = 30_000;
+const MODEL_TIMEOUT_MS = 600_000;
 
 function apiBaseUrl(): string {
   return (
@@ -44,7 +247,7 @@ function apiBaseUrl(): string {
   );
 }
 
-function organizationId(): string {
+export function organizationId(): string {
   return (
     (import.meta.env.VITE_ORGANIZATION_ID as string | undefined) ??
     DEFAULT_ORGANIZATION_ID
@@ -59,19 +262,40 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
   }
+
+  /** A status of 0 means the request never reached the API at all. */
+  get isOffline(): boolean {
+    return this.status === 0;
+  }
 }
 
-async function getJson<T>(path: string): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = READ_TIMEOUT_MS,
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
 
   try {
-    response = await fetch(`${apiBaseUrl()}${path}`);
-  } catch {
-    throw new ApiError("Could not reach the UNI-OFFICE API.", 0);
+    response = await fetch(`${apiBaseUrl()}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    throw new ApiError(
+      (error as Error)?.name === "AbortError"
+        ? "The request took too long and was cancelled."
+        : "Could not reach the UNI-OFFICE API.",
+      0,
+    );
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => null) as
+    const body = (await response.json().catch(() => null)) as
       | { error?: { message?: string } }
       | null;
 
@@ -84,44 +308,173 @@ async function getJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function fetchActivity(limit = 20): Promise<ActivityEvent[]> {
-  const data = await getJson<{ events: ActivityEvent[] }>(
-    `/activity?organizationId=${organizationId()}&limit=${limit}`,
+function get<T>(path: string, timeoutMs?: number): Promise<T> {
+  return request<T>(path, {}, timeoutMs);
+}
+
+function post<T>(
+  path: string,
+  body?: unknown,
+  timeoutMs = MODEL_TIMEOUT_MS,
+): Promise<T> {
+  return request<T>(
+    path,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    },
+    timeoutMs,
+  );
+}
+
+function scoped(path: string, params: Record<string, string | number | undefined> = {}): string {
+  const search = new URLSearchParams({ organizationId: organizationId() });
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) search.set(key, String(value));
+  }
+
+  return `${path}?${search.toString()}`;
+}
+
+export async function fetchOverview(activityLimit = 40): Promise<CompanyOverview> {
+  return get<CompanyOverview>(scoped("/overview", { activityLimit }), 60_000);
+}
+
+export async function fetchActivity(limit = 40): Promise<ActivityEvent[]> {
+  const data = await get<{ events: ActivityEvent[] }>(
+    scoped("/activity", { limit }),
   );
 
   return data.events;
 }
 
-export async function fetchMemory(limit = 20): Promise<MemoryItem[]> {
-  const data = await getJson<{ memories: MemoryItem[] }>(
-    `/memory?organizationId=${organizationId()}`,
+export async function fetchMemory(query?: string, limit = 60): Promise<MemoryItem[]> {
+  const data = await get<{ memories: MemoryItem[] }>(
+    scoped("/memory", { limit, query: query?.trim() || undefined }),
   );
 
-  return data.memories.slice(0, limit);
+  return data.memories;
 }
 
 export async function fetchAgents(): Promise<AgentSummary[]> {
-  const data = await getJson<{ agents: AgentSummary[] }>(
-    `/agents?organizationId=${organizationId()}`,
-  );
+  const data = await get<{ agents: AgentSummary[] }>(scoped("/agents"));
 
   return data.agents;
 }
 
-export function formatRelativeTime(iso: string): string {
+export async function fetchTools(): Promise<ToolDescriptor[]> {
+  const data = await get<{ tools: ToolDescriptor[] }>("/tools");
+
+  return data.tools;
+}
+
+export async function fetchWorkList(options: {
+  status?: WorkStatus;
+  limit?: number;
+} = {}): Promise<WorkItem[]> {
+  const data = await get<{ work: WorkItem[] }>(
+    scoped("/work", { status: options.status, limit: options.limit }),
+  );
+
+  return data.work;
+}
+
+export async function fetchWorkDetail(workId: string): Promise<WorkDetail> {
+  return get<WorkDetail>(`/work/${workId}/detail`);
+}
+
+export async function fetchArtifacts(limit = 50): Promise<ArtifactItem[]> {
+  const data = await get<{ artifacts: ArtifactItem[] }>(
+    scoped("/artifacts", { limit }),
+  );
+
+  return data.artifacts;
+}
+
+export async function fetchPendingApprovals(): Promise<ApprovalItem[]> {
+  const data = await get<{ approvals: ApprovalItem[] }>(scoped("/approvals"));
+
+  return data.approvals;
+}
+
+export async function createWork(
+  objective: string,
+  priority: WorkItem["priority"] = "normal",
+): Promise<WorkItem> {
+  const data = await post<{ work: WorkItem }>(
+    "/work",
+    { objective, priority },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.work;
+}
+
+export async function planWork(workId: string): Promise<{
+  work: WorkItem;
+  tasks: TaskItem[];
+}> {
+  return post(`/work/${workId}/plan`);
+}
+
+export async function executeWork(workId: string): Promise<{
+  work: WorkItem;
+  tasks: TaskItem[];
+}> {
+  return post(`/work/${workId}/execute`);
+}
+
+export async function retryWork(workId: string): Promise<RetryResult> {
+  return post<RetryResult>(`/work/${workId}/retry`, {}, READ_TIMEOUT_MS);
+}
+
+export async function resolveApproval(
+  approvalId: string,
+  decision: "approve" | "reject",
+  resolvedBy: string,
+): Promise<{ approval: ApprovalItem }> {
+  return post(`/approvals/${approvalId}/${decision}`, { resolvedBy });
+}
+
+export function formatRelativeTime(iso: string | undefined): string {
+  if (!iso) return "—";
+
   const deltaMs = Date.now() - new Date(iso).getTime();
 
   if (!Number.isFinite(deltaMs) || deltaMs < 0) {
     return "just now";
   }
 
-  const minutes = Math.floor(deltaMs / 60_000);
-  if (minutes < 1) return "just now";
+  const seconds = Math.floor(deltaMs / 1_000);
+  if (seconds < 45) return "just now";
+
+  const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
 
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
 
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  if (days < 30) return `${days}d ago`;
+
+  return new Date(iso).toLocaleDateString();
+}
+
+export function formatDuration(
+  startIso: string | undefined,
+  endIso: string | undefined,
+): string {
+  if (!startIso || !endIso) return "—";
+
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+
+  if (ms < 1_000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1_000).toFixed(1)}s`;
+
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1_000);
+  return `${minutes}m ${seconds}s`;
 }

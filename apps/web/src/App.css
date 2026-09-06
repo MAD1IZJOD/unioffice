@@ -493,3 +493,13 @@
     padding: 20px 14px 30px;
   }
 }
+
+.system-status-down {
+  border-color: rgba(248, 113, 113, 0.22);
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.notification-item span.min-w-0 {
+  min-width: 0;
+}

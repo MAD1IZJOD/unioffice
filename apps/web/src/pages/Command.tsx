@@ -1,596 +1,681 @@
 import {
-  ArrowUpRight,
+  ArrowRight,
   Bot,
-  Brain,
   Boxes,
-  CheckCircle2,
-  CircleDashed,
-  Clock3,
+  Brain,
+  FileOutput,
+  GitBranch,
+  History,
   LoaderCircle,
-  Plus,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
-  UsersRound,
+  Zap,
 } from "lucide-react";
 
-import type { LucideIcon } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
-import { useState } from "react";
+import {
+  createWork,
+  executeWork,
+  fetchOverview,
+  formatRelativeTime,
+  planWork,
+  type CompanyOverview,
+  type WorkItem,
+} from "../lib/api";
 
-type ExecutionState =
-  | "idle"
-  | "received"
-  | "planning"
-  | "executing"
-  | "completed";
+import { useResource } from "../lib/useResource";
 
-const stages = [
-  {
-    id: "received",
-    label: "REQUEST RECEIVED",
-    description: "Objective accepted",
-  },
-  {
-    id: "planning",
-    label: "PLANNING",
-    description: "Preparing work plan",
-  },
-  {
-    id: "executing",
-    label: "EXECUTING",
-    description: "Agents performing work",
-  },
-  {
-    id: "completed",
-    label: "COMPLETED",
-    description: "Work finished",
-  },
-] as const;
+import {
+  EmptyState,
+  ErrorState,
+  Metric,
+  Panel,
+  Skeleton,
+  StatusPill,
+  TimeStamp,
+} from "../components/primitives";
 
-const workforce: {
-  name: string;
-  description: string;
-  icon: LucideIcon;
-  tone: "cyan" | "violet" | "emerald";
-}[] = [
-  {
-    name: "Atlas",
-    description: "Orchestrates work",
-    icon: Brain,
-    tone: "cyan",
-  },
-  {
-    name: "Forge",
-    description: "Builds and ships",
-    icon: Bot,
-    tone: "violet",
-  },
-  {
-    name: "Ledger",
-    description: "Safeguards decisions",
-    icon: ShieldCheck,
-    tone: "emerald",
-  },
+import {
+  presenceTone,
+  statusLabel,
+  workStatusTone,
+} from "../lib/tone";
+
+import { describeEvent } from "../lib/events";
+
+/**
+ * The launch pipeline mirrors the real API calls, one stage per call. Nothing
+ * here is timed or simulated - a stage advances only when the request behind
+ * it actually returns, which is why planning visibly takes as long as the
+ * model takes.
+ */
+type LaunchStage = "idle" | "creating" | "planning" | "executing" | "done";
+
+const stageCopy: Record<Exclude<LaunchStage, "idle">, string> = {
+  creating: "Recording the objective",
+  planning: "Atlas is building the work plan",
+  executing: "Specialists are executing the plan",
+  done: "Execution finished",
+};
+
+const suggestions = [
+  "Calculate our total monthly operating cost from salaries 48200, cloud 9350, lease 12500 and licences 3875, then explain what it means for runway.",
+  "Tell me what day of the week 25 December 2027 falls on and how many days away it is.",
+  "Draft a one-page competitor brief covering positioning, pricing and the gap we should attack.",
 ];
 
-function getStageIndex(
-  state: ExecutionState,
-) {
-  return stages.findIndex(
-    (stage) => stage.id === state,
-  );
-}
-
 export default function Command() {
-  const [input, setInput] = useState("");
+  const navigate = useNavigate();
 
-  const [priority, setPriority] =
-    useState("Standard");
+  const overview = useResource<CompanyOverview>(
+    useCallback(() => fetchOverview(24), []),
+    { pollMs: 15_000 },
+  );
 
-  const [approvalMode, setApprovalMode] =
-    useState("Recommended");
+  const [objective, setObjective] = useState("");
+  const [priority, setPriority] = useState<WorkItem["priority"]>("normal");
+  const [stage, setStage] = useState<LaunchStage>("idle");
+  const [launchedWorkId, setLaunchedWorkId] = useState<string>();
+  const [launchError, setLaunchError] = useState<string>();
 
-  const [state, setState] =
-    useState<ExecutionState>("idle");
+  const busy = stage !== "idle" && stage !== "done";
 
-  const [result, setResult] =
-    useState("");
+  async function launch() {
+    const trimmed = objective.trim();
+    if (!trimmed || busy) return;
 
-  const [startedAt, setStartedAt] =
-    useState<Date | null>(null);
+    setLaunchError(undefined);
+    setLaunchedWorkId(undefined);
+    setStage("creating");
 
-  async function createWork() {
-    const objective = input.trim();
+    try {
+      const work = await createWork(trimmed, priority);
+      setLaunchedWorkId(work.id);
 
-    if (!objective || state !== "idle") {
-      return;
+      setStage("planning");
+      await planWork(work.id);
+
+      setStage("executing");
+      await executeWork(work.id);
+
+      setStage("done");
+      setObjective("");
+      overview.reload();
+    } catch (error) {
+      setLaunchError((error as Error).message);
+      setStage("idle");
+      overview.reload();
     }
-
-    setStartedAt(new Date());
-    setResult("");
-    setState("received");
-
-    await wait(600);
-
-    setState("planning");
-
-    await wait(1000);
-
-    setState("executing");
-
-    await wait(1500);
-
-    setResult(
-      `UNI-OFFICE accepted the objective: "${objective}". The execution pipeline is ready to delegate this work to an agent.`,
-    );
-
-    setState("completed");
   }
 
-  function reset() {
-    setInput("");
-    setResult("");
-    setStartedAt(null);
-    setState("idle");
-  }
-
-  const currentStage =
-    getStageIndex(state);
-
-  const statusCopy =
-    state === "idle"
-      ? "Ready to coordinate your next objective"
-      : state === "completed"
-        ? "Outcome recorded in Company Brain"
-        : "Company Brain is coordinating the work";
+  const data = overview.data;
+  const activeWork = data?.work.active ?? [];
+  const workingAgents =
+    data?.agents.filter((agent) => agent.presence === "working") ?? [];
+  const pendingApprovals = data?.approvals ?? [];
 
   return (
-    <div className="mx-auto max-w-[1380px] fade-up">
-      {/* Hero */}
-      <div className="mb-7">
+    <div className="mx-auto max-w-[1420px] fade-up">
+      <div className="mb-6">
         <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/[0.045] px-3 py-1.5">
-          <span className="status-dot status-dot-live" />
-
-          <span className="font-mono-ui text-[9px] font-medium uppercase tracking-[0.16em] text-cyan-300">
-            AI-NATIVE OPERATING SYSTEM
+          <span
+            className={`pill-dot ${overview.error ? "tone-error" : "tone-live"}`}
+          />
+          <span className="mono text-[9px] font-medium uppercase tracking-[0.16em] text-cyan-300">
+            {overview.error ? "Control plane offline" : "Control plane online"}
           </span>
         </div>
 
-        <h2 className="mt-5 max-w-[800px] text-[34px] font-semibold tracking-[-0.04em] text-slate-100 max-sm:text-[28px]">
+        <h2 className="mt-4 max-w-[820px] text-[32px] font-semibold leading-[1.15] tracking-[-0.04em] text-slate-100 max-sm:text-[25px]">
           Direct the company, not another chatbot.
         </h2>
 
-        <p className="mt-2 max-w-[700px] text-[13px] leading-6 text-slate-400">
-          Start with an objective. UNI-OFFICE builds the
-          work plan, brings in the right specialists and
-          keeps consequential actions under your control.
+        <p className="mt-2.5 max-w-[680px] text-[12.5px] leading-[1.65] text-slate-400">
+          State an objective. UNI-OFFICE plans the work, routes each task to the
+          specialist that holds the right tools, and keeps consequential steps
+          behind your approval.
         </p>
       </div>
 
-      {/* Main command area */}
       <div className="command-grid">
-        <div>
-          <div className="glass-panel overflow-hidden rounded-2xl">
-            <div className="flex items-center justify-between border-b border-[#202b35] px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.06]">
-                  <Sparkles
-                    size={15}
-                    className="text-cyan-300"
-                  />
-                </div>
-
-                <div>
-                <div className="text-[11px] font-semibold text-slate-200">
-                    New company objective
-                  </div>
-
-                  <div className="mt-0.5 font-mono-ui text-[8px] uppercase tracking-[0.14em] text-slate-500">
-                    Define an objective
-                  </div>
-                </div>
-              </div>
-
-              <span className="font-mono-ui text-[8px] uppercase tracking-[0.14em] text-slate-600">
-                COMMAND
+        <div className="min-w-0 space-y-4">
+          <Panel
+            eyebrow="Command"
+            title="New company objective"
+            action={
+              <span className="mono text-[9px] uppercase tracking-[0.14em] text-slate-600">
+                {busy ? "Running" : "Ready"}
               </span>
+            }
+          >
+            <textarea
+              id="work-objective"
+              value={objective}
+              onChange={(event) => setObjective(event.target.value)}
+              disabled={busy}
+              className="command-textarea min-h-[132px] w-full bg-transparent text-[15px] leading-[1.7] text-slate-100 placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="What should your company accomplish?"
+            />
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setObjective(suggestion)}
+                  className="suggestion-chip"
+                  title={suggestion}
+                >
+                  {suggestion.slice(0, 46)}…
+                </button>
+              ))}
             </div>
 
-            <div className="p-5">
-              <label
-                htmlFor="work-objective"
-                className="font-mono-ui text-[9px] uppercase tracking-[0.14em] text-slate-500"
-              >
-                Objective
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#1b252e] pt-4">
+              <label className="flex items-center gap-2.5">
+                <span className="mono text-[8.5px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Priority
+                </span>
+
+                <select
+                  value={priority}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setPriority(event.target.value as WorkItem["priority"])
+                  }
+                  className="select-control"
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
               </label>
-
-              <textarea
-                id="work-objective"
-                value={input}
-                onChange={(event) =>
-                  setInput(event.target.value)
-                }
-                disabled={state !== "idle"}
-                className="command-textarea mt-4 min-h-[172px] w-full bg-transparent text-[17px] leading-8 text-slate-100 placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="What should your company accomplish?"
-              />
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {[
-                  "Plan a product launch",
-                  "Prepare a competitor brief",
-                  "Improve customer onboarding",
-                ].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    disabled={state !== "idle"}
-                    onClick={() => setInput(suggestion)}
-                    className="rounded-full border border-[#263440] bg-[#10171e] px-3 py-1.5 text-[9px] font-medium text-slate-400 transition hover:border-cyan-300/25 hover:bg-cyan-300/[0.06] hover:text-cyan-100 disabled:opacity-40"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                <label className="rounded-xl border border-[#23313c] bg-[#0b1117] p-3.5">
-                  <span className="flex items-center gap-2 font-mono-ui text-[8px] font-semibold uppercase tracking-[0.13em] text-slate-500">
-                    <Sparkles size={12} className="text-cyan-300" />
-                    Delivery tempo
-                  </span>
-
-                  <select
-                    value={priority}
-                    disabled={state !== "idle"}
-                    onChange={(event) =>
-                      setPriority(event.target.value)
-                    }
-                    className="mt-2 w-full appearance-none bg-transparent text-[11px] font-semibold text-slate-200 outline-none disabled:opacity-50"
-                  >
-                    <option>Standard</option>
-                    <option>Priority</option>
-                    <option>Deep work</option>
-                  </select>
-                </label>
-
-                <label className="rounded-xl border border-[#23313c] bg-[#0b1117] p-3.5">
-                  <span className="flex items-center gap-2 font-mono-ui text-[8px] font-semibold uppercase tracking-[0.13em] text-slate-500">
-                    <ShieldCheck size={12} className="text-emerald-300" />
-                    Approval gate
-                  </span>
-
-                  <select
-                    value={approvalMode}
-                    disabled={state !== "idle"}
-                    onChange={(event) =>
-                      setApprovalMode(event.target.value)
-                    }
-                    className="mt-2 w-full appearance-none bg-transparent text-[11px] font-semibold text-slate-200 outline-none disabled:opacity-50"
-                  >
-                    <option>Recommended</option>
-                    <option>Always ask</option>
-                    <option>Observe only</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#202b35] bg-[#0c1218] px-5 py-4">
-              <div className="flex items-center gap-2">
-                <Boxes
-                  size={14}
-                  className="text-slate-500"
-                />
-
-                <span className="font-mono-ui text-[9px] uppercase tracking-[0.12em] text-slate-500">
-                  Company Brain connected
-                </span>
-
-                <span className="h-1 w-1 rounded-full bg-emerald-400" />
-
-                <span className="font-mono-ui text-[9px] text-emerald-400">
-                  READY
-                </span>
-              </div>
 
               <button
                 type="button"
-                onClick={createWork}
-                disabled={
-                  !input.trim() ||
-                  state !== "idle"
-                }
-                className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.10] px-4 py-2.5 text-[11px] font-semibold text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/[0.16] disabled:cursor-not-allowed disabled:opacity-30"
+                onClick={launch}
+                disabled={!objective.trim() || busy}
+                className="button-primary"
               >
-                Launch work
-                <ArrowUpRight size={14} />
+                {busy ? (
+                  <LoaderCircle size={14} className="spin-slow" />
+                ) : (
+                  <Zap size={14} />
+                )}
+                {busy ? "Working…" : "Launch work"}
               </button>
             </div>
-          </div>
+          </Panel>
 
-          {/* Execution */}
-          {state !== "idle" && (
-            <div className="glass-panel mt-5 rounded-2xl p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <div className="font-mono-ui text-[9px] uppercase tracking-[0.15em] text-slate-500">
-                    Execution pipeline
-                  </div>
+          {stage !== "idle" && (
+            <LaunchPipeline
+              stage={stage}
+              workId={launchedWorkId}
+              error={launchError}
+              onOpen={() =>
+                launchedWorkId && navigate(`/work/${launchedWorkId}`)
+              }
+            />
+          )}
 
-                  <div className="mt-1.5 text-[14px] font-semibold text-slate-200">
-                    {statusCopy}
-                  </div>
-                </div>
+          {launchError && stage === "idle" && (
+            <Panel eyebrow="Launch" title="The objective could not be completed">
+              <p className="text-[12px] leading-[1.7] text-slate-400">
+                {launchError}
+              </p>
 
-                {startedAt && (
-                  <div className="flex items-center gap-2 rounded-lg border border-[#25313c] bg-[#0c1218] px-3 py-2">
-                    <Clock3
-                      size={13}
-                      className="text-slate-500"
-                    />
+              {launchedWorkId && (
+                <Link
+                  to={`/work/${launchedWorkId}`}
+                  className="button-ghost mt-4 inline-flex"
+                >
+                  Inspect what happened
+                  <ArrowRight size={13} />
+                </Link>
+              )}
+            </Panel>
+          )}
 
-                    <span className="font-mono-ui text-[9px] text-slate-400">
-                      {startedAt.toLocaleTimeString()}
-                    </span>
-                  </div>
-                )}
+          <Panel
+            eyebrow="Execution"
+            title="Work in flight"
+            action={
+              <Link to="/work" className="button-quiet">
+                All work
+                <ArrowRight size={12} />
+              </Link>
+            }
+            padded={false}
+          >
+            {overview.loading ? (
+              <div className="p-[18px]">
+                <Skeleton rows={3} />
               </div>
+            ) : overview.error ? (
+              <ErrorState
+                message={overview.error.message}
+                offline={overview.error.isOffline}
+                onRetry={overview.reload}
+              />
+            ) : activeWork.length === 0 ? (
+              <EmptyState
+                icon={GitBranch}
+                title="Nothing is executing right now"
+                description="Launch an objective above and the plan, its tasks and every tool call will appear here as they happen."
+              />
+            ) : (
+              <div className="stack-list">
+                {activeWork.map((work) => (
+                  <Link
+                    key={work.id}
+                    to={`/work/${work.id}`}
+                    className="row-link"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="line-clamp-2 text-[12.5px] leading-[1.6] text-slate-200">
+                        {work.objective}
+                      </p>
 
-              <div className="mt-6 grid gap-2 md:grid-cols-4">
-                {stages.map(
-                  (stage, index) => {
-                    const active =
-                      index === currentStage;
-
-                    const completed =
-                      index < currentStage;
-
-                    return (
-                      <div
-                        key={stage.id}
-                        className={[
-                          "rounded-xl border p-4 transition-all",
-                          completed
-                            ? "border-emerald-400/20 bg-emerald-400/[0.055]"
-                            : active
-                              ? "border-cyan-400/25 bg-cyan-400/[0.065]"
-                              : "border-[#202b35] bg-[#0d1319]",
-                        ].join(" ")}
+                      <StatusPill
+                        tone={workStatusTone(work.status)}
+                        pulse={work.status === "executing"}
                       >
-                        <div className="flex items-center justify-between">
-                          {completed ? (
-                            <CheckCircle2
-                              size={16}
-                              className="text-emerald-400"
-                            />
-                          ) : active ? (
-                            <LoaderCircle
-                              size={16}
-                              className="animate-spin text-cyan-300"
-                            />
-                          ) : (
-                            <CircleDashed
-                              size={16}
-                              className="text-slate-600"
-                            />
-                          )}
+                        {statusLabel(work.status)}
+                      </StatusPill>
+                    </div>
 
-                          <span className="font-mono-ui text-[8px] text-slate-600">
-                            0{index + 1}
+                    <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                      <TimeStamp
+                        iso={work.createdAt}
+                        relative={formatRelativeTime(work.createdAt)}
+                      />
+
+                      <span className="mono text-[9px] uppercase tracking-[0.1em] text-slate-600">
+                        {work.priority}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Panel>
+
+          <Panel
+            eyebrow="History"
+            title="Recently finished"
+            padded={false}
+          >
+            {overview.loading ? (
+              <div className="p-[18px]">
+                <Skeleton rows={2} />
+              </div>
+            ) : (data?.work.recentlyCompleted.length ?? 0) === 0 ? (
+              <EmptyState
+                icon={History}
+                title="No completed work yet"
+                description="Finished objectives land here with their results, artifacts and the memory they contributed."
+              />
+            ) : (
+              <div className="stack-list">
+                {data!.work.recentlyCompleted.map((work) => (
+                  <Link
+                    key={work.id}
+                    to={`/work/${work.id}`}
+                    className="row-link"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="line-clamp-2 text-[12px] leading-[1.6] text-slate-300">
+                        {work.objective}
+                      </p>
+
+                      <StatusPill tone={workStatusTone(work.status)}>
+                        {statusLabel(work.status)}
+                      </StatusPill>
+                    </div>
+
+                    <TimeStamp
+                      iso={work.completedAt ?? work.updatedAt}
+                      relative={formatRelativeTime(
+                        work.completedAt ?? work.updatedAt,
+                      )}
+                    />
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Panel>
+        </div>
+
+        <aside className="min-w-0 space-y-4">
+          <Panel
+            eyebrow="Workforce"
+            title="Agent presence"
+            action={
+              <Link to="/agents" className="button-quiet">
+                Manage
+              </Link>
+            }
+            padded={false}
+          >
+            {overview.loading ? (
+              <div className="p-[18px]">
+                <Skeleton rows={4} />
+              </div>
+            ) : (data?.agents.length ?? 0) === 0 ? (
+              <EmptyState
+                icon={Bot}
+                title="No agents registered"
+                description="Seed the development workforce to give this organization a roster."
+              />
+            ) : (
+              <div className="stack-list">
+                {data!.agents.map((agent) => (
+                  <Link
+                    key={agent.agentId}
+                    to="/agents"
+                    className="row-link !py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`agent-mark ${presenceTone(agent.presence) === "active" ? "tone-active" : presenceTone(agent.presence)}`}
+                      >
+                        {agent.name.slice(0, 1)}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11.5px] font-semibold text-slate-200">
+                            {agent.name}
+                          </span>
+
+                          <span className="mono text-[8.5px] uppercase tracking-[0.1em] text-slate-600">
+                            {agent.type}
                           </span>
                         </div>
 
-                        <div className="mt-4 font-mono-ui text-[9px] font-semibold tracking-[0.1em] text-slate-300">
-                          {stage.label}
-                        </div>
-
-                        <div className="mt-1 text-[10px] text-slate-500">
-                          {completed
-                            ? "Complete"
-                            : active
-                              ? stage.description
-                              : "Waiting"}
+                        <div className="mt-1 truncate text-[10px] text-slate-500">
+                          {agent.activeTask
+                            ? agent.activeTask.title
+                            : `${agent.toolIds.length} tools · ${agent.completedTaskCount} tasks done`}
                         </div>
                       </div>
-                    );
-                  },
-                )}
-              </div>
 
-              {state === "executing" && (
-                <div className="mt-4 flex items-center gap-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.035] p-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-400/15 bg-cyan-400/[0.06]">
-                    <Bot
-                      size={17}
-                      className="text-cyan-300"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="text-[11px] font-semibold text-slate-200">
-                      Agent Runtime
+                      <StatusPill
+                        tone={presenceTone(agent.presence)}
+                        pulse={agent.presence === "working"}
+                      >
+                        {agent.presence}
+                      </StatusPill>
                     </div>
-
-                    <div className="mt-1 font-mono-ui text-[9px] text-slate-500">
-                      Atlas is coordinating the assigned specialists
-                    </div>
-                  </div>
-
-                  <span className="ml-auto status-dot status-dot-live" />
-                </div>
-              )}
-
-              {result && (
-                <div className="mt-4 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.035] p-5">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2
-                      size={14}
-                      className="text-emerald-400"
-                    />
-
-                    <span className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-emerald-300">
-                      Result
-                    </span>
-                  </div>
-
-                  <p className="mt-3 text-[13px] leading-6 text-slate-300">
-                    {result} Delivery tempo: {priority}. Approval mode: {approvalMode}.
-                  </p>
-                </div>
-              )}
-
-              {state === "completed" && (
-                <button
-                  type="button"
-                  onClick={reset}
-                  className="mt-5 inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 transition hover:text-slate-200"
-                >
-                  <Plus size={13} />
-                  Create another work item
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right rail */}
-        <aside className="space-y-4">
-          <div className="panel-muted rounded-2xl p-5">
-            <div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-              Coordination state
-            </div>
-
-            <div className="mt-5 flex items-center gap-3">
-              <span className="status-dot status-dot-live" />
-
-              <div>
-                <div className="text-[13px] font-semibold text-slate-200">
-                  Company Brain online
-                </div>
-
-                <div className="mt-1 text-[10px] text-slate-500">
-                  Shared context is ready for delegation
-                </div>
+                  </Link>
+                ))}
               </div>
-            </div>
+            )}
+          </Panel>
 
-            <div className="mt-5 border-t border-[#202b35] pt-4">
-              <div className="flex justify-between text-[10px]">
-                <span className="text-slate-500">
-                  Orchestrator
-                </span>
-
-                <span className="font-mono-ui text-slate-300">
-                  ATLAS / READY
-                </span>
+          <Panel
+            eyebrow="Governance"
+            title="Waiting on you"
+            action={
+              pendingApprovals.length > 0 ? (
+                <Link to="/approvals" className="button-quiet">
+                  Review
+                </Link>
+              ) : undefined
+            }
+            padded={false}
+          >
+            {overview.loading ? (
+              <div className="p-[18px]">
+                <Skeleton rows={2} />
               </div>
-
-              <div className="mt-3 flex justify-between text-[10px]">
-                <span className="text-slate-500">
-                  Governance
-                </span>
-
-                <span className="font-mono-ui text-emerald-400">
-                  ACTIVE
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="panel-muted rounded-2xl p-5">
-            <div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-              Your AI workforce
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {workforce.map(
-                ({ name, description, icon: Icon, tone }) => (
-                  <div
-                    key={name}
-                    className="flex items-center gap-3 rounded-xl border border-[#202b35] bg-[#10161d] px-3 py-3"
+            ) : pendingApprovals.length === 0 ? (
+              <EmptyState
+                icon={ShieldCheck}
+                title="No approvals pending"
+                description="Tasks the planner marks as consequential pause here before they run."
+              />
+            ) : (
+              <div className="stack-list">
+                {pendingApprovals.slice(0, 4).map((approval) => (
+                  <Link
+                    key={approval.id}
+                    to="/approvals"
+                    className="row-link !py-3.5"
                   >
-                    <span
-                      className={[
-                        "flex h-8 w-8 items-center justify-center rounded-lg border",
-                        tone === "cyan"
-                          ? "border-cyan-400/20 bg-cyan-400/[0.06] text-cyan-300"
-                          : tone === "violet"
-                            ? "border-violet-400/20 bg-violet-400/[0.06] text-violet-300"
-                            : "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-300",
-                      ].join(" ")}
-                    >
-                      <Icon size={14} />
-                    </span>
+                    <div className="flex items-start gap-2.5">
+                      <span className="pill-dot tone-warning mt-1.5" />
 
-                    <div>
-                      <div className="text-[10px] font-semibold text-slate-200">
-                        {name}
-                      </div>
-                      <div className="mt-0.5 text-[9px] text-slate-500">
-                        {description}
+                      <div className="min-w-0">
+                        <div className="text-[11.5px] font-semibold text-slate-200">
+                          {approval.action}
+                        </div>
+
+                        <p className="mt-1 line-clamp-2 text-[10.5px] leading-[1.55] text-slate-500">
+                          {approval.reason}
+                        </p>
                       </div>
                     </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Panel>
 
-                    <span className="ml-auto status-dot status-dot-live" />
-                  </div>
-                ),
-              )}
-            </div>
+          <Panel
+            eyebrow="Stream"
+            title="Live activity"
+            action={
+              <Link to="/activity" className="button-quiet">
+                Full log
+              </Link>
+            }
+            padded={false}
+          >
+            {overview.loading ? (
+              <div className="p-[18px]">
+                <Skeleton rows={5} />
+              </div>
+            ) : (data?.activity.length ?? 0) === 0 ? (
+              <EmptyState
+                icon={Boxes}
+                title="The company has not acted yet"
+                description="Every plan, delegation, tool call and approval is recorded here."
+              />
+            ) : (
+              <div className="scroll-area max-h-[340px] p-2">
+                {data!.activity.slice(0, 14).map((event) => {
+                  const described = describeEvent(event);
 
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#202b35] bg-[#0b1117] px-3 py-2.5 text-[9px] text-slate-500">
-              <UsersRound size={13} className="text-slate-400" />
-              137 agents can be organized by department
-            </div>
-          </div>
+                  return (
+                    <div key={event.id} className="activity-line">
+                      <span className={`pill-dot ${described.tone}`} />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[11px] text-slate-300">
+                          {described.title}
+                        </div>
+
+                        {described.detail && (
+                          <div className="mt-0.5 truncate text-[9.5px] text-slate-600">
+                            {described.detail}
+                          </div>
+                        )}
+                      </div>
+
+                      <span className="mono shrink-0 text-[9px] text-slate-600">
+                        {formatRelativeTime(event.timestamp)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
         </aside>
       </div>
 
-      {/* Metrics */}
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {[
-          {
-            label: "ACTIVE WORK",
-            value: "03",
-            detail: "Currently executing",
-          },
-          {
-            label: "ACTIVE AGENTS",
-            value: "07",
-            detail: "Ready for delegation",
-          },
-          {
-            label: "PENDING APPROVALS",
-            value: "02",
-            detail: "Require human review",
-          },
-        ].map((metric) => (
-          <div
-            key={metric.label}
-            className="panel-muted rounded-xl p-5"
-          >
-            <div className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-              {metric.label}
-            </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <Metric
+          label="Active work"
+          tone={activeWork.length > 0 ? "active" : "idle"}
+          value={overview.loading ? "—" : activeWork.length}
+          detail={`${data?.work.total ?? 0} objectives all time`}
+        />
 
-            <div className="mt-3 flex items-end justify-between">
-              <div className="text-[28px] font-semibold tracking-[-0.03em] text-slate-100">
-                {metric.value}
-              </div>
+        <Metric
+          label="Agents working"
+          tone={workingAgents.length > 0 ? "active" : "live"}
+          value={overview.loading ? "—" : workingAgents.length}
+          detail={`${data?.agents.length ?? 0} in the workforce`}
+        />
 
-              <div className="pb-1 text-[9px] text-slate-600">
-                {metric.detail}
-              </div>
-            </div>
-          </div>
-        ))}
+        <Metric
+          label="Pending approvals"
+          tone={pendingApprovals.length > 0 ? "warning" : "idle"}
+          value={overview.loading ? "—" : pendingApprovals.length}
+          detail="Require a human decision"
+        />
+
+        <Metric
+          label="Tool calls"
+          tone="live"
+          value={
+            overview.loading
+              ? "—"
+              : (data?.tools.reduce((total, tool) => total + tool.callCount, 0) ?? 0)
+          }
+          detail="In recent activity"
+        />
       </div>
     </div>
   );
 }
 
-function wait(milliseconds: number) {
-  return new Promise<void>((resolve) =>
-    setTimeout(resolve, milliseconds),
+function LaunchPipeline({
+  stage,
+  workId,
+  error,
+  onOpen,
+}: {
+  stage: LaunchStage;
+  workId?: string;
+  error?: string;
+  onOpen: () => void;
+}) {
+  const order: Array<Exclude<LaunchStage, "idle">> = [
+    "creating",
+    "planning",
+    "executing",
+    "done",
+  ];
+  const currentIndex = order.indexOf(stage as Exclude<LaunchStage, "idle">);
+
+  return (
+    <Panel
+      eyebrow="Pipeline"
+      title={
+        stage === "done"
+          ? "Execution finished"
+          : error
+            ? "Execution stopped"
+            : stageCopy[stage as Exclude<LaunchStage, "idle">]
+      }
+      action={
+        workId ? (
+          <button type="button" onClick={onOpen} className="button-quiet">
+            Open work
+            <ArrowRight size={12} />
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="grid gap-2 sm:grid-cols-4">
+        {order.map((entry, index) => {
+          const done = index < currentIndex;
+          const active = index === currentIndex && stage !== "done";
+          const finished = stage === "done";
+
+          return (
+            <div
+              key={entry}
+              className={[
+                "pipeline-step",
+                done || finished
+                  ? "pipeline-step-done"
+                  : active
+                    ? "pipeline-step-active"
+                    : "pipeline-step-idle",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between">
+                <span className="mono text-[8.5px] uppercase tracking-[0.13em]">
+                  {entry}
+                </span>
+
+                <span className="mono text-[8px] opacity-60">
+                  0{index + 1}
+                </span>
+              </div>
+
+              <div className="mt-3 text-[10px] leading-[1.5] opacity-80">
+                {done || finished
+                  ? "Complete"
+                  : active
+                    ? stageCopy[entry]
+                    : "Waiting"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {stage !== "done" && !error && (
+        <p className="mt-4 flex items-center gap-2 text-[10.5px] text-slate-500">
+          <LoaderCircle size={12} className="spin-slow text-cyan-300" />
+          Planning and execution run a local model to completion, so this takes
+          a couple of minutes rather than a couple of seconds.
+        </p>
+      )}
+
+      {stage === "done" && workId && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Link to={`/work/${workId}`} className="button-ghost">
+            <Sparkles size={13} />
+            See the plan, tool calls and result
+          </Link>
+
+          <Link to="/artifacts" className="button-quiet">
+            <FileOutput size={12} />
+            Artifacts
+          </Link>
+
+          <Link to="/brain" className="button-quiet">
+            <Brain size={12} />
+            Company Brain
+          </Link>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+export function RefreshButton({
+  onClick,
+  spinning,
+}: {
+  onClick: () => void;
+  spinning?: boolean;
+}) {
+  return (
+    <button type="button" onClick={onClick} className="button-quiet">
+      <RefreshCw size={12} className={spinning ? "spin-slow" : undefined} />
+      Refresh
+    </button>
   );
 }

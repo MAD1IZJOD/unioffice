@@ -25,9 +25,21 @@ import {
 } from "react-router-dom";
 
 import {
+  useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "react";
+
+import {
+  fetchOverview,
+  formatRelativeTime,
+  type CompanyOverview,
+} from "./lib/api";
+
+import { useResource } from "./lib/useResource";
+
+import { describeEvent } from "./lib/events";
 
 const navigation = [
   ["COMMAND", "/command", Command],
@@ -59,28 +71,6 @@ const pageTitles: Record<string, string> = {
   "/governance": "Governance",
 };
 
-const quickNavigation = [
-  {
-    label: "Command Center",
-    path: "/command",
-    icon: Command,
-  },
-  {
-    label: "Organization map",
-    path: "/organization",
-    icon: Network,
-  },
-  {
-    label: "Approval queue",
-    path: "/approvals",
-    icon: ShieldCheck,
-  },
-  {
-    label: "Company Brain",
-    path: "/brain",
-    icon: Brain,
-  },
-];
 
 function Navigation({
   onNavigate,
@@ -215,6 +205,82 @@ export default function App() {
   const [notificationsOpen, setNotificationsOpen] =
     useState(false);
 
+  const [paletteQuery, setPaletteQuery] =
+    useState("");
+
+  // The shell shows the same live counts as every page, so the header can
+  // never claim two approvals are waiting while the queue is empty.
+  const overview = useResource<CompanyOverview>(
+    useCallback(() => fetchOverview(12), []),
+    { pollMs: 20_000 },
+  );
+
+  const attention = useMemo(() => {
+    const data = overview.data;
+    if (!data) return [];
+
+    return [
+      ...data.approvals.map((approval) => ({
+        id: approval.id,
+        tone: "tone-warning",
+        label: approval.action,
+        detail: approval.reason,
+        to: "/approvals",
+      })),
+      ...data.work.recentlyCompleted
+        .filter((work) => work.status === "failed")
+        .slice(0, 3)
+        .map((work) => ({
+          id: work.id,
+          tone: "tone-error",
+          label: "Work failed",
+          detail: work.objective,
+          to: `/work/${work.id}`,
+        })),
+      ...data.activity.slice(0, 2).map((event) => {
+        const described = describeEvent(event);
+        return {
+          id: event.id,
+          tone: described.tone,
+          label: described.title,
+          detail: formatRelativeTime(event.timestamp),
+          to: event.workId ? `/work/${event.workId}` : "/activity",
+        };
+      }),
+    ];
+  }, [overview.data]);
+
+  const needsAttentionCount = overview.data?.approvals.length ?? 0;
+
+  const paletteResults = useMemo(() => {
+    const needle = paletteQuery.trim().toLowerCase();
+
+    const surfaces = [...navigation, ...organizationNavigation].map(
+      ([label, path, icon]) => ({
+        key: path,
+        label,
+        path,
+        icon,
+        kind: "Navigate",
+      }),
+    );
+
+    const work = (overview.data?.work.active ?? [])
+      .concat(overview.data?.work.recentlyCompleted ?? [])
+      .slice(0, 8)
+      .map((item) => ({
+        key: item.id,
+        label: item.objective,
+        path: `/work/${item.id}`,
+        icon: GitBranch,
+        kind: "Work",
+      }));
+
+    return [...surfaces, ...work].filter((entry) =>
+      !needle || entry.label.toLowerCase().includes(needle),
+    );
+  }, [paletteQuery, overview.data]);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (
@@ -228,6 +294,7 @@ export default function App() {
       if (event.key === "Escape") {
         setCommandOpen(false);
         setNotificationsOpen(false);
+        setPaletteQuery("");
       }
     }
 
@@ -242,7 +309,9 @@ export default function App() {
 
   const title =
     pageTitles[location.pathname] ??
-    "Operating System";
+    (location.pathname.startsWith("/work/")
+      ? "Work detail"
+      : "Operating System");
 
   return (
     <div className="app-shell">
@@ -401,7 +470,7 @@ export default function App() {
               <button
                 type="button"
                 className="icon-button relative"
-                aria-label="Open notifications"
+                aria-label={`Open notifications (${needsAttentionCount} awaiting approval)`}
                 onClick={() =>
                   setNotificationsOpen(
                     (isOpen) => !isOpen,
@@ -410,57 +479,75 @@ export default function App() {
               >
                 <Bell size={15} />
 
-                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.95)]" />
+                {needsAttentionCount > 0 && (
+                  <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.95)]" />
+                )}
               </button>
 
               {notificationsOpen && (
                 <div className="notification-popover">
                   <div className="flex items-center justify-between border-b border-[#202b35] px-4 py-3">
-                    <span className="font-mono-ui text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    <span className="mono text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                       Attention queue
                     </span>
 
-                    <span className="rounded-full bg-amber-400/10 px-2 py-1 font-mono-ui text-[8px] text-amber-300">
-                      02 NEW
-                    </span>
+                    {needsAttentionCount > 0 && (
+                      <span className="rounded-full bg-amber-400/10 px-2 py-1 mono text-[8px] text-amber-300">
+                        {needsAttentionCount} PENDING
+                      </span>
+                    )}
                   </div>
 
                   <div className="space-y-1 p-2">
-                    <NavLink
-                      to="/approvals"
-                      onClick={() =>
-                        setNotificationsOpen(false)
-                      }
-                      className="notification-item"
-                    >
-                      <span className="status-dot status-dot-warning" />
-                      <span>
-                        Two approval gates need review
-                      </span>
-                    </NavLink>
+                    {attention.length === 0 ? (
+                      <div className="px-2 py-4 text-center text-[10px] text-slate-500">
+                        Nothing needs your attention.
+                      </div>
+                    ) : (
+                      attention.slice(0, 6).map((entry) => (
+                        <NavLink
+                          key={entry.id}
+                          to={entry.to}
+                          onClick={() =>
+                            setNotificationsOpen(false)
+                          }
+                          className="notification-item"
+                        >
+                          <span className={`pill-dot ${entry.tone}`} />
 
-                    <NavLink
-                      to="/work"
-                      onClick={() =>
-                        setNotificationsOpen(false)
-                      }
-                      className="notification-item"
-                    >
-                      <span className="status-dot status-dot-live" />
-                      <span>
-                        Atlas shared an execution update
-                      </span>
-                    </NavLink>
+                          <span className="min-w-0">
+                            <span className="block truncate">
+                              {entry.label}
+                            </span>
+
+                            {entry.detail && (
+                              <span className="mt-0.5 block truncate text-[9px] text-slate-600">
+                                {entry.detail}
+                              </span>
+                            )}
+                          </span>
+                        </NavLink>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="system-status">
-              <span className="status-dot status-dot-live" />
+            <div
+              className={`system-status${overview.error ? " system-status-down" : ""}`}
+              title={overview.error?.message}
+            >
+              <span
+                className={`status-dot ${overview.error ? "status-dot-error" : "status-dot-live"}`}
+              />
 
               <span>
-                SYSTEM OPERATIONAL
+                {overview.error
+                  ? "API UNREACHABLE"
+                  : overview.loading
+                    ? "CONNECTING"
+                    : "SYSTEM OPERATIONAL"}
               </span>
             </div>
           </div>
@@ -488,37 +575,48 @@ export default function App() {
 
               <input
                 autoFocus
-                placeholder="Jump to a system surface..."
+                value={paletteQuery}
+                onChange={(event) =>
+                  setPaletteQuery(event.target.value)
+                }
+                placeholder="Jump to a surface or an objective..."
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
               />
 
-              <kbd className="rounded border border-[#2c3945] px-1.5 py-1 font-mono-ui text-[8px] text-slate-500">
+              <kbd className="rounded border border-[#2c3945] px-1.5 py-1 mono text-[8px] text-slate-500">
                 ESC
               </kbd>
             </div>
 
-            <div className="p-2">
-              <div className="px-2 pb-2 pt-1 font-mono-ui text-[8px] uppercase tracking-[0.16em] text-slate-600">
-                Navigate
-              </div>
-
-              {quickNavigation.map(
-                ({ label, path, icon: Icon }) => (
+            <div className="scroll-area max-h-[380px] p-2">
+              {paletteResults.length === 0 ? (
+                <div className="px-2 py-6 text-center text-[11px] text-slate-500">
+                  Nothing matches “{paletteQuery}”.
+                </div>
+              ) : (
+                paletteResults.map(({ key, label, path, icon: Icon, kind }) => (
                   <NavLink
-                    key={path}
+                    key={key}
                     to={path}
-                    onClick={() => setCommandOpen(false)}
+                    onClick={() => {
+                      setCommandOpen(false);
+                      setPaletteQuery("");
+                    }}
                     className="palette-item"
                   >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2a3844] bg-[#10171e] text-slate-400">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#2a3844] bg-[#10171e] text-slate-400">
                       <Icon size={14} />
                     </span>
 
-                    <span>{label}</span>
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
 
-                    <ArrowUpRight className="ml-auto text-slate-600" size={14} />
+                    <span className="mono shrink-0 text-[8px] uppercase tracking-[0.12em] text-slate-600">
+                      {kind}
+                    </span>
+
+                    <ArrowUpRight className="shrink-0 text-slate-600" size={14} />
                   </NavLink>
-                ),
+                ))
               )}
             </div>
           </div>
