@@ -7,6 +7,7 @@ import {
   Zap,
 } from "lucide-react";
 
+import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -25,8 +26,6 @@ import { useResource } from "../lib/useResource";
 import {
   EmptyState,
   ErrorState,
-  Metric,
-  Readout,
   Section,
   Skeleton,
   StatusPill,
@@ -40,6 +39,9 @@ import {
 } from "../lib/tone";
 
 import { describeEvent } from "../lib/events";
+import { describeCompany } from "../lib/statement";
+import { SignalField } from "../components/SignalField";
+import { AgentSigil } from "../components/AgentSigil";
 
 /**
  * The launch pipeline mirrors the real API calls, one stage per call. Nothing
@@ -129,26 +131,82 @@ export default function Command() {
     );
   }
 
+  const statement = describeCompany(data);
+
   return (
-    <div className="mx-auto max-w-[1340px] fade-up">
-      {/* What needs a person comes before anything else on the page. When the
-          company is quiet this block is absent rather than showing an empty
-          "0 approvals" card. */}
+    <div className="fade-up">
+      {/* The opening. The largest thing on the page is the company's own
+          account of its state, generated from the same overview every other
+          surface reads - so the art direction and the hierarchy are the same
+          decision rather than two competing ones. */}
+      <header className={`dispatch dispatch-${statement.mood}`}>
+        <SignalField
+          mood={statement.mood}
+          activity={data?.activity.length ?? 0}
+          agents={data?.agents.length ?? 0}
+        />
+
+        <div className="dispatch-inner">
+          <h2 className="statement">
+            {statement.headline.map((line) => (
+              <span key={line} className="statement-line">
+                {line}
+              </span>
+            ))}
+          </h2>
+
+          <p className="statement-detail">{statement.detail}</p>
+
+          <div className="dispatch-meta">
+            <DispatchStat
+              label="In flight"
+              value={overview.loading ? "—" : activeWork.length}
+              tone="active"
+              live={activeWork.length > 0}
+            />
+            <DispatchStat
+              label="Working"
+              value={overview.loading ? "—" : workingAgents.length}
+              tone="active"
+              live={workingAgents.length > 0}
+            />
+            <DispatchStat
+              label="Awaiting you"
+              value={overview.loading ? "—" : approvals.length}
+              tone="warning"
+              live={approvals.length > 0}
+            />
+            <DispatchStat
+              label="Tool calls"
+              value={overview.loading ? "—" : toolCalls}
+              tone="idle"
+            />
+            <DispatchStat
+              label="All time"
+              value={overview.loading ? "—" : (data?.work.total ?? 0)}
+              tone="idle"
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[1340px] pt-7">
       {approvals.length > 0 && (
         <Link to="/approvals" className="attention-bar">
           <ShieldAlert size={15} className="shrink-0 text-[#ff7176]" />
 
           <span className="min-w-0 flex-1">
             <span className="block text-[12.5px] font-semibold text-[#ffd9da]">
-              {approvals.length}{" "}
-              {approvals.length === 1 ? "decision is" : "decisions are"} waiting
-              on you
+              {approvals[0]!.action}
             </span>
             <span className="mt-0.5 block truncate text-[11px] text-[#c9868a]">
-              {approvals[0]!.action} — {approvals[0]!.reason}
+              {approvals[0]!.reason}
             </span>
           </span>
 
+          <span className="shrink-0 text-[11px] font-semibold text-[#ff7176]">
+            Review
+          </span>
           <ArrowRight size={14} className="shrink-0 text-[#ff7176]" />
         </Link>
       )}
@@ -240,38 +298,6 @@ export default function Command() {
               )}
             </div>
           )}
-
-          <div className="mt-6">
-            <Readout>
-              <Metric
-                label="In flight"
-                tone="active"
-                live={activeWork.length > 0}
-                value={overview.loading ? "—" : activeWork.length}
-                detail={`${data?.work.total ?? 0} all time`}
-              />
-              <Metric
-                label="Agents working"
-                tone="active"
-                live={workingAgents.length > 0}
-                value={overview.loading ? "—" : workingAgents.length}
-                detail={`${data?.agents.length ?? 0} in the workforce`}
-              />
-              <Metric
-                label="Awaiting you"
-                tone="warning"
-                live={approvals.length > 0}
-                value={overview.loading ? "—" : approvals.length}
-                detail="Human decisions"
-              />
-              <Metric
-                label="Tool calls"
-                tone="idle"
-                value={overview.loading ? "—" : toolCalls}
-                detail="In recent activity"
-              />
-            </Readout>
-          </div>
 
           <div className="mt-7">
             <Section
@@ -408,7 +434,13 @@ export default function Command() {
                     <span
                       className={`presence-mark ${toneClass[presenceTone(agent.presence)]}`}
                     >
-                      {agent.name.slice(0, 1)}
+                      <AgentSigil
+                        agentId={agent.agentId}
+                        capabilities={agent.capabilities}
+                        tools={agent.toolIds.length}
+                        size={22}
+                        active={agent.presence === "working"}
+                      />
                     </span>
 
                     <span className="min-w-0 flex-1">
@@ -487,6 +519,30 @@ export default function Command() {
           </Section>
         </aside>
       </div>
+      </div>
+    </div>
+  );
+}
+
+function DispatchStat({
+  label,
+  value,
+  tone,
+  live = false,
+}: {
+  label: string;
+  value: ReactNode;
+  tone: "active" | "warning" | "idle";
+  live?: boolean;
+}) {
+  return (
+    <div className={`dispatch-stat ${toneClass[tone]}`}>
+      <div
+        className={`dispatch-stat-value${live ? " dispatch-stat-value-live" : ""}`}
+      >
+        {value}
+      </div>
+      <div className="dispatch-stat-label">{label}</div>
     </div>
   );
 }

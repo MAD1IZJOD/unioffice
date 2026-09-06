@@ -1486,8 +1486,8 @@
 
 .presence-mark {
   display: flex;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -1744,4 +1744,251 @@
   font-family: var(--mono);
   font-size: 8.5px;
   letter-spacing: 0.02em;
+}
+
+/* ==========================================================================
+   Editorial layer
+
+   The company reports on itself. The largest type on a page is generated from
+   live state rather than written as copy, so scale and hierarchy carry the
+   same meaning: the bigger it is, the more it matters right now.
+   ========================================================================== */
+
+.dispatch {
+  position: relative;
+  overflow: hidden;
+  margin: -24px -22px 0;
+  padding: 64px 22px 52px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+/* The mood tints the whole opening, not individual widgets inside it. */
+.dispatch-waiting {
+  background:
+    radial-gradient(
+      120% 90% at 8% 0%,
+      rgba(229, 72, 77, 0.16),
+      transparent 62%
+    ),
+    var(--surface-0);
+}
+
+.dispatch-moving {
+  background:
+    radial-gradient(
+      120% 90% at 8% 0%,
+      rgba(59, 130, 246, 0.15),
+      transparent 62%
+    ),
+    var(--surface-0);
+}
+
+.dispatch-broken {
+  background:
+    radial-gradient(
+      120% 90% at 8% 0%,
+      rgba(229, 72, 77, 0.11),
+      transparent 58%
+    ),
+    var(--surface-0);
+}
+
+.dispatch-quiet {
+  background: var(--surface-0);
+}
+
+.signal-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.dispatch-inner {
+  position: relative;
+  max-width: 1340px;
+  margin: 0 auto;
+}
+
+/* Oversized, tight, and deliberately clipped to two lines: it is a headline,
+   not a paragraph. */
+.statement {
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: clamp(38px, 7.4vw, 92px);
+  font-weight: 680;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
+  text-transform: uppercase;
+}
+
+.statement-line {
+  display: block;
+}
+
+/* The second line carries the colour, so the mood reads without shouting. */
+.dispatch-waiting .statement-line:last-child,
+.dispatch-broken .statement-line:last-child {
+  color: var(--red-ink);
+}
+
+.dispatch-moving .statement-line:last-child {
+  color: var(--blue-ink);
+}
+
+.dispatch-quiet .statement-line:last-child {
+  color: var(--ink-muted);
+}
+
+.statement-detail {
+  max-width: 46ch;
+  margin: 22px 0 0;
+  color: var(--ink-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dispatch-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  margin-top: 34px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.dispatch-stat {
+  min-width: 92px;
+}
+
+.dispatch-stat-value {
+  color: var(--ink-primary);
+  font-size: 28px;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.dispatch-stat-value-live {
+  color: var(--tone);
+}
+
+.dispatch-stat-label {
+  margin-top: 7px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+/* A full-bleed rule with a label, used to open a section like a chapter. */
+.chapter {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin: 52px 0 20px;
+}
+
+.chapter-index {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.16em;
+}
+
+.chapter-title {
+  color: var(--ink-primary);
+  font-size: 17px;
+  font-weight: 640;
+  letter-spacing: -0.022em;
+  white-space: nowrap;
+}
+
+.chapter-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line-subtle);
+}
+
+.chapter-action {
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Agent sigils
+   -------------------------------------------------------------------------- */
+
+.agent-sigil .sigil-spoke {
+  stroke: currentColor;
+  opacity: 0.4;
+}
+
+.agent-sigil .sigil-node {
+  fill: currentColor;
+  opacity: 0.65;
+}
+
+.agent-sigil .sigil-core {
+  fill: var(--surface-0);
+  stroke: currentColor;
+  stroke-width: 1.1;
+}
+
+.agent-sigil {
+  color: var(--tone, var(--ink-muted));
+  transition: transform 220ms cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+/* Hovering a worker turns its mark - a small sign that it is an entity
+   rather than an avatar. */
+.roster-row:hover .agent-sigil,
+.presence-row:hover .agent-sigil {
+  transform: rotate(24deg);
+}
+
+.agent-sigil-active .sigil-core {
+  animation: sigilPulse 2.2s ease-in-out infinite;
+}
+
+@keyframes sigilPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 640px) {
+  .dispatch {
+    margin: -18px -14px 0;
+    padding: 40px 14px 34px;
+  }
+
+  .statement {
+    font-size: clamp(30px, 11vw, 48px);
+  }
+
+  .dispatch-meta {
+    gap: 18px;
+  }
+
+  .chapter {
+    margin: 38px 0 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-sigil,
+  .agent-sigil-active .sigil-core {
+    animation: none;
+    transition: none;
+  }
 }
