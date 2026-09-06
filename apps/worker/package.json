@@ -1,0 +1,19 @@
+{
+  "name": "@unioffice/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@unioffice/api": "workspace:*",
+    "@unioffice/core": "workspace:*",
+    "@unioffice/database": "workspace:*"
+  }
+}

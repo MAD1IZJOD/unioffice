@@ -1,228 +1,26 @@
-import {
-  DefaultAgentRuntime,
-  OllamaModelProvider,
-} from "@unioffice/agents";
+import { fileURLToPath } from "node:url";
 
-import {
-  createSupabaseAdminClient,
-  SupabaseAgentRepository,
-  SupabaseApprovalRepository,
-  SupabaseArtifactRepository,
-  SupabaseEventRepository,
-  SupabaseMemoryRepository,
-  SupabaseOrganizationRepository,
-  SupabaseTaskRepository,
-  SupabaseWorkRepository,
-} from "@unioffice/database";
+import { loadApiConfig } from "./config.js";
+import { ensureDevelopmentWorkforce } from "./development-workforce.js";
+import { createExecutionRuntime } from "./runtime.js";
+import { buildApiServer } from "./server.js";
 
-import {
-  DefaultMemoryRetriever,
-} from "@unioffice/memory";
-
-import {
-  DefaultDelegator,
-  DefaultExecutionEngine,
-  OllamaPlanner,
-} from "@unioffice/orchestrator";
-
-import {
-  createDefaultToolRegistry,
-} from "@unioffice/tools";
-
-import {
-  fileURLToPath,
-} from "node:url";
-
-import {
-  WorkApplicationService,
-} from "./application.js";
-
-import {
-  loadApiConfig,
-} from "./config.js";
-
-import {
-  ensureDevelopmentWorkforce,
-} from "./development-workforce.js";
-
-import {
-  EventRecorder,
-} from "./event-recorder.js";
-
-import {
-  buildApiServer,
-} from "./server.js";
-
-import {
-  CompanyBrainService,
-} from "./company-brain-service.js";
-
-import {
-  CompanyOverviewService,
-} from "./company-overview-service.js";
-
-import {
-  TaskExecutionService,
-} from "./task-execution-service.js";
-
-import {
-  WorkExecutionService,
-} from "./work-execution-service.js";
-
-import {
-  WorkApprovalService,
-} from "./work-approval-service.js";
-
-import {
-  WorkQueryService,
-} from "./work-query-service.js";
-
-import {
-  ExecutionScheduler,
-} from "./execution-scheduler.js";
-
-import {
-  StaleRunReconciler,
-} from "./stale-run-reconciler.js";
-
-import {
-  WorkRecoveryService,
-} from "./work-recovery-service.js";
-
-import {
-  WorkService,
-} from "./work-service.js";
+export { createExecutionRuntime } from "./runtime.js";
+export type { ExecutionRuntime } from "./runtime.js";
+export { loadApiConfig } from "./config.js";
+export type { ApiConfig } from "./config.js";
+export { ExecutionWorker } from "./execution-worker.js";
+export type { ExecutionWorkerOptions } from "./execution-worker.js";
 
 export async function createApiServer() {
   const config = loadApiConfig();
-  const supabase = createSupabaseAdminClient();
-  const organizationRepository =
-    new SupabaseOrganizationRepository(supabase);
-  const agentRepository =
-    new SupabaseAgentRepository(supabase);
-  const workRepository =
-    new SupabaseWorkRepository(supabase);
-  const taskRepository =
-    new SupabaseTaskRepository(supabase);
-  const approvalRepository =
-    new SupabaseApprovalRepository(supabase);
-  const artifactRepository =
-    new SupabaseArtifactRepository(supabase);
-  const eventRepository =
-    new SupabaseEventRepository(supabase);
-  const eventRecorder = new EventRecorder(eventRepository);
-  const memoryRepository =
-    new SupabaseMemoryRepository(supabase);
-  const memoryRetriever = new DefaultMemoryRetriever(memoryRepository);
-  const companyBrainService = new CompanyBrainService(
-    memoryRepository,
-    memoryRetriever,
-  );
-  const modelProvider = new OllamaModelProvider({
-    baseUrl: config.ollamaBaseUrl,
-    defaultModel: config.ollamaModel,
-  });
-  const planner = new OllamaPlanner(
-    modelProvider,
-    config.ollamaModel,
-  );
-  const delegator = new DefaultDelegator(agentRepository);
-  const toolRegistry = createDefaultToolRegistry();
-  const agentRuntime = new DefaultAgentRuntime(
-    modelProvider,
-    {
-      model: config.ollamaModel,
-      think: false,
-      toolRegistry,
-      // A genuinely multi-step deterministic task (e.g. a month-by-month
-      // projection) needs one tool call per step; 3 was too tight for real
-      // work and only ever exercised in unit tests with a single call.
-      maxToolCalls: 10,
-    },
-  );
-  const executionEngine = new DefaultExecutionEngine(
-    agentRuntime,
-  );
-  const applicationService = new WorkApplicationService(
-    workRepository,
-    eventRecorder,
-  );
-  const workService = new WorkService(
-    workRepository,
-    taskRepository,
-    agentRepository,
-    planner,
-    delegator,
-    eventRecorder,
-    toolRegistry.list().map((tool) => ({
-      id: tool.id,
-      name: tool.name,
-      description: tool.description,
-    })),
-  );
-  const taskExecutionService = new TaskExecutionService(
-    taskRepository,
-    artifactRepository,
-    workRepository,
-    agentRepository,
-    executionEngine,
-    eventRecorder,
-    companyBrainService,
-  );
-  const workApprovalService = new WorkApprovalService(
-    approvalRepository,
-    taskRepository,
-    workRepository,
-    eventRecorder,
-  );
-  const workExecutionService = new WorkExecutionService(
-    workRepository,
-    taskRepository,
-    taskExecutionService,
-    eventRecorder,
-    workApprovalService,
-  );
-  const workQueryService = new WorkQueryService(
-    workRepository,
-    taskRepository,
-    eventRepository,
-    artifactRepository,
-    agentRepository,
-    approvalRepository,
-  );
-  const executionScheduler = new ExecutionScheduler(
-    workExecutionService,
-    workRepository,
-    taskRepository,
-    eventRecorder,
-  );
-  const workRecoveryService = new WorkRecoveryService(
-    workRepository,
-    taskRepository,
-    eventRecorder,
-  );
-  const companyOverviewService = new CompanyOverviewService(
-    workRepository,
-    taskRepository,
-    agentRepository,
-    approvalRepository,
-    artifactRepository,
-    eventRepository,
-    toolRegistry,
-  );
+  const runtime = createExecutionRuntime(config);
 
-  // Runs abandoned by a previous process would otherwise sit in "executing"
-  // forever with nothing alive to finish them, and Retry only accepts failed
-  // work. Closing them out at startup puts them back on that path.
-  const staleRunReconciler = new StaleRunReconciler(
-    workRepository,
-    taskRepository,
-    eventRecorder,
-    config.staleRunAfterMs,
-  );
-
+  // Work interrupted by a previous restart is put back on a recoverable
+  // footing. The worker owns queue-level lease recovery; this handles work
+  // rows left mid-run by a process that predates the queue.
   try {
-    const reconciled = await staleRunReconciler.reconcile();
+    const reconciled = await runtime.staleRunReconciler.reconcile();
 
     if (reconciled.recoveredWork.length > 0) {
       console.warn(
@@ -234,62 +32,67 @@ export async function createApiServer() {
     // Startup must not depend on reconciliation succeeding; the worst case is
     // that stale work stays stale until the next boot.
     console.warn(
-      `Could not reconcile interrupted runs: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `Could not reconcile interrupted runs: ${errorMessage(error)}`,
     );
   }
 
-  const developmentOrganization =
-    config.seedDevelopmentWorkforce
-      ? await ensureDevelopmentWorkforce(
-          organizationRepository,
-          agentRepository,
-        )
-      : undefined;
+  const developmentOrganization = config.seedDevelopmentWorkforce
+    ? await ensureDevelopmentWorkforce(
+        runtime.organizationRepository,
+        runtime.agentRepository,
+      )
+    : undefined;
 
   return buildApiServer({
-    applicationService,
-    workService,
-    workExecutionService,
-    workApprovalService,
-    workQueryService,
-    workRecoveryService,
-    executionScheduler,
-    companyBrainService,
-    companyOverviewService,
-    toolRegistry,
-    developmentOrganizationId:
-      developmentOrganization?.organization.id,
+    applicationService: runtime.applicationService,
+    workService: runtime.workService,
+    workExecutionService: runtime.workExecutionService,
+    workApprovalService: runtime.workApprovalService,
+    workQueryService: runtime.workQueryService,
+    workRecoveryService: runtime.workRecoveryService,
+    executionQueueService: runtime.executionQueueService,
+    companyBrainService: runtime.companyBrainService,
+    companyOverviewService: runtime.companyOverviewService,
+    toolRegistry: runtime.toolRegistry,
+    developmentOrganizationId: developmentOrganization?.organization.id,
     corsOrigins: config.corsOrigins,
     healthCheck: async () => {
-      const { error } = await supabase
+      const { error } = await runtime.supabase
         .from("organizations")
         .select("id")
         .limit(1);
 
       if (error) {
-        throw new Error(
-          `Supabase health check failed: ${error.message}`,
-        );
+        throw new Error(`Supabase health check failed: ${error.message}`);
       }
 
-      const ollamaResponse = await fetch(
-        `${config.ollamaBaseUrl}/api/tags`,
-      );
+      const ollamaResponse = await fetch(`${config.ollamaBaseUrl}/api/tags`);
 
       if (!ollamaResponse.ok) {
-        throw new Error(
-          `Ollama health check failed: ${ollamaResponse.status}`,
-        );
+        throw new Error(`Ollama health check failed: ${ollamaResponse.status}`);
       }
+
+      // The queue is the API's link to the worker, so an unreachable queue
+      // table is a real outage even when everything else answers.
+      const queueDepth = await runtime.executionJobRepository
+        .findByOrganization(
+          developmentOrganization?.organization.id ??
+            ("00000000-0000-0000-0000-000000000000" as never),
+          1,
+        )
+        .then(() => "ready")
+        .catch((queueError: unknown) => {
+          throw new Error(
+            `Execution queue health check failed: ${errorMessage(queueError)}`,
+          );
+        });
 
       return {
         supabase: "ready",
         ollama: "ready",
+        executionQueue: queueDepth,
         model: config.ollamaModel,
-        developmentOrganizationId:
-          developmentOrganization?.organization.id,
+        developmentOrganizationId: developmentOrganization?.organization.id,
       };
     },
   });
@@ -305,16 +108,16 @@ async function start(): Promise<void> {
   });
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 if (
   process.argv[1] &&
   fileURLToPath(import.meta.url) === process.argv[1]
 ) {
   start().catch((error: unknown) => {
-    console.error(
-      error instanceof Error
-        ? error.message
-        : error,
-    );
+    console.error(errorMessage(error));
     process.exitCode = 1;
   });
 }

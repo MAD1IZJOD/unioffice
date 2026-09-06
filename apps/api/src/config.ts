@@ -25,6 +25,19 @@ export interface ApiConfig {
    * second live instance's work is never reclaimed out from under it.
    */
   staleRunAfterMs: number;
+
+  /** How long the worker waits after finding nothing to do. */
+  workerPollIntervalMs: number;
+
+  /**
+   * How long a worker's claim on a job is good for. Must outlast a real
+   * objective, which takes minutes, or a healthy worker would lose its own
+   * job to recovery mid-run.
+   */
+  workerLeaseMs: number;
+
+  /** How many jobs one worker executes at once. */
+  workerConcurrency: number;
 }
 
 export function loadApiConfig(
@@ -55,7 +68,42 @@ export function loadApiConfig(
     staleRunAfterMs: parseStaleRunMinutes(
       env.EXECUTION_STALE_AFTER_MINUTES,
     ) * 60_000,
+    workerPollIntervalMs: positiveInteger(
+      env.WORKER_POLL_INTERVAL_MS,
+      2_000,
+      "WORKER_POLL_INTERVAL_MS",
+    ),
+    // Ten minutes: comfortably longer than a real objective, so recovery only
+    // fires for a worker that has genuinely stopped.
+    workerLeaseMs: positiveInteger(
+      env.WORKER_LEASE_MS,
+      600_000,
+      "WORKER_LEASE_MS",
+    ),
+    workerConcurrency: positiveInteger(
+      env.WORKER_CONCURRENCY,
+      2,
+      "WORKER_CONCURRENCY",
+    ),
   };
+}
+
+function positiveInteger(
+  value: string | undefined,
+  fallback: number,
+  name: string,
+): number {
+  if (value === undefined || value.trim() === "") {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+
+  return parsed;
 }
 
 function parseStaleRunMinutes(value: string | undefined): number {

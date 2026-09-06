@@ -39,8 +39,8 @@ import type {
 } from "./work-recovery-service.js";
 
 import type {
-  ExecutionScheduler,
-} from "./execution-scheduler.js";
+  ExecutionQueueService,
+} from "./execution-queue-service.js";
 
 import type {
   CompanyBrainService,
@@ -64,7 +64,7 @@ export interface ApiServices {
   workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
   workRecoveryService: WorkRecoveryService;
-  executionScheduler: ExecutionScheduler;
+  executionQueueService: ExecutionQueueService;
   companyBrainService: CompanyBrainService;
   companyOverviewService: CompanyOverviewService;
   toolRegistry: ToolRegistry;
@@ -217,9 +217,15 @@ export function buildApiServer(
     });
 
     instance.get("/work/:id/detail", async (request) => {
-      return services.workQueryService.getWorkDetail(
-        parameterId(request.params),
-      );
+      const workId = parameterId(request.params);
+      const [detail, job] = await Promise.all([
+        services.workQueryService.getWorkDetail(workId),
+        services.executionQueueService.getActiveJob(workId),
+      ]);
+
+      // Real queue state, read from the job row - never a guess about what a
+      // worker might be doing.
+      return { ...detail, executionJob: job };
     });
 
     instance.get("/work/:id", async (request) => {
@@ -236,19 +242,34 @@ export function buildApiServer(
       );
     });
   
-    // Starts execution and returns immediately. Callers watch progress
-    // through /work/:id/detail, which reads the same rows the executor is
-    // writing, rather than holding a request open for minutes of model time.
+    // Puts the work on the durable queue and returns immediately. A worker
+    // executes it, so the run no longer depends on this process staying
+    // alive. Callers watch progress through /work/:id/detail, which reads the
+    // same rows the worker is writing.
     instance.post("/work/:id/execute", async (request) => {
-      return services.executionScheduler.startExecution(
+      return services.executionQueueService.enqueueWork(
         parameterId(request.params),
+        "requested",
       );
     });
   
     instance.post("/work/:id/retry", async (request) => {
-      return services.workRecoveryService.retryWork(
-        parameterId(request.params),
-      );
+      const workId = parameterId(request.params);
+      const retried = await services.workRecoveryService.retryWork(workId);
+
+      // A retry that only reset rows would sit there until someone pressed
+      // Execute, so it goes back on the queue itself. Work that has to be
+      // replanned is left for the planner; only a resumable plan is queued.
+      if (retried.mode === "resume") {
+        const queued = await services.executionQueueService.enqueueWork(
+          workId,
+          "retry",
+        );
+
+        return { ...retried, job: queued.job };
+      }
+
+      return retried;
     });
 
     instance.get("/work/:id/tasks", async (request) => {
@@ -296,8 +317,11 @@ export function buildApiServer(
         parameterApprovalId(request.params),
         resolverId(request.body),
       );
-      const execution = await services.executionScheduler.startExecution(
+      // Resuming is a durable enqueue too, so an approval granted while no
+      // worker happens to be up is still executed once one starts.
+      const execution = await services.executionQueueService.enqueueWork(
         approval.workId,
+        "approval_resumed",
       );
 
       return { approval, ...execution };

@@ -311,6 +311,18 @@ importers:
         specifier: ^8.2.0
         version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)
 
+  apps/worker:
+    dependencies:
+      '@unioffice/api':
+        specifier: workspace:*
+        version: link:../api
+      '@unioffice/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@unioffice/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+
   packages/agents:
     dependencies:
       '@unioffice/core':
