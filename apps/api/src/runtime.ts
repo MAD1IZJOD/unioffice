@@ -153,6 +153,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workExecutionService,
     executionJobRepository,
     workRepository,
+    taskRepository,
     eventRecorder,
   );
 

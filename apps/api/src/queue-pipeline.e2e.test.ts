@@ -282,6 +282,7 @@ function harness(
     workExecutionService,
     jobs,
     workRepository,
+    taskRepository,
     eventRecorder,
     { retryBackoffMs: 0 },
   );
@@ -590,4 +591,46 @@ test("a job abandoned by a dead worker is recovered and finished by another", as
   assert.equal(result.claimed, 1);
   assert.equal(result.completed, 1);
   assert.equal((await h.workRepository.findById(work.id))!.status, "completed");
+});
+
+test("a task left running by a dead worker is reclaimed and finished on the retry", async () => {
+  // Found by pulling the plug on a worker mid-run: the task said "running",
+  // the executor read that as "someone else owns this" and returned, so the
+  // job was marked complete while the work never finished.
+  const h = harness([
+    calculationPlan,
+    toolCall("calculator", { expression: "4 + 4" }),
+    "The total is 8.",
+  ]);
+  const work = await createAndPlan(h);
+
+  const died = new Date(Date.now() - 120_000);
+  await h.jobs.enqueue({
+    organizationId,
+    workId: work.id,
+    reason: "requested",
+    runAt: died,
+  });
+  await h.jobs.claimNext({ workerId: "dead-worker", leaseMs: 1000, now: died });
+
+  // The dead worker got as far as marking its task running.
+  const [task] = await h.taskRepository.findByWork(work.id);
+  await h.taskRepository.update({
+    ...task!,
+    status: "running",
+    startedAt: died,
+  });
+
+  const survivor = h.worker("worker-b");
+  await survivor.recoverAbandonedJobs();
+  const result = await survivor.tick();
+
+  assert.equal(result.completed, 1);
+
+  const finished = await h.workRepository.findById(work.id);
+  assert.equal(finished!.status, "completed");
+
+  const finishedTask = (await h.taskRepository.findByWork(work.id))[0]!;
+  assert.equal(finishedTask.status, "completed");
+  assert.ok(finishedTask.result, "the reclaimed task must actually produce a result");
 });

@@ -2,6 +2,7 @@ import type { ExecutionJob } from "@unioffice/core";
 
 import type {
   ExecutionJobRepository,
+  TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
 
@@ -38,6 +39,7 @@ export class ExecutionJobRunner {
     private readonly workExecutionService: WorkExecutionService,
     private readonly executionJobRepository: ExecutionJobRepository,
     private readonly workRepository: WorkRepository,
+    private readonly taskRepository: TaskRepository,
     private readonly eventRecorder: EventRecorder,
     options: ExecutionJobRunnerOptions = {},
   ) {
@@ -46,6 +48,7 @@ export class ExecutionJobRunner {
 
   async run(job: ExecutionJob): Promise<RunJobOutcome> {
     try {
+      await this.reclaimOrphanedTasks(job);
       await this.workExecutionService.executeWork(job.workId);
 
       const completed = await this.executionJobRepository.complete(job.id);
@@ -53,6 +56,62 @@ export class ExecutionJobRunner {
       return { job: completed ?? job, outcome: "completed" };
     } catch (error) {
       return this.handleFailure(job, errorMessage(error));
+    }
+  }
+
+  /**
+   * Frees tasks a previous attempt left mid-flight.
+   *
+   * A worker killed while executing leaves its task saying "running". Nothing
+   * is running it, but the executor reads that as "another executor owns
+   * this" and returns without doing anything - so the job would be marked
+   * complete while the work sat unfinished forever. This was found by pulling
+   * the plug on a worker mid-run.
+   *
+   * Only a retry can see an orphan: the queue allows one job per work item
+   * and one worker per job, so on any attempt after the first, a running task
+   * belongs to an attempt that is already dead.
+   */
+  private async reclaimOrphanedTasks(job: ExecutionJob): Promise<void> {
+    if (job.attempts <= 1) {
+      return;
+    }
+
+    const tasks = await this.taskRepository.findByWork(job.workId);
+    const orphaned = tasks.filter((task) => task.status === "running");
+
+    for (const task of orphaned) {
+      const now = new Date();
+
+      await this.taskRepository.update({
+        ...task,
+        status: "pending",
+        startedAt: undefined,
+        completedAt: undefined,
+        updatedAt: now,
+        metadata: {
+          ...task.metadata,
+          execution: undefined,
+          reclaimed: {
+            at: now.toISOString(),
+            reason:
+              "The worker executing this task stopped; the task was returned to the plan.",
+            attempt: job.attempts,
+          },
+        },
+      });
+
+      await this.eventRecorder.record({
+        organizationId: job.organizationId,
+        workId: job.workId,
+        taskId: task.id,
+        agentId: task.assignedAgentId,
+        type: "task.ready",
+        payload: {
+          title: task.title,
+          reclaimed: true,
+        },
+      });
     }
   }
 
