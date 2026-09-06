@@ -14,6 +14,8 @@ function baseServices(overrides: Partial<ApiServices> = {}): ApiServices {
     workApprovalService: {} as ApiServices["workApprovalService"],
     workQueryService: {} as ApiServices["workQueryService"],
     companyBrainService: {} as ApiServices["companyBrainService"],
+    companyOverviewService: {} as ApiServices["companyOverviewService"],
+    toolRegistry: {} as ApiServices["toolRegistry"],
     healthCheck: async () => ({}),
     corsOrigins: ["http://localhost:5173"],
     ...overrides,

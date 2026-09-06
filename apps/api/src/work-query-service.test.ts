@@ -14,6 +14,7 @@ import type {
 
 import type {
   AgentRepository,
+  ApprovalRepository,
   ArtifactRepository,
   EventRepository,
   TaskRepository,
@@ -47,6 +48,16 @@ const artifactRepository: ArtifactRepository = {
   async findById() { return null; },
   async findByWork() { return []; },
   async findByTask() { return []; },
+  async findByOrganization() { return []; },
+};
+
+const approvalRepository: ApprovalRepository = {
+  async create(approval) { return approval; },
+  async findById() { return null; },
+  async findByWork() { return []; },
+  async findPendingByOrganization() { return []; },
+  async update(approval) { return approval; },
+  async resolvePending(approval) { return approval; },
 };
 
 const noAgentsRepository: AgentRepository = {
@@ -92,6 +103,7 @@ test("getOrganizationActivity returns only events for the requested organization
     eventRepository,
     artifactRepository,
     noAgentsRepository,
+    approvalRepository,
   );
 
   const activity = await service.getOrganizationActivity(organizationId);
@@ -117,6 +129,7 @@ test("getOrganizationActivity forwards a limit to the repository", async () => {
     eventRepository,
     artifactRepository,
     noAgentsRepository,
+    approvalRepository,
   );
 
   await service.getOrganizationActivity(organizationId, 5);
@@ -158,9 +171,134 @@ test("getAgents returns the organization's agent directory", async () => {
     eventRepository,
     artifactRepository,
     agentRepository,
+    approvalRepository,
   );
 
   const result = await service.getAgents(organizationId);
 
   assert.deepEqual(result, agents);
+});
+
+function makeWork(overrides: Partial<Work>): Work {
+  const now = new Date();
+
+  return {
+    id: "work-1" as WorkId,
+    organizationId,
+    requesterId: "user-1" as Work["requesterId"],
+    objective: "Test objective.",
+    status: "queued",
+    priority: "normal",
+    createdAt: now,
+    updatedAt: now,
+    metadata: {},
+    ...overrides,
+  };
+}
+
+function serviceWithWork(work: Work[]): WorkQueryService {
+  return new WorkQueryService(
+    { ...workRepository, async findByOrganization() { return work; } },
+    taskRepository,
+    { async create(event) { return event; }, async findByWork() { return []; }, async findByOrganization() { return []; } },
+    artifactRepository,
+    noAgentsRepository,
+    approvalRepository,
+  );
+}
+
+test("listWork returns organization work newest first", async () => {
+  const service = serviceWithWork([
+    makeWork({ id: "work-old" as WorkId, createdAt: new Date("2026-01-01T00:00:00Z") }),
+    makeWork({ id: "work-new" as WorkId, createdAt: new Date("2026-03-01T00:00:00Z") }),
+  ]);
+
+  const result = await service.listWork(organizationId);
+
+  assert.deepEqual(result.map((work) => work.id), ["work-new", "work-old"]);
+});
+
+test("listWork narrows to a single status when one is requested", async () => {
+  const service = serviceWithWork([
+    makeWork({ id: "work-done" as WorkId, status: "completed" }),
+    makeWork({ id: "work-queued" as WorkId, status: "queued" }),
+  ]);
+
+  const result = await service.listWork(organizationId, { status: "completed" });
+
+  assert.deepEqual(result.map((work) => work.id), ["work-done"]);
+});
+
+test("listWork applies the requested limit", async () => {
+  const service = serviceWithWork([
+    makeWork({ id: "work-a" as WorkId, createdAt: new Date("2026-01-03T00:00:00Z") }),
+    makeWork({ id: "work-b" as WorkId, createdAt: new Date("2026-01-02T00:00:00Z") }),
+    makeWork({ id: "work-c" as WorkId, createdAt: new Date("2026-01-01T00:00:00Z") }),
+  ]);
+
+  const result = await service.listWork(organizationId, { limit: 2 });
+
+  assert.deepEqual(result.map((work) => work.id), ["work-a", "work-b"]);
+});
+
+test("getWorkDetail includes only the agents this work actually assigned", async () => {
+  const assignedAgentId = "agent-assigned" as Agent["id"];
+  const now = new Date();
+  const agents: Agent[] = [
+    {
+      id: assignedAgentId,
+      organizationId,
+      name: "Assigned",
+      description: "Works on this task.",
+      type: "specialist",
+      status: "active",
+      capabilities: [],
+      toolIds: [],
+      createdAt: now,
+      updatedAt: now,
+      metadata: {},
+    },
+    {
+      id: "agent-idle" as Agent["id"],
+      organizationId,
+      name: "Idle",
+      description: "Not on this work.",
+      type: "specialist",
+      status: "active",
+      capabilities: [],
+      toolIds: [],
+      createdAt: now,
+      updatedAt: now,
+      metadata: {},
+    },
+  ];
+  const service = new WorkQueryService(
+    { ...workRepository, async findById() { return makeWork({}); } },
+    {
+      ...taskRepository,
+      async findByWork() {
+        return [{
+          id: "task-1" as Task["id"],
+          workId: "work-1" as WorkId,
+          title: "Task",
+          description: "Task description.",
+          status: "completed" as const,
+          assignedAgentId,
+          dependsOn: [],
+          createdAt: now,
+          updatedAt: now,
+          metadata: {},
+        }];
+      },
+    },
+    { async create(event) { return event; }, async findByWork() { return []; }, async findByOrganization() { return []; } },
+    artifactRepository,
+    { ...noAgentsRepository, async findByOrganization() { return agents; } },
+    approvalRepository,
+  );
+
+  const detail = await service.getWorkDetail("work-1" as WorkId);
+
+  assert.deepEqual(detail.agents.map((agent) => agent.id), [assignedAgentId]);
+  assert.equal(detail.tasks.length, 1);
 });

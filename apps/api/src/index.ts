@@ -58,6 +58,10 @@ import {
 } from "./company-brain-service.js";
 
 import {
+  CompanyOverviewService,
+} from "./company-overview-service.js";
+
+import {
   TaskExecutionService,
 } from "./task-execution-service.js";
 
@@ -172,6 +176,16 @@ export async function createApiServer() {
     eventRepository,
     artifactRepository,
     agentRepository,
+    approvalRepository,
+  );
+  const companyOverviewService = new CompanyOverviewService(
+    workRepository,
+    taskRepository,
+    agentRepository,
+    approvalRepository,
+    artifactRepository,
+    eventRepository,
+    toolRegistry,
   );
 
   const developmentOrganization =
@@ -189,6 +203,8 @@ export async function createApiServer() {
     workApprovalService,
     workQueryService,
     companyBrainService,
+    companyOverviewService,
+    toolRegistry,
     developmentOrganizationId:
       developmentOrganization?.organization.id,
     corsOrigins: config.corsOrigins,

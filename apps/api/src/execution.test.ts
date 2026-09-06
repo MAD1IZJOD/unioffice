@@ -282,6 +282,12 @@ class MemoryArtifactRepository implements ArtifactRepository {
       (artifact) => artifact.taskId === id,
     );
   }
+
+  async findByOrganization(id: OrganizationId): Promise<Artifact[]> {
+    return [...this.artifacts.values()].filter(
+      (artifact) => artifact.organizationId === id,
+    );
+  }
 }
 
 function makeAgent(): Agent {
@@ -531,6 +537,7 @@ test("retains a completed task result when artifact projection fails", async () 
     async findById() { return null; },
     async findByWork() { return []; },
     async findByTask() { return []; },
+    async findByOrganization() { return []; },
   };
   const engine: ExecutionEngine = {
     async execute(request) {

@@ -74,6 +74,24 @@ export class SupabaseArtifactRepository implements ArtifactRepository {
     if (error) throw new Error(`Failed to find task artifacts: ${error.message}`);
     return (data as ArtifactRow[] ?? []).map(fromRow);
   }
+
+  async findByOrganization(
+    organizationId: OrganizationId,
+    limit = 50,
+  ): Promise<Artifact[]> {
+    const { data, error } = await this.client
+      .from("artifacts")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to find organization artifacts: ${error.message}`);
+    }
+
+    return (data as ArtifactRow[] ?? []).map(fromRow);
+  }
 }
 
 function toRow(artifact: Artifact) {

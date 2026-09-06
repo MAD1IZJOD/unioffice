@@ -1,6 +1,7 @@
 import type {
   Artifact,
   ArtifactId,
+  OrganizationId,
   TaskId,
   WorkId,
 } from "@unioffice/core";
@@ -13,4 +14,9 @@ export interface ArtifactRepository {
   findByWork(workId: WorkId): Promise<Artifact[]>;
 
   findByTask(taskId: TaskId): Promise<Artifact[]>;
+
+  findByOrganization(
+    organizationId: OrganizationId,
+    limit?: number,
+  ): Promise<Artifact[]>;
 }

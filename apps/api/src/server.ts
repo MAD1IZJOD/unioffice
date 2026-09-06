@@ -8,6 +8,7 @@ import type {
   UserId,
   WorkId,
   WorkPriority,
+  WorkStatus,
 } from "@unioffice/core";
 
 import type {
@@ -37,6 +38,14 @@ import type {
   CompanyBrainService,
 } from "./company-brain-service.js";
 
+import type {
+  CompanyOverviewService,
+} from "./company-overview-service.js";
+
+import type {
+  ToolRegistry,
+} from "@unioffice/tools";
+
 const developmentRequesterId =
   "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09" as UserId;
 
@@ -47,6 +56,8 @@ export interface ApiServices {
   workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
   companyBrainService: CompanyBrainService;
+  companyOverviewService: CompanyOverviewService;
+  toolRegistry: ToolRegistry;
   healthCheck: () => Promise<Record<string, unknown>>;
   developmentOrganizationId?: OrganizationId;
   corsOrigins: string[];
@@ -126,19 +137,11 @@ export function buildApiServer(
   
     instance.post("/work", async (request, reply) => {
       const body = objectBody(request.body);
-      const organizationId =
-        optionalText(body.organizationId) ??
-        services.developmentOrganizationId;
-  
-      if (!organizationId) {
-        throw new ApiError(
-          400,
-          "organizationId is required when no development workforce is seeded.",
-        );
-      }
-  
       const input: CreateWorkInput = {
-        organizationId: organizationId as OrganizationId,
+        organizationId: requiredOrganizationId(
+          services,
+          body.organizationId,
+        ),
         requesterId:
           (optionalText(body.requesterId) ??
             developmentRequesterId) as UserId,
@@ -156,6 +159,59 @@ export function buildApiServer(
       return reply.status(201).send({ work });
     });
   
+    instance.get("/work", async (request) => {
+      const query = objectBody(request.query);
+      const work = await services.workQueryService.listWork(
+        requiredOrganizationId(services, query.organizationId),
+        {
+          status: parseWorkStatus(query.status),
+          limit: parseOptionalLimit(query.limit),
+        },
+      );
+
+      return { work };
+    });
+
+    instance.get("/overview", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.companyOverviewService.getOverview(
+        requiredOrganizationId(services, query.organizationId),
+        { activityLimit: parseOptionalLimit(query.activityLimit) },
+      );
+    });
+
+    instance.get("/tools", async () => {
+      // The registry is the single source of truth for what can actually be
+      // called; the catalog is projected from it rather than duplicated.
+      const tools = services.toolRegistry.list().map((tool) => ({
+        id: tool.id,
+        name: tool.name,
+        description: tool.description,
+        version: tool.version,
+        inputSchema: tool.inputSchema,
+      }));
+
+      return { tools };
+    });
+
+    instance.get("/artifacts", async (request) => {
+      const query = objectBody(request.query);
+      const artifacts =
+        await services.workQueryService.getOrganizationArtifacts(
+          requiredOrganizationId(services, query.organizationId),
+          parseOptionalLimit(query.limit),
+        );
+
+      return { artifacts };
+    });
+
+    instance.get("/work/:id/detail", async (request) => {
+      return services.workQueryService.getWorkDetail(
+        parameterId(request.params),
+      );
+    });
+
     instance.get("/work/:id", async (request) => {
       const work = await services.workQueryService.getWork(
         parameterId(request.params),
@@ -209,14 +265,10 @@ export function buildApiServer(
   
     instance.get("/approvals", async (request) => {
       const query = objectBody(request.query);
-      const organizationId = optionalText(query.organizationId) ??
-        services.developmentOrganizationId;
-      if (!organizationId) {
-        throw new ApiError(400, "organizationId is required when no development workforce is seeded.");
-      }
       const approvals = await services.workApprovalService.getPendingApprovals(
-        organizationId as OrganizationId,
+        requiredOrganizationId(services, query.organizationId),
       );
+
       return { approvals };
     });
   
@@ -241,63 +293,92 @@ export function buildApiServer(
   
     instance.get("/agents", async (request) => {
       const query = objectBody(request.query);
-      const organizationId = optionalText(query.organizationId) ??
-        services.developmentOrganizationId;
-  
-      if (!organizationId) {
-        throw new ApiError(400, "organizationId is required when no development workforce is seeded.");
-      }
-  
       const agents = await services.workQueryService.getAgents(
-        organizationId as OrganizationId,
+        requiredOrganizationId(services, query.organizationId),
       );
-  
+
       return { agents };
     });
   
     instance.get("/activity", async (request) => {
       const query = objectBody(request.query);
-      const organizationId = optionalText(query.organizationId) ??
-        services.developmentOrganizationId;
-  
-      if (!organizationId) {
-        throw new ApiError(400, "organizationId is required when no development workforce is seeded.");
-      }
-  
       const events = await services.workQueryService.getOrganizationActivity(
-        organizationId as OrganizationId,
+        requiredOrganizationId(services, query.organizationId),
         parseOptionalLimit(query.limit),
       );
-  
+
       return { events };
     });
   
     instance.get("/memory", async (request) => {
       const query = objectBody(request.query);
-      const organizationId = optionalText(query.organizationId) ??
-        services.developmentOrganizationId;
-  
-      if (!organizationId) {
-        throw new ApiError(400, "organizationId is required when no development workforce is seeded.");
-      }
-  
+      const organizationId = requiredOrganizationId(
+        services,
+        query.organizationId,
+      );
       const searchQuery = optionalText(query.query);
-  
+
       const memories = searchQuery
         ? await services.companyBrainService.retrieveRelevant({
-            organizationId: organizationId as OrganizationId,
+            organizationId,
             query: searchQuery,
             limit: parseOptionalLimit(query.limit),
           })
         : await services.companyBrainService.listByOrganization(
-            organizationId as OrganizationId,
+            organizationId,
           );
-  
+
       return { memories };
       });
   });
 
   return app;
+}
+
+/**
+ * Every organization-scoped read resolves the same way: an explicit id, or
+ * the seeded development organization when one exists. This was copy-pasted
+ * into five handlers before the second wave of routes made that untenable.
+ */
+function requiredOrganizationId(
+  services: ApiServices,
+  value: unknown,
+): OrganizationId {
+  const organizationId =
+    optionalText(value) ?? services.developmentOrganizationId;
+
+  if (!organizationId) {
+    throw new ApiError(
+      400,
+      "organizationId is required when no development workforce is seeded.",
+    );
+  }
+
+  return organizationId as OrganizationId;
+}
+
+function parseWorkStatus(value: unknown): WorkStatus | undefined {
+  const text = optionalText(value);
+
+  if (text === undefined) {
+    return undefined;
+  }
+
+  const statuses: WorkStatus[] = [
+    "queued",
+    "planning",
+    "executing",
+    "waiting_approval",
+    "completed",
+    "failed",
+    "cancelled",
+  ];
+
+  if (!statuses.includes(text as WorkStatus)) {
+    throw new ApiError(400, "status is invalid.");
+  }
+
+  return text as WorkStatus;
 }
 
 function healthHandler(services: ApiServices) {
