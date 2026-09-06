@@ -90,8 +90,12 @@ export class ExecutionWorker {
    * has usually not failed at all, it just lost its executor, so it goes back
    * on the queue for someone else to finish.
    */
-  async recoverAbandonedJobs(): Promise<{ requeued: number; failed: number }> {
-    const recovered = await this.executionJobRepository.recoverExpiredLeases();
+  async recoverAbandonedJobs(
+    now?: Date,
+  ): Promise<{ requeued: number; failed: number }> {
+    const recovered = await this.executionJobRepository.recoverExpiredLeases(
+      now,
+    );
 
     if (recovered.requeued.length > 0) {
       this.log(
