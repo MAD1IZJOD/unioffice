@@ -3,6 +3,7 @@ import {
   Boxes,
   ChevronRight,
   FileOutput,
+  LoaderCircle,
   Play,
   RefreshCw,
   RotateCcw,
@@ -10,7 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
@@ -23,6 +24,7 @@ import {
   retryWork,
   type TaskItem,
   type WorkDetail as WorkDetailData,
+  type WorkStatus,
 } from "../lib/api";
 
 import { useResource } from "../lib/useResource";
@@ -53,28 +55,47 @@ const RESOLVER_ID = "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09";
 const LIVE_POLL_MS = 4_000;
 const SETTLED_POLL_MS = 30_000;
 
-export default function WorkDetail() {
-  const { workId = "" } = useParams();
-  const [action, setAction] = useState<string>();
-  const [actionError, setActionError] = useState<string>();
-  const [pollMs, setPollMs] = useState(LIVE_POLL_MS);
+const SETTLED_STATUSES: ReadonlyArray<WorkStatus> = [
+  "completed",
+  "failed",
+  "cancelled",
+];
 
+/**
+ * Watches one work item, polling closely while it can still change and
+ * backing off once it settles. The interval is adjusted during render
+ * (React's documented alternative to an effect for state derived from data
+ * the component already has) rather than mirrored by an effect.
+ */
+function useWatchedWorkDetail(workId: string) {
+  const [pollMs, setPollMs] = useState(LIVE_POLL_MS);
   const detail = useResource<WorkDetailData>(
     useCallback(() => fetchWorkDetail(workId), [workId]),
     { pollMs, enabled: Boolean(workId) },
   );
 
   const status = detail.data?.work.status;
+  const nextPollMs =
+    status && SETTLED_STATUSES.includes(status)
+      ? SETTLED_POLL_MS
+      : LIVE_POLL_MS;
 
-  useEffect(() => {
-    if (!status) return;
+  if (nextPollMs !== pollMs) {
+    setPollMs(nextPollMs);
+  }
 
-    setPollMs(
-      status === "completed" || status === "failed" || status === "cancelled"
-        ? SETTLED_POLL_MS
-        : LIVE_POLL_MS,
-    );
-  }, [status]);
+  return detail;
+}
+
+export default function WorkDetail() {
+  const { workId = "" } = useParams();
+  const [action, setAction] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
+
+  // The interval is a function of the work's status, so it is derived on
+  // every render rather than mirrored into state and kept in sync by an
+  // effect. useResource restarts its timer when the value changes.
+  const detail = useWatchedWorkDetail(workId);
 
   async function run(label: string, operation: () => Promise<unknown>) {
     setAction(label);
@@ -124,6 +145,11 @@ export default function WorkDetail() {
   const completedCount = tasks.filter(
     (task) => task.status === "completed",
   ).length;
+  // A run that already has a task in flight must not offer "Execute" again -
+  // the button reads as "nothing is happening" when in fact it is running.
+  const inFlight = tasks.some(
+    (task) => task.status === "running" || task.status === "ready",
+  );
   const progress = tasks.length
     ? Math.round((completedCount / tasks.length) * 100)
     : 0;
@@ -213,7 +239,15 @@ export default function WorkDetail() {
               </button>
             )}
 
+          {tasks.length > 0 && inFlight && (
+            <span className="running-indicator">
+              <LoaderCircle size={13} className="spin-slow" />
+              Executing in the background
+            </span>
+          )}
+
           {tasks.length > 0 &&
+            !inFlight &&
             (work.status === "queued" || work.status === "executing") && (
               <button
                 type="button"
@@ -222,7 +256,11 @@ export default function WorkDetail() {
                 className="button-primary"
               >
                 <Play size={13} />
-                {action === "execute" ? "Executing…" : "Execute"}
+                {action === "execute"
+                  ? "Starting…"
+                  : work.status === "executing"
+                    ? "Resume execution"
+                    : "Execute"}
               </button>
             )}
 
