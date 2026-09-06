@@ -17,6 +17,7 @@ import {
   ErrorState,
   Metric,
   Panel,
+  Readout,
   SectionHeading,
   Skeleton,
 } from "../components/primitives";
@@ -103,7 +104,8 @@ export default function Brain() {
         )}
       </form>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className="mb-5">
+        <Readout>
         <Metric
           label="Memories"
           tone="live"
@@ -124,6 +126,7 @@ export default function Brain() {
           value={memory.loading ? "—" : (byType.experience ?? 0)}
           detail="Outcomes recorded from real tasks"
         />
+        </Readout>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">

@@ -5,7 +5,6 @@ import { Link } from "react-router-dom";
 
 import {
   fetchOverview,
-  formatRelativeTime,
   type AgentPresenceSummary,
   type CompanyOverview,
 } from "../lib/api";
@@ -17,6 +16,7 @@ import {
   EmptyState,
   ErrorState,
   Panel,
+  Section,
   SectionHeading,
   Skeleton,
   StatusPill,
@@ -24,8 +24,7 @@ import {
 
 import {
   presenceTone,
-  statusLabel,
-  taskStatusTone,
+  toneClass,
 } from "../lib/tone";
 
 const presenceCopy: Record<AgentPresenceSummary["presence"], string> = {
@@ -75,80 +74,89 @@ export default function Agents() {
           />
         </Panel>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {agents.map((agent) => (
-              <button
-                key={agent.agentId}
-                type="button"
-                onClick={() => setSelectedId(agent.agentId)}
-                className={`agent-card${selected?.agentId === agent.agentId ? " agent-card-selected" : ""}`}
-              >
-                <div className="flex items-start gap-3">
-                  <span className={`agent-mark ${presenceTone(agent.presence)}`}>
-                    {agent.name.slice(0, 1)}
-                  </span>
+        <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+          {/* A roster, not a wall of profile cards: one row per worker, with
+              the orchestrator separated from the specialists because they do
+              genuinely different jobs. */}
+          <div>
+            {(["orchestrator", "manager", "specialist"] as const)
+              .map((type) => ({
+                type,
+                members: agents.filter((agent) => agent.type === type),
+              }))
+              .filter((group) => group.members.length > 0)
+              .map((group) => (
+                <Section
+                  key={group.type}
+                  title={group.type === "orchestrator" ? "Coordination" : group.type === "manager" ? "Management" : "Specialists"}
+                  count={group.members.length}
+                >
+                  <div className="op-list">
+                    {group.members.map((agent) => (
+                      <button
+                        key={agent.agentId}
+                        type="button"
+                        onClick={() => setSelectedId(agent.agentId)}
+                        className={`roster-row${selected?.agentId === agent.agentId ? " roster-row-selected" : ""}`}
+                      >
+                        <span
+                          className={`roster-mark ${toneClass[presenceTone(agent.presence)]}`}
+                        >
+                          {agent.name.slice(0, 1)}
+                        </span>
 
-                  <div className="min-w-0 flex-1 text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-semibold text-slate-100">
-                        {agent.name}
-                      </span>
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                            <span className="text-[13px] font-semibold text-[#f2f4f7]">
+                              {agent.name}
+                            </span>
 
-                      <span className="mono text-[8.5px] uppercase tracking-[0.11em] text-slate-600">
-                        {agent.type}
-                      </span>
-                    </div>
+                            <span className="t-machine">
+                              {agent.capabilities.join(" · ")}
+                            </span>
+                          </span>
 
-                    <p className="mt-1.5 line-clamp-2 text-[10.5px] leading-[1.6] text-slate-500">
-                      {agent.description}
-                    </p>
+                          <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {agent.activeTask ? (
+                              <span className="truncate text-[10.5px] text-[#84b4fb]">
+                                {agent.activeTask.title}
+                              </span>
+                            ) : (
+                              <span className="t-machine">
+                                {agent.completedTaskCount} done
+                                {agent.failedTaskCount > 0
+                                  ? ` · ${agent.failedTaskCount} failed`
+                                  : ""}
+                              </span>
+                            )}
+
+                            {agent.toolIds.length === 0 ? (
+                              <span className="t-machine opacity-70">
+                                no tools
+                              </span>
+                            ) : (
+                              <span className="flex flex-wrap gap-1">
+                                {agent.toolIds.map((tool) => (
+                                  <span key={tool} className="tool-tag">
+                                    {tool}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+
+                        <StatusPill
+                          tone={presenceTone(agent.presence)}
+                          pulse={agent.presence === "working"}
+                        >
+                          {agent.presence}
+                        </StatusPill>
+                      </button>
+                    ))}
                   </div>
-
-                  <StatusPill
-                    tone={presenceTone(agent.presence)}
-                    pulse={agent.presence === "working"}
-                  >
-                    {agent.presence}
-                  </StatusPill>
-                </div>
-
-                {agent.activeTask && (
-                  <div className="agent-active-task">
-                    <StatusPill tone={taskStatusTone(agent.activeTask.status)}>
-                      {statusLabel(agent.activeTask.status)}
-                    </StatusPill>
-
-                    <span className="truncate text-[10.5px] text-slate-400">
-                      {agent.activeTask.title}
-                    </span>
-                  </div>
-                )}
-
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {agent.toolIds.length === 0 ? (
-                    <Chip tone="idle">no tools</Chip>
-                  ) : (
-                    agent.toolIds.map((tool) => (
-                      <Chip key={tool} tone="active">
-                        <Wrench size={9} />
-                        {tool}
-                      </Chip>
-                    ))
-                  )}
-                </div>
-
-                <div className="agent-card-footer mono">
-                  <span>{agent.completedTaskCount} completed</span>
-                  <span>{agent.failedTaskCount} failed</span>
-                  <span className="ml-auto">
-                    {agent.lastActiveAt
-                      ? formatRelativeTime(agent.lastActiveAt)
-                      : "never active"}
-                  </span>
-                </div>
-              </button>
-            ))}
+                </Section>
+              ))}
           </div>
 
           {selected && (
