@@ -68,15 +68,12 @@ export class ExecutionJobRunner {
    * complete while the work sat unfinished forever. This was found by pulling
    * the plug on a worker mid-run.
    *
-   * Only a retry can see an orphan: the queue allows one job per work item
-   * and one worker per job, so on any attempt after the first, a running task
-   * belongs to an attempt that is already dead.
+   * Any running task found here is an orphan, whichever attempt or job left
+   * it behind: holding this job means no other worker can be executing this
+   * work, because the queue allows one active job per work item and one
+   * worker per job. So if a task says running, nothing is running it.
    */
   private async reclaimOrphanedTasks(job: ExecutionJob): Promise<void> {
-    if (job.attempts <= 1) {
-      return;
-    }
-
     const tasks = await this.taskRepository.findByWork(job.workId);
     const orphaned = tasks.filter((task) => task.status === "running");
 

@@ -605,15 +605,10 @@ test("a task left running by a dead worker is reclaimed and finished on the retr
   const work = await createAndPlan(h);
 
   const died = new Date(Date.now() - 120_000);
-  await h.jobs.enqueue({
-    organizationId,
-    workId: work.id,
-    reason: "requested",
-    runAt: died,
-  });
-  await h.jobs.claimNext({ workerId: "dead-worker", leaseMs: 1000, now: died });
 
-  // The dead worker got as far as marking its task running.
+  // The dead worker got as far as marking its task running, then vanished.
+  // Its job is long gone, so the orphan must be reclaimed by whichever job
+  // next owns this work - not only by a later attempt of the same job.
   const [task] = await h.taskRepository.findByWork(work.id);
   await h.taskRepository.update({
     ...task!,
@@ -621,9 +616,9 @@ test("a task left running by a dead worker is reclaimed and finished on the retr
     startedAt: died,
   });
 
-  const survivor = h.worker("worker-b");
-  await survivor.recoverAbandonedJobs();
-  const result = await survivor.tick();
+  await h.executionQueueService.enqueueWork(work.id, "requested");
+
+  const result = await h.worker("worker-b").tick();
 
   assert.equal(result.completed, 1);
 
