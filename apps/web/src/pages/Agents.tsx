@@ -138,7 +138,7 @@ export default function Agents() {
                   )}
                 </div>
 
-                <div className="mt-3 flex items-center gap-4 border-t border-[#1b252e] pt-3 mono text-[9px] text-slate-600">
+                <div className="agent-card-footer mono">
                   <span>{agent.completedTaskCount} completed</span>
                   <span>{agent.failedTaskCount} failed</span>
                   <span className="ml-auto">

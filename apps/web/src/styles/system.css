@@ -885,7 +885,12 @@
    -------------------------------------------------------------------------- */
 
 .agent-card {
-  display: block;
+  /* A column with the footer pushed down keeps a row of cards aligned; as
+     plain blocks they ended at whatever height their description wrapped to,
+     which read as sloppy rather than dense. */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -900,6 +905,17 @@
 .agent-card:hover {
   border-color: var(--line-strong);
   background: var(--surface-3);
+}
+
+.agent-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-subtle);
+  color: var(--ink-faint);
+  font-size: 9px;
 }
 
 .agent-card-selected {
@@ -1093,4 +1109,50 @@
   .code-block {
     font-size: 9.5px;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Focus
+
+   Nothing in the app had a visible keyboard focus state, so tabbing through
+   it was invisible. One ring, drawn outside the element so it never shifts
+   layout, on everything that can take focus.
+   -------------------------------------------------------------------------- */
+
+.button-primary:focus-visible,
+.button-ghost:focus-visible,
+.button-quiet:focus-visible,
+.filter-tab:focus-visible,
+.row-link:focus-visible,
+.task-row:focus-visible,
+.agent-card:focus-visible,
+.suggestion-chip:focus-visible,
+.select-control:focus-visible,
+.command-textarea:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+
+.row-link:focus-visible,
+.task-row:focus-visible {
+  outline-offset: -2px;
+}
+
+/* --------------------------------------------------------------------------
+   Hover feedback
+
+   The row hover was 1.9% white, which is below what most screens resolve, so
+   rows felt inert under the cursor.
+   -------------------------------------------------------------------------- */
+
+.row-link:hover,
+.task-row:hover,
+.activity-line:hover,
+.timeline-entry-link:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.button-ghost:active:not(:disabled),
+.button-quiet:active:not(:disabled) {
+  transform: translateY(1px);
 }
