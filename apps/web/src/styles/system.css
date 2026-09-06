@@ -1925,12 +1925,12 @@
 
 .agent-sigil .sigil-spoke {
   stroke: currentColor;
-  opacity: 0.4;
+  opacity: 0.62;
 }
 
 .agent-sigil .sigil-node {
   fill: currentColor;
-  opacity: 0.65;
+  opacity: 0.95;
 }
 
 .agent-sigil .sigil-core {
@@ -2030,5 +2030,99 @@
 
   .statement-page {
     font-size: clamp(24px, 8vw, 34px);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Transitions
+
+   Moving between surfaces should read as turning a page, not as loading a
+   different app. The statement lifts into place first and the body follows a
+   beat later, so the eye lands on the headline before the detail arrives.
+   Everything is transform and opacity only, and it runs once per navigation.
+   -------------------------------------------------------------------------- */
+
+.statement-line {
+  animation: lineRise 460ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
+}
+
+.statement-line:nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.dispatch .statement-detail,
+.dispatch .dispatch-meta {
+  animation: lineRise 460ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
+  animation-delay: 130ms;
+}
+
+@keyframes lineRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The body of the page arrives just behind its opening. */
+.fade-up {
+  animation: fadeUp 300ms ease-out both;
+  animation-delay: 60ms;
+}
+
+/* --------------------------------------------------------------------------
+   Small moments
+
+   Each of these marks a real state change rather than decorating a hover.
+   -------------------------------------------------------------------------- */
+
+/* A row that is genuinely executing gets a travelling highlight along its
+   status rail - the only continuously moving thing in the product, and it
+   only exists while something really is running. */
+.op-rail-running {
+  position: relative;
+  overflow: hidden;
+}
+
+.op-rail-running::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--ink-primary),
+    transparent
+  );
+  opacity: 0.55;
+  animation: railTravel 2.4s ease-in-out infinite;
+}
+
+@keyframes railTravel {
+  0% {
+    transform: translateY(-100%);
+  }
+
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+/* Reveals the objective's full text on hover when it was clamped. */
+.op-row:hover .op-row-title {
+  -webkit-line-clamp: 4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statement-line,
+  .dispatch .statement-detail,
+  .dispatch .dispatch-meta,
+  .fade-up,
+  .op-rail-running::after {
+    animation: none;
   }
 }

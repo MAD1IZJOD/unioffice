@@ -326,7 +326,7 @@ export default function Command() {
                       className="op-row"
                     >
                       <span
-                        className={`op-rail ${toneClass[workStatusTone(work.status)]}`}
+                        className={`op-rail ${toneClass[workStatusTone(work.status)]}${work.status === "executing" ? " op-rail-running" : ""}`}
                       />
 
                       <span className="min-w-0 flex-1">
@@ -378,7 +378,7 @@ export default function Command() {
                       className="op-row op-row-quiet"
                     >
                       <span
-                        className={`op-rail ${toneClass[workStatusTone(work.status)]}`}
+                        className={`op-rail ${toneClass[workStatusTone(work.status)]}${work.status === "executing" ? " op-rail-running" : ""}`}
                       />
 
                       <span className="min-w-0 flex-1 truncate text-[11.5px] text-[#a7b0bd]">

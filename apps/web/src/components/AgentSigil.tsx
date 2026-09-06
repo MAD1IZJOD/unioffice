@@ -78,7 +78,7 @@ export function AgentSigil({
             y1="16"
             x2={spoke.x2}
             y2={spoke.y2}
-            strokeWidth="0.85"
+            strokeWidth="1.1"
             className="sigil-spoke"
           />
         ))}
@@ -88,7 +88,7 @@ export function AgentSigil({
             key={index}
             cx={node.cx}
             cy={node.cy}
-            r="1.5"
+            r="1.8"
             className="sigil-node"
           />
         ))}

@@ -180,7 +180,7 @@ export default function Work() {
                   className="op-row"
                 >
                   <span
-                    className={`op-rail ${toneClass[workStatusTone(item.status)]}`}
+                    className={`op-rail ${toneClass[workStatusTone(item.status)]}${item.status === "executing" ? " op-rail-running" : ""}`}
                   />
 
                   <span className="min-w-0 flex-1">
