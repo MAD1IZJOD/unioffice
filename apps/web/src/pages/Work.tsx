@@ -19,11 +19,11 @@ import {
   SectionHeading,
   Skeleton,
   StatusPill,
-  TimeStamp,
 } from "../components/primitives";
 
 import {
   statusLabel,
+  toneClass,
   workStatusTone,
 } from "../lib/tone";
 
@@ -136,13 +136,48 @@ export default function Work() {
             }
           />
         ) : (
-          <div className="stack-list">
-            {visible.map((item) => (
-              <Link key={item.id} to={`/work/${item.id}`} className="row-link">
-                <div className="flex items-start justify-between gap-5">
-                  <p className="line-clamp-2 flex-1 text-[12.5px] leading-[1.65] text-slate-200">
-                    {item.objective}
-                  </p>
+          <div className="op-list px-[14px]">
+            {visible.map((item) => {
+              const plan =
+                typeof item.metadata.plan === "object" && item.metadata.plan
+                  ? (item.metadata.plan as Record<string, unknown>)
+                  : undefined;
+
+              return (
+                <Link
+                  key={item.id}
+                  to={`/work/${item.id}`}
+                  className="op-row"
+                >
+                  <span
+                    className={`op-rail ${toneClass[workStatusTone(item.status)]}`}
+                  />
+
+                  <span className="min-w-0 flex-1">
+                    <span className="op-row-title">{item.objective}</span>
+
+                    <span className="op-row-meta">
+                      <span className="t-machine">
+                        {formatRelativeTime(item.createdAt)}
+                      </span>
+
+                      <span className="t-machine uppercase">
+                        {item.priority}
+                      </span>
+
+                      {plan?.taskCount !== undefined && (
+                        <span className="t-machine">
+                          {String(plan.taskCount)} tasks
+                        </span>
+                      )}
+
+                      {typeof item.metadata.executionError === "string" && (
+                        <span className="truncate text-[9.5px] text-[#c9868a]">
+                          {item.metadata.executionError}
+                        </span>
+                      )}
+                    </span>
+                  </span>
 
                   <StatusPill
                     tone={workStatusTone(item.status)}
@@ -150,37 +185,9 @@ export default function Work() {
                   >
                     {statusLabel(item.status)}
                   </StatusPill>
-                </div>
-
-                <div className="mt-2.5 flex flex-wrap items-center gap-4">
-                  <TimeStamp
-                    iso={item.createdAt}
-                    relative={formatRelativeTime(item.createdAt)}
-                  />
-
-                  <span className="mono text-[9px] uppercase tracking-[0.11em] text-slate-600">
-                    {item.priority} priority
-                  </span>
-
-                  {typeof item.metadata.plan === "object" &&
-                    item.metadata.plan !== null && (
-                      <span className="mono text-[9px] text-slate-600">
-                        {String(
-                          (item.metadata.plan as Record<string, unknown>)
-                            .taskCount ?? "?",
-                        )}{" "}
-                        tasks
-                      </span>
-                    )}
-
-                  {typeof item.metadata.executionError === "string" && (
-                    <span className="mono truncate text-[9px] text-red-400/80">
-                      {item.metadata.executionError}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
       </Panel>

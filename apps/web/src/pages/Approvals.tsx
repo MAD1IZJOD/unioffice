@@ -96,18 +96,18 @@ export default function Approvals() {
             description="Work runs unattended until the planner flags a task as requiring a human decision."
           />
         ) : (
-          <div className="stack-list">
+          <div className="divide-y divide-[#161a21]">
             {pending.map((approval) => (
-              <div key={approval.id} className="px-[18px] py-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-semibold text-slate-100">
+              <div key={approval.id} className="approval-row">
+                <div className="approval-row-head">
+                  <span className="approval-marker" aria-hidden="true" />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13.5px] font-semibold leading-snug text-[#f2f4f7]">
                       {approval.action}
                     </div>
 
-                    <div className="mt-1.5 mono text-[9px] text-slate-600">
-                      {approval.resource}
-                    </div>
+                    <div className="t-machine mt-1">{approval.resource}</div>
                   </div>
 
                   <StatusPill tone="warning" pulse>
@@ -115,39 +115,43 @@ export default function Approvals() {
                   </StatusPill>
                 </div>
 
-                <div className="callout callout-warning mt-3.5">
-                  <div className="detail-label mb-1.5">Why this needs you</div>
-                  {approval.reason}
-                </div>
+                <dl className="approval-facts">
+                  <div>
+                    <dt className="t-eyebrow">Why it stopped</dt>
+                    <dd className="mt-1.5 text-[11.5px] leading-[1.6] text-[#a7b0bd]">
+                      {approval.reason}
+                    </dd>
+                  </div>
 
-                <div className="mt-3.5 flex flex-wrap items-center gap-4 mono text-[9.5px] text-slate-600">
-                  <span>requested {formatRelativeTime(approval.createdAt)}</span>
+                  <div>
+                    <dt className="t-eyebrow">If you approve</dt>
+                    <dd className="mt-1.5 text-[11.5px] leading-[1.6] text-[#a7b0bd]">
+                      This task is queued for a worker, and everything
+                      depending on it continues.
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt className="t-eyebrow">If you reject</dt>
+                    <dd className="mt-1.5 text-[11.5px] leading-[1.6] text-[#a7b0bd]">
+                      The decision is recorded and the task stays unexecuted.
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="approval-row-foot">
+                  <span className="t-machine">
+                    requested {formatRelativeTime(approval.createdAt)}
+                  </span>
 
                   <Link
                     to={`/work/${approval.workId}`}
-                    className="text-cyan-300/80 hover:text-cyan-200"
+                    className="button-quiet"
                   >
-                    open the work
+                    Open the work
                   </Link>
-                </div>
 
-                <p className="mt-3 text-[10.5px] leading-[1.6] text-slate-500">
-                  Approving resumes execution of this task and everything that
-                  depends on it. Rejecting leaves the decision recorded and the
-                  task unexecuted.
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={resolving === approval.id}
-                    onClick={() => decide(approval, "approve")}
-                    className="button-ghost button-approve"
-                  >
-                    {resolving === approval.id
-                      ? "Working…"
-                      : "Approve and continue"}
-                  </button>
+                  <span className="flex-1" />
 
                   <button
                     type="button"
@@ -156,6 +160,17 @@ export default function Approvals() {
                     className="button-ghost button-reject"
                   >
                     Reject
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={resolving === approval.id}
+                    onClick={() => decide(approval, "approve")}
+                    className="button-primary button-approve-strong"
+                  >
+                    {resolving === approval.id
+                      ? "Working…"
+                      : "Approve and continue"}
                   </button>
                 </div>
               </div>

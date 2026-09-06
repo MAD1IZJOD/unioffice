@@ -1,15 +1,9 @@
 import {
   ArrowRight,
   Bot,
-  Boxes,
-  Brain,
-  FileOutput,
-  GitBranch,
-  History,
+  CircleDot,
   LoaderCircle,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
+  ShieldAlert,
   Zap,
 } from "lucide-react";
 
@@ -32,15 +26,16 @@ import {
   EmptyState,
   ErrorState,
   Metric,
-  Panel,
+  Readout,
+  Section,
   Skeleton,
   StatusPill,
-  TimeStamp,
 } from "../components/primitives";
 
 import {
   presenceTone,
   statusLabel,
+  toneClass,
   workStatusTone,
 } from "../lib/tone";
 
@@ -50,15 +45,15 @@ import { describeEvent } from "../lib/events";
  * The launch pipeline mirrors the real API calls, one stage per call. Nothing
  * here is timed or simulated - a stage advances only when the request behind
  * it actually returns, which is why planning visibly takes as long as the
- * model takes. Once execution is scheduled the page hands off to the work
- * detail view, which watches the same rows the executor is writing.
+ * model takes. Once execution is queued the page hands off to the work detail
+ * view, which watches the same rows the worker is writing.
  */
 type LaunchStage = "idle" | "creating" | "planning" | "executing" | "done";
 
 const stageCopy: Record<Exclude<LaunchStage, "idle">, string> = {
   creating: "Recording the objective",
   planning: "Atlas is building the work plan",
-  executing: "Handing the plan to the specialists",
+  executing: "Queueing the plan for a worker",
   done: "Execution is under way",
 };
 
@@ -106,8 +101,6 @@ export default function Command() {
       setObjective("");
       overview.reload();
 
-      // Execution now runs in the background, so the useful thing to show is
-      // the live work view rather than a spinner on this page.
       navigate(`/work/${work.id}`);
     } catch (error) {
       setLaunchError((error as Error).message);
@@ -120,85 +113,67 @@ export default function Command() {
   const activeWork = data?.work.active ?? [];
   const workingAgents =
     data?.agents.filter((agent) => agent.presence === "working") ?? [];
-  const pendingApprovals = data?.approvals ?? [];
+  const approvals = data?.approvals ?? [];
+  const toolCalls =
+    data?.tools.reduce((total, tool) => total + tool.callCount, 0) ?? 0;
+
+  if (overview.error) {
+    return (
+      <div className="mx-auto max-w-[1340px]">
+        <ErrorState
+          message={overview.error.message}
+          offline={overview.error.isOffline}
+          onRetry={overview.reload}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-[1420px] fade-up">
-      <div className="mb-5">
-        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/[0.045] px-3 py-1.5">
-          <span
-            className={`pill-dot ${overview.error ? "tone-error" : "tone-live"}`}
-          />
-          <span className="mono text-[9px] font-medium uppercase tracking-[0.16em] text-cyan-300">
-            {overview.error ? "Control plane offline" : "Control plane online"}
+    <div className="mx-auto max-w-[1340px] fade-up">
+      {/* What needs a person comes before anything else on the page. When the
+          company is quiet this block is absent rather than showing an empty
+          "0 approvals" card. */}
+      {approvals.length > 0 && (
+        <Link to="/approvals" className="attention-bar">
+          <ShieldAlert size={15} className="shrink-0 text-[#ff7176]" />
+
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12.5px] font-semibold text-[#ffd9da]">
+              {approvals.length}{" "}
+              {approvals.length === 1 ? "decision is" : "decisions are"} waiting
+              on you
+            </span>
+            <span className="mt-0.5 block truncate text-[11px] text-[#c9868a]">
+              {approvals[0]!.action} — {approvals[0]!.reason}
+            </span>
           </span>
-        </div>
 
-        <h2 className="mt-3.5 max-w-[820px] text-[28px] font-semibold leading-[1.15] tracking-[-0.04em] text-slate-100 max-sm:text-[22px]">
-          Direct the company, not another chatbot.
-        </h2>
+          <ArrowRight size={14} className="shrink-0 text-[#ff7176]" />
+        </Link>
+      )}
 
-        <p className="mt-2 max-w-[660px] text-[12px] leading-[1.6] text-slate-400">
-          State an objective. UNI-OFFICE plans the work, routes each task to the
-          specialist that holds the right tools, and keeps consequential steps
-          behind your approval.
-        </p>
-      </div>
-
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric
-          label="Active work"
-          tone={activeWork.length > 0 ? "active" : "idle"}
-          value={overview.loading ? "—" : activeWork.length}
-          detail={`${data?.work.total ?? 0} objectives all time`}
-        />
-
-        <Metric
-          label="Agents working"
-          tone={workingAgents.length > 0 ? "active" : "live"}
-          value={overview.loading ? "—" : workingAgents.length}
-          detail={`${data?.agents.length ?? 0} in the workforce`}
-        />
-
-        <Metric
-          label="Pending approvals"
-          tone={pendingApprovals.length > 0 ? "warning" : "idle"}
-          value={overview.loading ? "—" : pendingApprovals.length}
-          detail="Require a human decision"
-        />
-
-        <Metric
-          label="Tool calls"
-          tone="live"
-          value={
-            overview.loading
-              ? "—"
-              : (data?.tools.reduce((total, tool) => total + tool.callCount, 0) ?? 0)
-          }
-          detail="In recent activity"
-        />
-      </div>
       <div className="command-grid">
-        <div className="min-w-0 space-y-4">
-          <Panel
-            eyebrow="Command"
-            title="New company objective"
-            action={
-              <span className="mono text-[9px] uppercase tracking-[0.14em] text-slate-600">
-                {busy ? "Running" : "Ready"}
-              </span>
-            }
-          >
+        <div className="min-w-0">
+          {/* The one genuinely elevated surface on the page, because it is
+              the only thing here you act with rather than read. */}
+          <div className="composer">
+            <div className="composer-head">
+              <span className="t-eyebrow">New objective</span>
+              <span className="t-machine">{busy ? "RUNNING" : "READY"}</span>
+            </div>
+
             <textarea
               id="work-objective"
               value={objective}
               onChange={(event) => setObjective(event.target.value)}
               disabled={busy}
-              className="command-textarea min-h-[132px] w-full bg-transparent text-[15px] leading-[1.7] text-slate-100 placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="What should your company accomplish?"
+              rows={3}
+              className="command-textarea w-full bg-transparent text-[14.5px] leading-[1.65] text-[#f2f4f7] placeholder:text-[#535b68] disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="What should the company accomplish?"
             />
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
@@ -208,16 +183,14 @@ export default function Command() {
                   className="suggestion-chip"
                   title={suggestion}
                 >
-                  {suggestion.slice(0, 46)}…
+                  {suggestion.slice(0, 42)}…
                 </button>
               ))}
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#1b252e] pt-4">
-              <label className="flex items-center gap-2.5">
-                <span className="mono text-[8.5px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Priority
-                </span>
+            <div className="composer-foot">
+              <label className="flex items-center gap-2">
+                <span className="t-eyebrow">Priority</span>
 
                 <select
                   value={priority}
@@ -241,83 +214,107 @@ export default function Command() {
                 className="button-primary"
               >
                 {busy ? (
-                  <LoaderCircle size={14} className="spin-slow" />
+                  <LoaderCircle size={13} className="spin-slow" />
                 ) : (
-                  <Zap size={14} />
+                  <Zap size={13} />
                 )}
-                {busy ? "Working…" : "Launch work"}
+                {busy ? "Working…" : "Launch"}
               </button>
             </div>
-          </Panel>
+          </div>
 
           {stage !== "idle" && (
-            <LaunchPipeline
-              stage={stage}
-              workId={launchedWorkId}
-              error={launchError}
-              onOpen={() =>
-                launchedWorkId && navigate(`/work/${launchedWorkId}`)
-              }
-            />
+            <LaunchPipeline stage={stage} workId={launchedWorkId} />
           )}
 
           {launchError && stage === "idle" && (
-            <Panel eyebrow="Launch" title="The objective could not be completed">
-              <p className="text-[12px] leading-[1.7] text-slate-400">
-                {launchError}
-              </p>
-
+            <div className="callout callout-error mt-3">
+              {launchError}
               {launchedWorkId && (
                 <Link
                   to={`/work/${launchedWorkId}`}
-                  className="button-ghost mt-4 inline-flex"
+                  className="ml-2 underline underline-offset-2"
                 >
-                  Inspect what happened
-                  <ArrowRight size={13} />
+                  Inspect it
                 </Link>
               )}
-            </Panel>
+            </div>
           )}
 
-          <Panel
-            eyebrow="Execution"
-            title="Work in flight"
-            action={
-              <Link to="/work" className="button-quiet">
-                All work
-                <ArrowRight size={12} />
-              </Link>
-            }
-            padded={false}
-          >
-            {overview.loading ? (
-              <div className="p-[18px]">
+          <div className="mt-6">
+            <Readout>
+              <Metric
+                label="In flight"
+                tone="active"
+                live={activeWork.length > 0}
+                value={overview.loading ? "—" : activeWork.length}
+                detail={`${data?.work.total ?? 0} all time`}
+              />
+              <Metric
+                label="Agents working"
+                tone="active"
+                live={workingAgents.length > 0}
+                value={overview.loading ? "—" : workingAgents.length}
+                detail={`${data?.agents.length ?? 0} in the workforce`}
+              />
+              <Metric
+                label="Awaiting you"
+                tone="warning"
+                live={approvals.length > 0}
+                value={overview.loading ? "—" : approvals.length}
+                detail="Human decisions"
+              />
+              <Metric
+                label="Tool calls"
+                tone="idle"
+                value={overview.loading ? "—" : toolCalls}
+                detail="In recent activity"
+              />
+            </Readout>
+          </div>
+
+          <div className="mt-7">
+            <Section
+              title="In flight"
+              count={activeWork.length > 0 ? activeWork.length : undefined}
+              action={
+                <Link to="/work" className="button-quiet">
+                  All work
+                  <ArrowRight size={11} />
+                </Link>
+              }
+            >
+              {overview.loading ? (
                 <Skeleton rows={3} />
-              </div>
-            ) : overview.error ? (
-              <ErrorState
-                message={overview.error.message}
-                offline={overview.error.isOffline}
-                onRetry={overview.reload}
-              />
-            ) : activeWork.length === 0 ? (
-              <EmptyState
-                icon={GitBranch}
-                title="Nothing is executing right now"
-                description="Launch an objective above and the plan, its tasks and every tool call will appear here as they happen."
-              />
-            ) : (
-              <div className="stack-list">
-                {activeWork.map((work) => (
-                  <Link
-                    key={work.id}
-                    to={`/work/${work.id}`}
-                    className="row-link"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <p className="line-clamp-2 text-[12.5px] leading-[1.6] text-slate-200">
-                        {work.objective}
-                      </p>
+              ) : activeWork.length === 0 ? (
+                <p className="t-meta py-2">
+                  Nothing is executing. Give the company an objective above and
+                  its plan, tasks and tool calls appear here as they happen.
+                </p>
+              ) : (
+                <div className="op-list">
+                  {activeWork.map((work) => (
+                    <Link
+                      key={work.id}
+                      to={`/work/${work.id}`}
+                      className="op-row"
+                    >
+                      <span
+                        className={`op-rail ${toneClass[workStatusTone(work.status)]}`}
+                      />
+
+                      <span className="min-w-0 flex-1">
+                        <span className="op-row-title">{work.objective}</span>
+
+                        <span className="op-row-meta">
+                          <span className="t-machine">
+                            {formatRelativeTime(work.createdAt)}
+                          </span>
+                          <span className="t-machine uppercase">
+                            {work.priority}
+                          </span>
+                        </span>
+                      </span>
 
                       <StatusPill
                         tone={workStatusTone(work.status)}
@@ -325,85 +322,75 @@ export default function Command() {
                       >
                         {statusLabel(work.status)}
                       </StatusPill>
-                    </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </Section>
 
-                    <div className="mt-2.5 flex flex-wrap items-center gap-3">
-                      <TimeStamp
-                        iso={work.createdAt}
-                        relative={formatRelativeTime(work.createdAt)}
+            <Section
+              title="Recently finished"
+              action={
+                <Link to="/activity" className="button-quiet">
+                  Activity
+                </Link>
+              }
+            >
+              {overview.loading ? (
+                <Skeleton rows={2} />
+              ) : (data?.work.recentlyCompleted.length ?? 0) === 0 ? (
+                <p className="t-meta py-2">
+                  Finished objectives land here with their results and the
+                  memory they contributed.
+                </p>
+              ) : (
+                <div className="op-list">
+                  {data!.work.recentlyCompleted.map((work) => (
+                    <Link
+                      key={work.id}
+                      to={`/work/${work.id}`}
+                      className="op-row op-row-quiet"
+                    >
+                      <span
+                        className={`op-rail ${toneClass[workStatusTone(work.status)]}`}
                       />
 
-                      <span className="mono text-[9px] uppercase tracking-[0.1em] text-slate-600">
-                        {work.priority}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </Panel>
-
-          <Panel
-            eyebrow="History"
-            title="Recently finished"
-            padded={false}
-          >
-            {overview.loading ? (
-              <div className="p-[18px]">
-                <Skeleton rows={2} />
-              </div>
-            ) : (data?.work.recentlyCompleted.length ?? 0) === 0 ? (
-              <EmptyState
-                icon={History}
-                title="No completed work yet"
-                description="Finished objectives land here with their results, artifacts and the memory they contributed."
-              />
-            ) : (
-              <div className="stack-list">
-                {data!.work.recentlyCompleted.map((work) => (
-                  <Link
-                    key={work.id}
-                    to={`/work/${work.id}`}
-                    className="row-link"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <p className="line-clamp-1 text-[11.5px] leading-[1.6] text-slate-400">
+                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[#a7b0bd]">
                         {work.objective}
-                      </p>
+                      </span>
+
+                      <span className="t-machine shrink-0">
+                        {formatRelativeTime(work.completedAt ?? work.updatedAt)}
+                      </span>
 
                       <StatusPill tone={workStatusTone(work.status)}>
                         {statusLabel(work.status)}
                       </StatusPill>
-                    </div>
-
-                    <TimeStamp
-                      iso={work.completedAt ?? work.updatedAt}
-                      relative={formatRelativeTime(
-                        work.completedAt ?? work.updatedAt,
-                      )}
-                    />
-                  </Link>
-                ))}
-              </div>
-            )}
-          </Panel>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </Section>
+          </div>
         </div>
 
-        <aside className="min-w-0 space-y-4">
-          <Panel
-            eyebrow="Workforce"
-            title="Agent presence"
+        {/* Right rail: who is doing what, and what the company just did. */}
+        <aside className="min-w-0 space-y-6">
+          <Section
+            title="Workforce"
+            count={
+              workingAgents.length > 0
+                ? `${workingAgents.length} working`
+                : undefined
+            }
             action={
               <Link to="/agents" className="button-quiet">
                 Manage
               </Link>
             }
-            padded={false}
           >
             {overview.loading ? (
-              <div className="p-[18px]">
-                <Skeleton rows={4} />
-              </div>
+              <Skeleton rows={4} />
             ) : (data?.agents.length ?? 0) === 0 ? (
               <EmptyState
                 icon={Bot}
@@ -411,142 +398,85 @@ export default function Command() {
                 description="Seed the development workforce to give this organization a roster."
               />
             ) : (
-              <div className="stack-list">
+              <div className="space-y-px">
                 {data!.agents.map((agent) => (
                   <Link
                     key={agent.agentId}
                     to="/agents"
-                    className="row-link !py-3"
+                    className="presence-row"
                   >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`agent-mark ${presenceTone(agent.presence) === "active" ? "tone-active" : presenceTone(agent.presence)}`}
-                      >
-                        {agent.name.slice(0, 1)}
+                    <span
+                      className={`presence-mark ${toneClass[presenceTone(agent.presence)]}`}
+                    >
+                      {agent.name.slice(0, 1)}
+                    </span>
+
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline gap-2">
+                        <span className="text-[11.5px] font-semibold text-[#f2f4f7]">
+                          {agent.name}
+                        </span>
+                        <span className="t-machine">{agent.type}</span>
                       </span>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11.5px] font-semibold text-slate-200">
-                            {agent.name}
-                          </span>
+                      <span className="mt-0.5 block truncate text-[10px] text-[#6f7887]">
+                        {agent.activeTask
+                          ? agent.activeTask.title
+                          : `${agent.toolIds.length} tools · ${agent.completedTaskCount} done`}
+                      </span>
+                    </span>
 
-                          <span className="mono text-[8.5px] uppercase tracking-[0.1em] text-slate-600">
-                            {agent.type}
-                          </span>
-                        </div>
-
-                        <div className="mt-1 truncate text-[10px] text-slate-500">
-                          {agent.activeTask
-                            ? agent.activeTask.title
-                            : `${agent.toolIds.length} tools · ${agent.completedTaskCount} tasks done`}
-                        </div>
-                      </div>
-
-                      <StatusPill
-                        tone={presenceTone(agent.presence)}
-                        pulse={agent.presence === "working"}
-                      >
-                        {agent.presence}
-                      </StatusPill>
-                    </div>
+                    <StatusPill
+                      tone={presenceTone(agent.presence)}
+                      pulse={agent.presence === "working"}
+                    >
+                      {agent.presence}
+                    </StatusPill>
                   </Link>
                 ))}
               </div>
             )}
-          </Panel>
+          </Section>
 
-          <Panel
-            eyebrow="Governance"
-            title="Waiting on you"
-            action={
-              pendingApprovals.length > 0 ? (
-                <Link to="/approvals" className="button-quiet">
-                  Review
-                </Link>
-              ) : undefined
-            }
-            padded={false}
-          >
-            {overview.loading ? (
-              <div className="p-[18px]">
-                <Skeleton rows={2} />
-              </div>
-            ) : pendingApprovals.length === 0 ? (
-              <EmptyState
-                icon={ShieldCheck}
-                title="No approvals pending"
-                description="Tasks the planner marks as consequential pause here before they run."
-              />
-            ) : (
-              <div className="stack-list">
-                {pendingApprovals.slice(0, 4).map((approval) => (
-                  <Link
-                    key={approval.id}
-                    to="/approvals"
-                    className="row-link !py-3.5"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <span className="pill-dot tone-warning mt-1.5" />
-
-                      <div className="min-w-0">
-                        <div className="text-[11.5px] font-semibold text-slate-200">
-                          {approval.action}
-                        </div>
-
-                        <p className="mt-1 line-clamp-2 text-[10.5px] leading-[1.55] text-slate-500">
-                          {approval.reason}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </Panel>
-
-          <Panel
-            eyebrow="Stream"
-            title="Live activity"
+          <Section
+            title="Live stream"
             action={
               <Link to="/activity" className="button-quiet">
                 Full log
               </Link>
             }
-            padded={false}
           >
             {overview.loading ? (
-              <div className="p-[18px]">
-                <Skeleton rows={5} />
-              </div>
+              <Skeleton rows={5} />
             ) : (data?.activity.length ?? 0) === 0 ? (
-              <EmptyState
-                icon={Boxes}
-                title="The company has not acted yet"
-                description="Every plan, delegation, tool call and approval is recorded here."
-              />
+              <p className="t-meta py-2">
+                Every plan, delegation, tool call and approval is recorded here.
+              </p>
             ) : (
-              <div className="scroll-area max-h-[340px] p-2">
-                {data!.activity.slice(0, 14).map((event) => {
+              <div className="scroll-area max-h-[400px] pr-1">
+                {data!.activity.slice(0, 16).map((event) => {
                   const described = describeEvent(event);
 
                   return (
-                    <div key={event.id} className="activity-line">
-                      <span className={`pill-dot ${described.tone}`} />
+                    <div key={event.id} className="stream-row">
+                      <CircleDot
+                        size={9}
+                        className={`stream-dot ${described.tone}`}
+                      />
 
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[11px] text-slate-300">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[11px] text-[#a7b0bd]">
                           {described.title}
-                        </div>
+                        </span>
 
                         {described.detail && (
-                          <div className="mt-0.5 truncate text-[9.5px] text-slate-600">
+                          <span className="mt-0.5 block truncate text-[9.5px] text-[#535b68]">
                             {described.detail}
-                          </div>
+                          </span>
                         )}
-                      </div>
+                      </span>
 
-                      <span className="mono shrink-0 text-[9px] text-slate-600">
+                      <span className="t-machine shrink-0">
                         {formatRelativeTime(event.timestamp)}
                       </span>
                     </div>
@@ -554,10 +484,9 @@ export default function Command() {
                 })}
               </div>
             )}
-          </Panel>
+          </Section>
         </aside>
       </div>
-
     </div>
   );
 }
@@ -565,13 +494,9 @@ export default function Command() {
 function LaunchPipeline({
   stage,
   workId,
-  error,
-  onOpen,
 }: {
   stage: LaunchStage;
   workId?: string;
-  error?: string;
-  onOpen: () => void;
 }) {
   const order: Array<Exclude<LaunchStage, "idle">> = [
     "creating",
@@ -582,106 +507,47 @@ function LaunchPipeline({
   const currentIndex = order.indexOf(stage as Exclude<LaunchStage, "idle">);
 
   return (
-    <Panel
-      eyebrow="Pipeline"
-      title={
-        stage === "done"
-          ? "Execution finished"
-          : error
-            ? "Execution stopped"
-            : stageCopy[stage as Exclude<LaunchStage, "idle">]
-      }
-      action={
-        workId ? (
-          <button type="button" onClick={onOpen} className="button-quiet">
-            Open work
-            <ArrowRight size={12} />
-          </button>
-        ) : undefined
-      }
-    >
-      <div className="grid gap-2 sm:grid-cols-4">
+    <div className="pipeline">
+      <div className="pipeline-track">
         {order.map((entry, index) => {
-          const done = index < currentIndex;
+          const done = index < currentIndex || stage === "done";
           const active = index === currentIndex && stage !== "done";
-          const finished = stage === "done";
 
           return (
             <div
               key={entry}
-              className={[
-                "pipeline-step",
-                done || finished
-                  ? "pipeline-step-done"
+              className={`pipeline-step${
+                done
+                  ? " pipeline-step-done"
                   : active
-                    ? "pipeline-step-active"
-                    : "pipeline-step-idle",
-              ].join(" ")}
+                    ? " pipeline-step-active"
+                    : ""
+              }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="mono text-[8.5px] uppercase tracking-[0.13em]">
-                  {entry}
-                </span>
-
-                <span className="mono text-[8px] opacity-60">
-                  0{index + 1}
-                </span>
-              </div>
-
-              <div className="mt-3 text-[10px] leading-[1.5] opacity-80">
-                {done || finished
-                  ? "Complete"
-                  : active
-                    ? stageCopy[entry]
-                    : "Waiting"}
-              </div>
+              <span className="pipeline-dot" />
+              <span className="pipeline-label">{entry}</span>
             </div>
           );
         })}
       </div>
 
-      {stage !== "done" && !error && (
-        <p className="mt-4 flex items-center gap-2 text-[10.5px] text-slate-500">
-          <LoaderCircle size={12} className="spin-slow text-cyan-300" />
-          Planning runs a local model to completion, so it takes a minute or
-          two. Execution then continues in the background and you will be
-          taken to the live view.
-        </p>
-      )}
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 text-[10.5px] text-[#6f7887]">
+          {stage !== "done" && (
+            <LoaderCircle size={11} className="spin-slow text-[#84b4fb]" />
+          )}
+          {stage === "done"
+            ? "Handed to a worker. Opening the live view."
+            : stageCopy[stage as Exclude<LaunchStage, "idle">]}
+        </span>
 
-      {stage === "done" && workId && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Link to={`/work/${workId}`} className="button-ghost">
-            <Sparkles size={13} />
-            See the plan, tool calls and result
+        {workId && (
+          <Link to={`/work/${workId}`} className="button-quiet">
+            Open
+            <ArrowRight size={11} />
           </Link>
-
-          <Link to="/artifacts" className="button-quiet">
-            <FileOutput size={12} />
-            Artifacts
-          </Link>
-
-          <Link to="/brain" className="button-quiet">
-            <Brain size={12} />
-            Company Brain
-          </Link>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-export function RefreshButton({
-  onClick,
-  spinning,
-}: {
-  onClick: () => void;
-  spinning?: boolean;
-}) {
-  return (
-    <button type="button" onClick={onClick} className="button-quiet">
-      <RefreshCw size={12} className={spinning ? "spin-slow" : undefined} />
-      Refresh
-    </button>
+        )}
+      </div>
+    </div>
   );
 }
