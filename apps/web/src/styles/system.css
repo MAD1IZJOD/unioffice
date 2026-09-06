@@ -1026,3 +1026,71 @@
 .prose-result li::marker {
   color: var(--ink-faint);
 }
+
+/* --------------------------------------------------------------------------
+   Narrow screens
+
+   The layout grids collapse on their own through Tailwind's breakpoints, but
+   several fixed measurements here were sized for a desktop column and do not
+   survive a phone: a 200px search field sitting beside the filter tabs, and a
+   49px task indent eating an eighth of the screen.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .section-heading {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .search-field {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .panel-header,
+  .panel-body,
+  .row-link,
+  .task-row {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  /* The index gutter is a desktop affordance; on a phone the title needs
+     the width more than the alignment. */
+  .task-detail {
+    padding: 4px 14px 18px;
+  }
+
+  .section-heading-title {
+    font-size: 17px;
+  }
+
+  .metric {
+    padding: 14px;
+  }
+
+  .metric-value {
+    font-size: 23px;
+  }
+
+  .timeline {
+    padding: 14px 14px 4px;
+  }
+
+  .empty-state,
+  .error-state {
+    padding: 26px 16px;
+  }
+
+  .code-block {
+    font-size: 9.5px;
+  }
+}
