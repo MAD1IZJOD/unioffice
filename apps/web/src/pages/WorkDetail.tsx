@@ -150,6 +150,22 @@ export default function WorkDetail() {
   const inFlight = tasks.some(
     (task) => task.status === "running" || task.status === "ready",
   );
+
+  // The deliverable is the last task that finished. Without this the answer
+  // sat below the plan, the artifacts and the timeline - you had to scroll
+  // past the machinery to find what the company actually said.
+  const finalResult = [...tasks]
+    .filter((task) => task.status === "completed" && task.result !== undefined)
+    .sort((left, right) =>
+      new Date(left.completedAt ?? left.updatedAt).getTime() -
+      new Date(right.completedAt ?? right.updatedAt).getTime(),
+    )
+    .map((task) => ({
+      value: task.result,
+      title: task.title,
+      agentId: task.assignedAgentId,
+    }))
+    .at(-1);
   const progress = tasks.length
     ? Math.round((completedCount / tasks.length) * 100)
     : 0;
@@ -319,6 +335,21 @@ export default function WorkDetail() {
         )}
       </Panel>
 
+      {finalResult && (
+        <Panel
+          className="mt-4"
+          eyebrow="Delivered"
+          title="What the company produced"
+        >
+          <ResultBody value={finalResult.value} />
+
+          <div className="mt-3 mono text-[9.5px] text-slate-600">
+            produced by {agentName(finalResult.agentId)} ·{" "}
+            {finalResult.title}
+          </div>
+        </Panel>
+      )}
+
       {pendingApprovals.length > 0 && (
         <Panel
           className="mt-4"
@@ -434,11 +465,9 @@ export default function WorkDetail() {
                     </div>
 
                     {artifact.metadata.content !== undefined && (
-                      <pre className="code-block mt-3">
-                        {typeof artifact.metadata.content === "string"
-                          ? artifact.metadata.content
-                          : safeStringify(artifact.metadata.content, 2)}
-                      </pre>
+                      <div className="mt-3">
+                        <ResultBody value={artifact.metadata.content} />
+                      </div>
                     )}
                   </div>
                 ))}
@@ -494,6 +523,83 @@ export default function WorkDetail() {
   );
 }
 
+/**
+ * Agent output is prose far more often than it is data, and rendering it in a
+ * monospace code block made every deliverable read like a log dump. Strings
+ * render as text with their bullet lists and light markdown emphasis honoured;
+ * anything structured keeps the code block, where monospace is the right
+ * answer.
+ */
+function ResultBody({ value }: { value: unknown }) {
+  if (typeof value !== "string") {
+    return <pre className="code-block">{safeStringify(value, 2)}</pre>;
+  }
+
+  return <div className="prose-result">{renderBlocks(value)}</div>;
+}
+
+const BULLET = /^\s*[-*•]\s+/;
+
+function renderBlocks(text: string) {
+  return text
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block, blockIndex) => {
+      const lines = splitLines(block);
+      const bullets = lines.filter((line) => BULLET.test(line));
+
+      // Models emit bullets on single newlines, so a paragraph-only splitter
+      // ran "- Salaries: 48,200 - Cloud: 9,350" together into one line.
+      if (bullets.length > 1) {
+        const lead = lines.find((line) => !BULLET.test(line));
+
+        return (
+          <div key={blockIndex}>
+            {lead && <p>{renderEmphasis(lead)}</p>}
+
+            <ul>
+              {bullets.map((line, index) => (
+                <li key={index}>{renderEmphasis(line.replace(BULLET, ""))}</li>
+              ))}
+            </ul>
+          </div>
+        );
+      }
+
+      return (
+        <p key={blockIndex}>
+          {renderEmphasis(block.replace(/\s*\n\s*/g, " "))}
+        </p>
+      );
+    });
+}
+
+/**
+ * Bullets are not always on their own line - a model that wrote the list
+ * inline still means a list, so " - " before a new item breaks too.
+ */
+function splitLines(block: string): string[] {
+  return block
+    .split(/\n|(?=\s-\s(?=[A-Z0-9]))/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The models reliably emit **bold** and nothing else worth parsing, so this
+ * handles exactly that rather than pulling in a markdown renderer.
+ */
+function renderEmphasis(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+      <strong key={index}>{part.slice(2, -2)}</strong>
+    ) : (
+      <span key={index}>{part}</span>
+    ),
+  );
+}
+
 function TaskRow({
   task,
   index,
@@ -509,8 +615,7 @@ function TaskRow({
   const toolCalls = task.metadata.execution?.toolCalls ?? [];
   const requiredTools = task.metadata.routing?.requiredTools ?? [];
   const delegation = task.metadata.delegation;
-  const result =
-    typeof task.result === "string" ? task.result : safeStringify(task.result, 2);
+  const hasResult = task.result !== undefined && task.result !== "";
 
   return (
     <div>
@@ -639,14 +744,16 @@ function TaskRow({
             </div>
           )}
 
-          {result && (
+          {hasResult && (
             <div className="mt-4">
               <div className="detail-label">Result</div>
-              <div className="result-block mt-2">{result}</div>
+              <div className="result-block mt-2">
+                <ResultBody value={task.result} />
+              </div>
             </div>
           )}
 
-          {!result && !task.metadata.execution?.error && (
+          {!hasResult && !task.metadata.execution?.error && (
             <p className="mt-4 text-[10.5px] text-slate-600">
               {summarizeValue(task.status) === "waiting"
                 ? "This task is holding for an approval decision."

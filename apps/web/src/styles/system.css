@@ -981,3 +981,48 @@
   font-size: 11px;
   font-weight: 600;
 }
+
+/* --------------------------------------------------------------------------
+   Agent output
+
+   Agent results are prose far more often than they are data, so they are set
+   as text. Only structured output keeps the monospace code block.
+   -------------------------------------------------------------------------- */
+
+.prose-result {
+  color: #d3dfea;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.prose-result p {
+  margin: 0;
+}
+
+.prose-result p + p {
+  margin-top: 10px;
+}
+
+.prose-result strong {
+  color: var(--ink-primary);
+  font-weight: 650;
+}
+
+.prose-result .code-block {
+  margin: 0;
+}
+
+.prose-result ul {
+  margin: 8px 0 0;
+  padding-left: 17px;
+  list-style: disc;
+}
+
+.prose-result li {
+  margin-top: 3px;
+  color: var(--ink-secondary);
+}
+
+.prose-result li::marker {
+  color: var(--ink-faint);
+}
