@@ -337,14 +337,15 @@ function parseCapabilities(
     );
   }
 
+  // An invented capability is unsatisfiable by construction, but it is a
+  // routing hint rather than a hard constraint - the delegator ranks on
+  // capabilities and only filters on tools. Dropping the unknown one keeps
+  // the rest of the plan usable, where throwing failed the whole objective
+  // over a single hallucinated word.
   if (knownCapabilities.size > 0) {
-    for (const capability of capabilities) {
-      if (!knownCapabilities.has(capability)) {
-        throw new Error(
-          `Planner task ${index + 1} requires an unknown capability: ${capability}`,
-        );
-      }
-    }
+    return capabilities.filter((capability) =>
+      knownCapabilities.has(capability),
+    );
   }
 
   return capabilities;

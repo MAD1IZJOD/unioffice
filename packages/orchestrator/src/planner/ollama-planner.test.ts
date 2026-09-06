@@ -247,26 +247,27 @@ test("rejects a required tool that does not exist", () => {
   );
 });
 
-test("rejects a required capability outside the known vocabulary", () => {
-  assert.throws(
-    () => parseOllamaPlan(
-      JSON.stringify({
-        tasks: [{
-          ref: "compute",
-          title: "Compute the total",
-          description: "Project revenue growth.",
-          requiredCapabilities: ["mathematical_analysis"],
-          requiredTools: [],
-          requiresApproval: false,
-          dependsOn: [],
-        }],
-      }),
-      [],
-      [],
-      ["analysis", "writing", "coding"],
-    ),
-    /requires an unknown capability: mathematical_analysis/,
+test("drops a required capability outside the known vocabulary instead of failing the plan", () => {
+  const plan = parseOllamaPlan(
+    JSON.stringify({
+      tasks: [{
+        ref: "compute",
+        title: "Compute the total",
+        description: "Project revenue growth.",
+        requiredCapabilities: ["mathematical_analysis", "coding"],
+        requiredTools: [],
+        requiresApproval: false,
+        dependsOn: [],
+      }],
+    }),
+    [],
+    [],
+    ["analysis", "writing", "coding"],
   );
+
+  // The hallucinated capability can never be satisfied, so it is ignored -
+  // but the real one it named still routes the task.
+  assert.deepEqual(plan.tasks[0]!.requiredCapabilities, ["coding"]);
 });
 
 test("accepts a required capability that is in the known vocabulary", () => {

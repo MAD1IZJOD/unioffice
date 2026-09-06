@@ -18,12 +18,49 @@ const UNITS = Object.keys(UNIT_MS) as DateUnit[];
 export type DatetimeInput =
   | { operation: "now" }
   | { operation: "add"; isoDate: string; amount: number; unit: DateUnit }
-  | { operation: "diff"; fromIso: string; toIso: string; unit: DateUnit };
+  | { operation: "diff"; fromIso: string; toIso: string; unit: DateUnit }
+  | { operation: "describe"; isoDate: string };
 
 export type DatetimeOutput =
   | { operation: "now"; iso: string }
   | { operation: "add"; iso: string }
-  | { operation: "diff"; value: number; unit: DateUnit };
+  | { operation: "diff"; value: number; unit: DateUnit }
+  | {
+      operation: "describe";
+      iso: string;
+      weekday: string;
+      day: number;
+      month: number;
+      monthName: string;
+      year: number;
+      dayOfYear: number;
+      isLeapYear: boolean;
+    };
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
 
 /**
  * Deterministic date/time utility. Every branch is pure arithmetic on
@@ -37,14 +74,17 @@ export const datetimeTool: ToolDefinition<
   id: "datetime",
   name: "Date/Time",
   description:
-    "Reads the current time, or adds to / diffs ISO-8601 timestamps. Operations: now, add, diff.",
+    "Deterministic date facts. 'describe' returns the weekday, month and day-of-year for a date - use it for any 'what day of the week' question. Also reads the current time ('now'), shifts a timestamp ('add'), or measures the gap between two ('diff').",
   version: "1.0.0",
   inputSchema: {
     type: "object",
     required: ["operation"],
     properties: {
-      operation: { type: "string", enum: ["now", "add", "diff"] },
-      isoDate: { type: "string", description: "Required for 'add'." },
+      operation: { type: "string", enum: ["now", "add", "diff", "describe"] },
+      isoDate: {
+        type: "string",
+        description: "Required for 'add' and 'describe'.",
+      },
       fromIso: { type: "string", description: "Required for 'diff'." },
       toIso: { type: "string", description: "Required for 'diff'." },
       amount: { type: "number", description: "Required for 'add'." },
@@ -69,6 +109,22 @@ export const datetimeTool: ToolDefinition<
 
     if (operation === "now") {
       return { valid: true, value: { operation: "now" } };
+    }
+
+    if (operation === "describe") {
+      const isoDate = value.isoDate;
+
+      if (typeof isoDate !== "string" || Number.isNaN(Date.parse(isoDate))) {
+        return {
+          valid: false,
+          errors: [{
+            path: "isoDate",
+            message: "isoDate must be a valid ISO-8601 timestamp.",
+          }],
+        };
+      }
+
+      return { valid: true, value: { operation: "describe", isoDate } };
     }
 
     if (operation === "add") {
@@ -131,7 +187,10 @@ export const datetimeTool: ToolDefinition<
 
     return {
       valid: false,
-      errors: [{ path: "operation", message: "operation must be one of: now, add, diff." }],
+      errors: [{
+        path: "operation",
+        message: "operation must be one of: now, add, diff, describe.",
+      }],
     };
   },
 
@@ -143,6 +202,33 @@ export const datetimeTool: ToolDefinition<
     if (input.operation === "add") {
       const result = new Date(Date.parse(input.isoDate) + input.amount * UNIT_MS[input.unit]);
       return { operation: "add", iso: result.toISOString() };
+    }
+
+    if (input.operation === "describe") {
+      // Read in UTC throughout: the same input must describe the same day
+      // regardless of the server's local timezone.
+      const date = new Date(Date.parse(input.isoDate));
+      const year = date.getUTCFullYear();
+      const startOfYear = Date.UTC(year, 0, 1);
+      const isLeapYear =
+        (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+
+      return {
+        operation: "describe",
+        iso: date.toISOString(),
+        weekday: WEEKDAYS[date.getUTCDay()]!,
+        day: date.getUTCDate(),
+        month: date.getUTCMonth() + 1,
+        monthName: MONTHS[date.getUTCMonth()]!,
+        year,
+        dayOfYear:
+          Math.floor(
+            (Date.UTC(year, date.getUTCMonth(), date.getUTCDate()) -
+              startOfYear) /
+              UNIT_MS.days,
+          ) + 1,
+        isLeapYear,
+      };
     }
 
     const deltaMs = Date.parse(input.toIso) - Date.parse(input.fromIso);
