@@ -338,6 +338,76 @@ export function ErrorState({
   );
 }
 
+/**
+ * Waiting for the company.
+ *
+ * A skeleton is right when the shape of what is arriving is already known and
+ * fixed. For a first connection it is not - so this says what is being waited
+ * on instead of drawing four grey bars that turn out to be nothing.
+ */
+export function Connecting({ what }: { what: string }) {
+  return (
+    <div className="connecting" role="status">
+      <span className="connecting-bar" aria-hidden="true" />
+      {what}
+    </div>
+  );
+}
+
+/**
+ * An empty surface.
+ *
+ * Nothing has gone wrong when a new company has produced nothing, so this is
+ * written as a statement rather than drawn as an icon in a dashed box.
+ */
+export function Quiet({
+  line,
+  detail,
+  action,
+}: {
+  line: string;
+  detail?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="quiet">
+      <p className="quiet-line">{line}</p>
+      {detail && <p className="quiet-detail">{detail}</p>}
+      {action && <div className="quiet-action">{action}</div>}
+    </div>
+  );
+}
+
+/**
+ * Something went wrong.
+ *
+ * Three things, in order: what happened, why it matters, and what can be done
+ * about it. Never a stack trace - the message the API returned is the most a
+ * person can act on.
+ */
+export function Failure({
+  headline,
+  detail,
+  consequence,
+  action,
+}: {
+  headline: string;
+  detail: string;
+  consequence?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="callout callout-error">
+      <div className="detail-label mb-2">{headline}</div>
+      <div>{detail}</div>
+      {consequence && (
+        <div className="mt-2 text-[10.5px] text-[#c9868a]">{consequence}</div>
+      )}
+      {action && <div className="mt-3 flex flex-wrap gap-2">{action}</div>}
+    </div>
+  );
+}
+
 export function Skeleton({
   rows = 3,
   className = "",
