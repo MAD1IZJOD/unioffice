@@ -1,256 +1,395 @@
-import { Bot, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
   fetchOverview,
+  formatRelativeTime,
   type AgentPresenceSummary,
   type CompanyOverview,
 } from "../lib/api";
 
 import { useResource } from "../lib/useResource";
 
-import { AgentSigil } from "../components/AgentSigil";
+import { AgentMark } from "../components/AgentMark";
 
 import {
   Chip,
+  Connecting,
+  Failure,
   PageOpening,
-  Reading,
-  EmptyState,
-  ErrorState,
   Panel,
-  Section,
-  Skeleton,
+  Quiet,
+  Reading,
   StatusPill,
 } from "../components/primitives";
 
-import {
-  presenceTone,
-  toneClass,
-} from "../lib/tone";
+import { presenceTone, toneClass } from "../lib/tone";
+import { spellOut } from "../lib/statement";
+import { groupByDiscipline, profileOf } from "../lib/workforce";
 
 const presenceCopy: Record<AgentPresenceSummary["presence"], string> = {
   working: "Executing a task right now.",
   waiting: "Holding for an approval decision.",
-  blocked: "A recent task failed and needs attention.",
+  blocked: "A recent task failed and has not been retried.",
   available: "Ready to be delegated work.",
   disabled: "Not active in this organization.",
 };
 
 export default function Agents() {
   const overview = useResource<CompanyOverview>(
-    useCallback(() => fetchOverview(40), []),
+    useCallback(() => fetchOverview(60), []),
     { pollMs: 15_000 },
   );
 
   const [selectedId, setSelectedId] = useState<string>();
-  const agents = overview.data?.agents ?? [];
+
+  const agents = useMemo(() => overview.data?.agents ?? [], [overview.data]);
   const selected =
     agents.find((agent) => agent.agentId === selectedId) ?? agents[0];
+
+  const working = agents.filter((agent) => agent.presence === "working");
+  const groups = useMemo(() => groupByDiscipline(agents), [agents]);
+
+  // Which objectives a worker has actually touched, read off the event log
+  // rather than guessed. Cross-navigation only earns its place when it points
+  // at something real.
+  const recentWorkFor = useMemo(() => {
+    const data = overview.data;
+    if (!data || !selected) return [];
+
+    const objectives = new Map(
+      [...data.work.active, ...data.work.recentlyCompleted].map((work) => [
+        work.id,
+        work,
+      ]),
+    );
+
+    const seen = new Set<string>();
+    const result: Array<{ id: string; objective: string; when: string }> = [];
+
+    for (const event of data.activity) {
+      if (event.agentId !== selected.agentId || !event.workId) continue;
+      if (seen.has(event.workId)) continue;
+
+      seen.add(event.workId);
+      const work = objectives.get(event.workId);
+
+      result.push({
+        id: event.workId,
+        objective: work?.objective ?? "An earlier objective",
+        when: event.timestamp,
+      });
+
+      if (result.length === 5) break;
+    }
+
+    return result;
+  }, [overview.data, selected]);
 
   return (
     <div className="mx-auto max-w-[1240px] fade-up">
       <PageOpening
         eyebrow="Workforce"
-        title="THE WORKFORCE"
-        lead="AND WHAT IT HOLDS."
-        detail="What each agent is responsible for, which tools it is authorized to call, and what it is doing now."
-        tone={agents.some((a) => a.presence === "working") ? "moving" : "quiet"}
+        title={
+          overview.loading ? "THE WORKFORCE." : `${spellOut(agents.length)} WORKERS.`
+        }
+        lead={
+          working.length > 0
+            ? `${spellOut(working.length)} AT WORK.`
+            : "ALL STANDING BY."
+        }
+        detail="Each holds a different set of capabilities and a different set of tools, and the delegator routes on exactly those two facts."
+        tone={working.length > 0 ? "moving" : "quiet"}
         meta={
           <>
-            <Reading label="Working" value={agents.filter((a) => a.presence === "working").length} tone="active" live={agents.some((a) => a.presence === "working")} />
-            <Reading label="Available" value={agents.filter((a) => a.presence === "available").length} tone="live" />
-            <Reading label="Tools granted" value={agents.reduce((total, a) => total + a.toolIds.length, 0)} tone="idle" />
+            <Reading
+              label="On the roster"
+              value={overview.loading ? "—" : agents.length}
+              tone="idle"
+            />
+            <Reading
+              label="Working"
+              value={overview.loading ? "—" : working.length}
+              tone="active"
+              live={working.length > 0}
+            />
+            <Reading
+              label="Available"
+              value={
+                overview.loading
+                  ? "—"
+                  : agents.filter((agent) => agent.presence === "available")
+                      .length
+              }
+              tone="live"
+            />
+            <Reading
+              label="Tool grants"
+              value={
+                overview.loading
+                  ? "—"
+                  : agents.reduce(
+                      (total, agent) => total + agent.toolIds.length,
+                      0,
+                    )
+              }
+              tone="idle"
+            />
           </>
         }
       />
 
       {overview.loading ? (
-        <Panel>
-          <Skeleton rows={6} />
-        </Panel>
+        <Connecting what="Loading the workforce…" />
       ) : overview.error ? (
-        <Panel>
-          <ErrorState
-            message={overview.error.message}
-            offline={overview.error.isOffline}
-            onRetry={overview.reload}
-          />
-        </Panel>
+        <Failure
+          headline={
+            overview.error.isOffline
+              ? "The company is unreachable"
+              : "The roster could not be read"
+          }
+          detail={overview.error.message}
+          action={
+            <button
+              type="button"
+              onClick={overview.reload}
+              className="button-ghost"
+            >
+              Try again
+            </button>
+          }
+        />
       ) : agents.length === 0 ? (
-        <Panel>
-          <EmptyState
-            icon={Bot}
-            title="No agents in this organization"
-            description="Run the API with SEED_DEVELOPMENT_WORKFORCE=true to create the starting workforce."
-          />
-        </Panel>
+        <Quiet
+          line="No one has been hired."
+          detail="Run the API with SEED_DEVELOPMENT_WORKFORCE=true and the starting workforce is created on boot."
+        />
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
-          {/* A roster, not a wall of profile cards: one row per worker, with
-              the orchestrator separated from the specialists because they do
-              genuinely different jobs. */}
-          <div>
-            {(["orchestrator", "manager", "specialist"] as const)
-              .map((type) => ({
-                type,
-                members: agents.filter((agent) => agent.type === type),
-              }))
-              .filter((group) => group.members.length > 0)
-              .map((group) => (
-                <Section
-                  key={group.type}
-                  title={group.type === "orchestrator" ? "Coordination" : group.type === "manager" ? "Management" : "Specialists"}
-                  count={group.members.length}
-                >
-                  <div className="op-list">
-                    {group.members.map((agent) => (
-                      <button
-                        key={agent.agentId}
-                        type="button"
-                        onClick={() => setSelectedId(agent.agentId)}
-                        className={`roster-row${selected?.agentId === agent.agentId ? " roster-row-selected" : ""}`}
+        <div className="grid gap-8 xl:grid-cols-[1fr_340px]">
+          <div className="min-w-0">
+            {groups.map((group) => (
+              <section key={group.discipline}>
+                <div className="discipline-head">
+                  <span className="discipline-name">{group.profile.label}</span>
+                  <span className="discipline-role">{group.profile.role}</span>
+                  <span className="discipline-rule" />
+                  <span className="t-machine">{group.members.length}</span>
+                </div>
+
+                <div className="op-list">
+                  {group.members.map((agent) => (
+                    <button
+                      key={agent.agentId}
+                      type="button"
+                      onClick={() => setSelectedId(agent.agentId)}
+                      className={`roster-row${selected?.agentId === agent.agentId ? " roster-row-selected" : ""}`}
+                      aria-pressed={selected?.agentId === agent.agentId}
+                    >
+                      <span
+                        className={`roster-mark ${toneClass[presenceTone(agent.presence)]}`}
                       >
-                        <span
-                          className={`roster-mark ${toneClass[presenceTone(agent.presence)]}`}
-                        >
-                          <AgentSigil
-                            agentId={agent.agentId}
-                            capabilities={agent.capabilities}
-                            tools={agent.toolIds.length}
-                            size={26}
-                            active={agent.presence === "working"}
-                          />
+                        <AgentMark
+                          agentId={agent.agentId}
+                          capabilities={agent.capabilities}
+                          tools={agent.toolIds.length}
+                          type={agent.type}
+                          size={26}
+                          active={agent.presence === "working"}
+                        />
+                      </span>
+
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                          <span className="roster-name">{agent.name}</span>
+                          <span className="t-machine">
+                            {agent.capabilities.join(" · ")}
+                          </span>
                         </span>
 
-                        <span className="min-w-0 flex-1 text-left">
-                          <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                            <span className="text-[13px] font-semibold text-[#f2f4f7]">
-                              {agent.name}
+                        <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {agent.activeTask ? (
+                            <span className="truncate text-[10.5px] text-[#84b4fb]">
+                              {agent.activeTask.title}
                             </span>
-
+                          ) : (
                             <span className="t-machine">
-                              {agent.capabilities.join(" · ")}
+                              {agent.completedTaskCount} done
+                              {agent.failedTaskCount > 0
+                                ? ` · ${agent.failedTaskCount} failed`
+                                : ""}
                             </span>
-                          </span>
+                          )}
 
-                          <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                            {agent.activeTask ? (
-                              <span className="truncate text-[10.5px] text-[#84b4fb]">
-                                {agent.activeTask.title}
-                              </span>
-                            ) : (
-                              <span className="t-machine">
-                                {agent.completedTaskCount} done
-                                {agent.failedTaskCount > 0
-                                  ? ` · ${agent.failedTaskCount} failed`
-                                  : ""}
-                              </span>
-                            )}
-
-                            {agent.toolIds.length === 0 ? (
-                              <span className="t-machine opacity-70">
-                                no tools
-                              </span>
-                            ) : (
-                              <span className="flex flex-wrap gap-1">
-                                {agent.toolIds.map((tool) => (
-                                  <span key={tool} className="tool-tag">
-                                    {tool}
-                                  </span>
-                                ))}
-                              </span>
-                            )}
-                          </span>
+                          {agent.toolIds.length === 0 ? (
+                            <span className="t-machine opacity-70">
+                              holds no tools
+                            </span>
+                          ) : (
+                            <span className="flex flex-wrap gap-1">
+                              {agent.toolIds.map((tool) => (
+                                <span key={tool} className="tool-tag">
+                                  {tool}
+                                </span>
+                              ))}
+                            </span>
+                          )}
                         </span>
+                      </span>
 
-                        <StatusPill
-                          tone={presenceTone(agent.presence)}
-                          pulse={agent.presence === "working"}
-                        >
-                          {agent.presence}
-                        </StatusPill>
-                      </button>
-                    ))}
-                  </div>
-                </Section>
-              ))}
+                      <StatusPill
+                        tone={presenceTone(agent.presence)}
+                        pulse={agent.presence === "working"}
+                      >
+                        {agent.presence}
+                      </StatusPill>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
 
           {selected && (
-            <Panel
-              eyebrow="Agent"
-              title={selected.name}
-              className="self-start"
-              action={
-                <StatusPill tone={presenceTone(selected.presence)}>
-                  {selected.presence}
-                </StatusPill>
-              }
-            >
-              <p className="text-[11.5px] leading-[1.7] text-slate-400">
-                {selected.description}
-              </p>
+            <Panel className="self-start" padded={false}>
+              <div
+                className={`agent-portrait ${toneClass[presenceTone(selected.presence)]}`}
+              >
+                <span className="agent-portrait-mark">
+                  <AgentMark
+                    agentId={selected.agentId}
+                    capabilities={selected.capabilities}
+                    tools={selected.toolIds.length}
+                    type={selected.type}
+                    size={40}
+                    active={selected.presence === "working"}
+                  />
+                </span>
 
-              <p className="mt-3 text-[10.5px] leading-[1.6] text-slate-500">
-                {presenceCopy[selected.presence]}
-              </p>
-
-              <div className="mt-5">
-                <div className="detail-label">Capabilities</div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {selected.capabilities.map((capability) => (
-                    <Chip key={capability} tone="idle">
-                      {capability}
-                    </Chip>
-                  ))}
+                <div className="min-w-0">
+                  <div className="agent-portrait-name">{selected.name}</div>
+                  <div className="roster-role mt-2">
+                    {profileOf(selected).label}
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-5">
-                <div className="detail-label">Authorized tools</div>
+              <div className="panel-body">
+                <p className="text-[11.5px] leading-[1.75] text-[#a7b0bd]">
+                  {selected.description}
+                </p>
 
-                {selected.toolIds.length === 0 ? (
-                  <p className="mt-2 text-[10.5px] leading-[1.6] text-slate-500">
-                    This agent holds no tools, so the delegator will never route
-                    a task that requires one to it.
-                  </p>
-                ) : (
+                <div className="mt-3 flex items-center gap-2">
+                  <StatusPill
+                    tone={presenceTone(selected.presence)}
+                    pulse={selected.presence === "working"}
+                  >
+                    {selected.presence}
+                  </StatusPill>
+
+                  <span className="text-[10.5px] leading-[1.6] text-[#6f7887]">
+                    {presenceCopy[selected.presence]}
+                  </span>
+                </div>
+
+                <div className="mt-6">
+                  <div className="detail-label">Capabilities</div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {selected.toolIds.map((tool) => (
-                      <Chip key={tool} tone="active">
-                        <Wrench size={9} />
-                        {tool}
+                    {selected.capabilities.map((capability) => (
+                      <Chip key={capability} tone="idle">
+                        {capability}
                       </Chip>
                     ))}
                   </div>
+                </div>
+
+                <div className="mt-6">
+                  <div className="detail-label">Authorized tools</div>
+
+                  {selected.toolIds.length === 0 ? (
+                    <p className="mt-2 text-[10.5px] leading-[1.65] text-[#6f7887]">
+                      Holds no tools, so the delegator will never route a task
+                      that requires one here. This is a hard boundary, not a
+                      preference.
+                    </p>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {selected.toolIds.map((tool) => (
+                        <Chip key={tool} tone="active">
+                          <Wrench size={9} />
+                          {tool}
+                        </Chip>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {selected.activeTask && (
+                  <div className="mt-6">
+                    <div className="detail-label">Doing now</div>
+
+                    <Link
+                      to={`/work/${selected.activeTask.workId}`}
+                      className="agent-active-task mt-2 !flex"
+                    >
+                      <span className="truncate text-[11px] text-[#a7b0bd]">
+                        {selected.activeTask.title}
+                      </span>
+                    </Link>
+                  </div>
+                )}
+
+                {recentWorkFor.length > 0 && (
+                  <div className="mt-6">
+                    <div className="detail-label">Recently involved in</div>
+
+                    <div className="mt-2 space-y-px">
+                      {recentWorkFor.map((entry) => (
+                        <Link
+                          key={entry.id}
+                          to={`/work/${entry.id}`}
+                          className="presence-row"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[11px] text-[#a7b0bd]">
+                              {entry.objective}
+                            </span>
+                            <span className="t-machine">
+                              {formatRelativeTime(entry.when)}
+                            </span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6 flex gap-6">
+                  <div>
+                    <div className="detail-label">Completed</div>
+                    <div className="mt-1.5 font-mono text-[16px] text-[#f2f4f7]">
+                      {selected.completedTaskCount}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="detail-label">Failed</div>
+                    <div className="mt-1.5 font-mono text-[16px] text-[#f2f4f7]">
+                      {selected.failedTaskCount}
+                    </div>
+                  </div>
+                </div>
+
+                {typeof selected.metadata?.systemInstructions === "string" && (
+                  <div className="mt-6">
+                    <div className="detail-label">System instructions</div>
+                    <pre className="code-block mt-2">
+                      {selected.metadata.systemInstructions}
+                    </pre>
+                  </div>
                 )}
               </div>
-
-              {selected.activeTask && (
-                <div className="mt-5">
-                  <div className="detail-label">Current work</div>
-
-                  <Link
-                    to={`/work/${selected.activeTask.workId}`}
-                    className="agent-active-task mt-2 !flex"
-                  >
-                    <span className="truncate text-[11px] text-slate-300">
-                      {selected.activeTask.title}
-                    </span>
-                  </Link>
-                </div>
-              )}
-
-              {typeof selected.metadata?.systemInstructions === "string" && (
-                <div className="mt-5">
-                  <div className="detail-label">System instructions</div>
-                  <pre className="code-block mt-2">
-                    {selected.metadata.systemInstructions}
-                  </pre>
-                </div>
-              )}
             </Panel>
           )}
         </div>
