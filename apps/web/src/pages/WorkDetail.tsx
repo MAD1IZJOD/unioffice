@@ -1,27 +1,29 @@
 import {
   ArrowLeft,
-  Boxes,
   ChevronRight,
-  FileOutput,
   LoaderCircle,
   Play,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
   Wrench,
 } from "lucide-react";
 
+import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
   executeWork,
+  fetchWorkDetail,
   formatDuration,
   formatRelativeTime,
-  fetchWorkDetail,
   planWork,
   resolveApproval,
   retryWork,
+  type AgentSummary,
+  type ApprovalItem,
+  type ArtifactItem,
+  type MemoryItem,
   type TaskItem,
   type WorkDetail as WorkDetailData,
   type WorkStatus,
@@ -29,23 +31,22 @@ import {
 
 import { useResource } from "../lib/useResource";
 
-import { describeEvent, safeStringify, summarizeValue } from "../lib/events";
+import { describeEvent, excerptOf, safeStringify } from "../lib/events";
 
 import {
   Chip,
-  EmptyState,
-  ErrorState,
-  Panel,
-  Skeleton,
+  Connecting,
+  Failure,
+  Quiet,
   StatusPill,
-  TimeStamp,
 } from "../components/primitives";
 
-import {
-  statusLabel,
-  taskStatusTone,
-  workStatusTone,
-} from "../lib/tone";
+import { ResultBody } from "../components/ResultBody";
+import { ArtifactSheet } from "../components/ArtifactSheet";
+import { AgentMark } from "../components/AgentMark";
+
+import { profileOf } from "../lib/workforce";
+import { statusLabel, taskStatusTone, workStatusTone } from "../lib/tone";
 
 // No auth yet, so a decision is attributed to the seeded development
 // requester rather than inventing an identity the backend cannot verify.
@@ -62,10 +63,10 @@ const SETTLED_STATUSES: ReadonlyArray<WorkStatus> = [
 ];
 
 /**
- * Watches one work item, polling closely while it can still change and
- * backing off once it settles. The interval is adjusted during render
- * (React's documented alternative to an effect for state derived from data
- * the component already has) rather than mirrored by an effect.
+ * Watches one work item, polling closely while it can still change and backing
+ * off once it settles. The interval is adjusted during render (React's
+ * documented alternative to an effect for state derived from data the
+ * component already has) rather than mirrored by an effect.
  */
 function useWatchedWorkDetail(workId: string) {
   const [pollMs, setPollMs] = useState(LIVE_POLL_MS);
@@ -91,10 +92,8 @@ export default function WorkDetail() {
   const { workId = "" } = useParams();
   const [action, setAction] = useState<string>();
   const [actionError, setActionError] = useState<string>();
+  const [openArtifact, setOpenArtifact] = useState<ArtifactItem>();
 
-  // The interval is a function of the work's status, so it is derived on
-  // every render rather than mirrored into state and kept in sync by an
-  // effect. useResource restarts its timer when the value changes.
   const detail = useWatchedWorkDetail(workId);
 
   async function run(label: string, operation: () => Promise<unknown>) {
@@ -113,32 +112,57 @@ export default function WorkDetail() {
 
   if (detail.loading) {
     return (
-      <div className="mx-auto max-w-[1180px]">
-        <Panel eyebrow="Work" title="Loading">
-          <Skeleton rows={7} />
-        </Panel>
+      <div className="mx-auto max-w-[1080px]">
+        <Connecting what="Opening the run…" />
       </div>
     );
   }
 
   if (detail.error || !detail.data) {
     return (
-      <div className="mx-auto max-w-[1180px]">
-        <Panel>
-          <ErrorState
-            message={detail.error?.message ?? "This work item could not be loaded."}
-            offline={detail.error?.isOffline}
-            onRetry={detail.reload}
-          />
-        </Panel>
+      <div className="mx-auto max-w-[1080px] pt-4">
+        <Failure
+          headline="This work could not be opened"
+          detail={
+            detail.error?.message ?? "The API returned nothing for this id."
+          }
+          consequence={
+            detail.error?.isOffline
+              ? "The run itself is unaffected - a worker executes it from the queue, not from this page."
+              : undefined
+          }
+          action={
+            <>
+              <button
+                type="button"
+                onClick={detail.reload}
+                className="button-ghost"
+              >
+                Try again
+              </button>
+              <Link to="/work" className="button-quiet">
+                All work
+              </Link>
+            </>
+          }
+        />
       </div>
     );
   }
 
-  const { work, tasks, events, artifacts, approvals, agents, executionJob } =
-    detail.data;
-  const agentName = (id?: string) =>
-    agents.find((agent) => agent.id === id)?.name ?? "Unassigned";
+  const {
+    work,
+    tasks,
+    events,
+    artifacts,
+    approvals,
+    agents,
+    memories,
+    executionJob,
+  } = detail.data;
+
+  const agentOf = (id?: string) => agents.find((agent) => agent.id === id);
+  const agentName = (id?: string) => agentOf(id)?.name ?? "Unassigned";
 
   const pendingApprovals = approvals.filter(
     (approval) => approval.status === "pending",
@@ -146,117 +170,494 @@ export default function WorkDetail() {
   const completedCount = tasks.filter(
     (task) => task.status === "completed",
   ).length;
-  // A run that already has a task in flight must not offer "Execute" again -
-  // the button reads as "nothing is happening" when in fact it is running.
   const inFlight = tasks.some(
     (task) => task.status === "running" || task.status === "ready",
   );
 
-  // The deliverable is the last task that finished. Without this the answer
-  // sat below the plan, the artifacts and the timeline - you had to scroll
-  // past the machinery to find what the company actually said.
-  const finalResult = [...tasks]
+  const toolCalls = tasks.flatMap((task) =>
+    (task.metadata.execution?.toolCalls ?? []).map((call) => ({
+      call,
+      task,
+    })),
+  );
+
+  const resultTasks = [...tasks]
     .filter((task) => task.status === "completed" && task.result !== undefined)
-    .sort((left, right) =>
-      new Date(left.completedAt ?? left.updatedAt).getTime() -
-      new Date(right.completedAt ?? right.updatedAt).getTime(),
-    )
-    .map((task) => ({
-      value: task.result,
-      title: task.title,
-      agentId: task.assignedAgentId,
-    }))
-    .at(-1);
+    .sort(
+      (left, right) =>
+        new Date(left.completedAt ?? left.updatedAt).getTime() -
+        new Date(right.completedAt ?? right.updatedAt).getTime(),
+    );
+
+  // The deliverable is the last task that finished.
+  const finalResult = resultTasks.at(-1);
   const progress = tasks.length
     ? Math.round((completedCount / tasks.length) * 100)
     : 0;
 
+  const failureMessage =
+    typeof work.metadata.executionError === "string"
+      ? work.metadata.executionError
+      : typeof work.metadata.planningError === "string"
+        ? work.metadata.planningError
+        : undefined;
+
+  // The run told as the sequence it actually was. A stage that did not happen
+  // is not built, so a run with no tool calls has no tools chapter rather than
+  // an empty one claiming the company reached for something.
+  const steps: StoryStep[] = [];
+
+  steps.push({
+    key: "objective",
+    label: "Objective",
+    state: "done",
+    tone: "tone-idle",
+    body: (
+      <>
+        <p className="story-headline">{work.objective}</p>
+        <p className="story-note">
+          Received {formatRelativeTime(work.createdAt)} at {work.priority}{" "}
+          priority.
+        </p>
+      </>
+    ),
+  });
+
+  if (tasks.length > 0 || work.metadata.planningError) {
+    steps.push({
+      key: "plan",
+      label: "Plan",
+      state: tasks.length > 0 ? "done" : "idle",
+      tone: tasks.length > 0 ? "tone-live" : "tone-error",
+      body:
+        tasks.length > 0 ? (
+          <>
+            <p className="story-headline">
+              Broken into {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
+            </p>
+            <p className="story-lead">
+              The planner decomposed the objective and named, for each task, the
+              capabilities and tools it needs. Those requirements are what the
+              delegator routes on.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="story-headline">Planning did not produce a plan</p>
+            <p className="story-lead">
+              {String(work.metadata.planningError)}
+            </p>
+          </>
+        ),
+    });
+  }
+
+  const delegated = tasks.filter((task) => task.assignedAgentId);
+
+  if (delegated.length > 0) {
+    steps.push({
+      key: "delegation",
+      label: "Delegation",
+      state: "done",
+      tone: "tone-active",
+      body: (
+        <>
+          <p className="story-headline">
+            Routed to{" "}
+            {new Set(delegated.map((task) => task.assignedAgentId)).size}{" "}
+            {new Set(delegated.map((task) => task.assignedAgentId)).size === 1
+              ? "specialist"
+              : "specialists"}
+          </p>
+
+          <div className="mt-4 space-y-px">
+            {delegated.map((task) => (
+              <DelegationRow
+                key={task.id}
+                task={task}
+                agent={agentOf(task.assignedAgentId)}
+              />
+            ))}
+          </div>
+        </>
+      ),
+    });
+  }
+
+  if (tasks.length > 0) {
+    steps.push({
+      key: "execution",
+      label: "Execution",
+      state: inFlight ? "live" : completedCount === tasks.length ? "done" : "idle",
+      tone: inFlight ? "tone-active" : "tone-live",
+      body: (
+        <>
+          <p className="story-headline">
+            {completedCount} of {tasks.length} complete
+          </p>
+
+          {tasks.length > 0 && (
+            <div className="progress-track mt-4">
+              <div
+                className="progress-fill"
+                style={{ width: `${progress}%` }}
+                role="progressbar"
+                aria-valuenow={progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
+            </div>
+          )}
+
+          <div className="mt-4 border-t border-[#161a21]">
+            {tasks.map((task, index) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                index={index}
+                agentName={agentName(task.assignedAgentId)}
+                dependencyTitles={task.dependsOn
+                  .map((id) => tasks.find((entry) => entry.id === id)?.title)
+                  .filter((title): title is string => Boolean(title))}
+              />
+            ))}
+          </div>
+        </>
+      ),
+    });
+  }
+
+  if (toolCalls.length > 0) {
+    steps.push({
+      key: "tools",
+      label: "Tools",
+      state: "done",
+      tone: "tone-active",
+      body: (
+        <>
+          <p className="story-headline">
+            {toolCalls.length} real tool{" "}
+            {toolCalls.length === 1 ? "call" : "calls"}
+          </p>
+          <p className="story-lead">
+            Each was validated against the tool's schema and re-checked against
+            the calling agent's authorization before it ran.
+          </p>
+
+          <div className="mt-4 space-y-2">
+            {toolCalls.map(({ call, task }, index) => (
+              <div key={`${call.toolId}-${index}`} className="tool-call">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Wrench size={12} className="text-[#84b4fb]" />
+
+                  <span className="mono text-[10.5px] font-semibold text-[#f2f4f7]">
+                    {call.toolId}
+                  </span>
+
+                  <StatusPill
+                    tone={call.status === "completed" ? "live" : "error"}
+                  >
+                    {call.status}
+                  </StatusPill>
+
+                  <span className="t-machine ml-auto truncate">
+                    {agentName(task.assignedAgentId)} · {task.title}
+                  </span>
+                </div>
+
+                <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <div className="detail-label">Input</div>
+                    <pre className="code-block mt-1">
+                      {safeStringify(call.input, 2)}
+                    </pre>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="detail-label">
+                      {call.error ? "Error" : "Output"}
+                    </div>
+                    <pre className="code-block mt-1">
+                      {safeStringify(call.error ?? call.output, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ),
+    });
+  }
+
+  if (approvals.length > 0) {
+    steps.push({
+      key: "decisions",
+      label: "Decisions",
+      state: pendingApprovals.length > 0 ? "live" : "done",
+      tone: pendingApprovals.length > 0 ? "tone-warning" : "tone-live",
+      body: (
+        <>
+          <p className="story-headline">
+            {pendingApprovals.length > 0
+              ? "This run is waiting on you"
+              : `${approvals.length} human ${approvals.length === 1 ? "decision" : "decisions"}`}
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {approvals.map((approval) => (
+              <ApprovalBlock
+                key={approval.id}
+                approval={approval}
+                requestedBy={agentName(approval.agentId)}
+                busy={Boolean(action)}
+                onDecide={(decision) =>
+                  run(decision, () =>
+                    resolveApproval(approval.id, decision, RESOLVER_ID),
+                  )
+                }
+              />
+            ))}
+          </div>
+        </>
+      ),
+    });
+  }
+
+  // The final answer sits above the story, so the OUTPUT stage only earns a
+  // place when there is more than one result and the intermediate ones say
+  // something the deliverable alone does not.
+  if (resultTasks.length > 1) {
+    steps.push({
+      key: "output",
+      label: "Output",
+      state: "done",
+      tone: "tone-live",
+      body: (
+        <>
+          <p className="story-headline">
+            What each step returned
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {resultTasks.map((task) => (
+              <div key={task.id} className="callout">
+                <div className="detail-label mb-1.5">
+                  {task.title} · {agentName(task.assignedAgentId)}
+                </div>
+                {excerptOf(task.result, 300)}
+              </div>
+            ))}
+          </div>
+        </>
+      ),
+    });
+  }
+
+  if (artifacts.length > 0) {
+    steps.push({
+      key: "artifact",
+      label: "Artifact",
+      state: "done",
+      tone: "tone-live",
+      body: (
+        <>
+          <p className="story-headline">
+            {artifacts.length} durable{" "}
+            {artifacts.length === 1 ? "output" : "outputs"}
+          </p>
+          <p className="story-lead">
+            Stored the moment the task producing it completed, so the result
+            outlives the run that made it.
+          </p>
+
+          <div className="workbench mt-4">
+            {artifacts.map((artifact) => (
+              <button
+                key={artifact.id}
+                type="button"
+                className="artifact-tile"
+                onClick={() => setOpenArtifact(artifact)}
+              >
+                <span className="artifact-tile-name">{artifact.name}</span>
+
+                {artifact.metadata.content !== undefined && (
+                  <span className="artifact-tile-excerpt">
+                    {excerptOf(artifact.metadata.content, 190)}
+                  </span>
+                )}
+
+                <span className="artifact-tile-foot">
+                  <Chip tone="live">{artifact.type}</Chip>
+                  <span className="t-machine">
+                    {agentName(artifact.createdByAgentId)}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      ),
+    });
+  }
+
+  if (memories.length > 0) {
+    steps.push({
+      key: "memory",
+      label: "Memory",
+      state: "done",
+      tone: "tone-active",
+      body: (
+        <>
+          <p className="story-headline">
+            {memories.length} {memories.length === 1 ? "memory" : "memories"}{" "}
+            written
+          </p>
+          <p className="story-lead">
+            What this run leaves behind for the next one. Agents retrieve from
+            here before starting related work.
+          </p>
+
+          <div className="mt-4 space-y-2">
+            {memories.map((memory: MemoryItem) => (
+              <div key={memory.id} className="callout">
+                <div className="detail-label mb-1.5">
+                  {memory.type} · {formatRelativeTime(memory.createdAt)}
+                </div>
+                {memory.content}
+              </div>
+            ))}
+          </div>
+
+          <Link to="/brain" className="button-quiet mt-3 inline-flex">
+            Everything the company knows
+          </Link>
+        </>
+      ),
+    });
+  }
+
+  if (events.length > 0) {
+    steps.push({
+      key: "record",
+      label: "Record",
+      state: "done",
+      tone: "tone-idle",
+      body: (
+        <>
+          <p className="story-headline">
+            {events.length} recorded {events.length === 1 ? "event" : "events"}
+          </p>
+
+          <div className="timeline mt-2 !px-0">
+            {[...events].reverse().map((event) => {
+              const described = describeEvent(event);
+
+              return (
+                <div key={event.id} className="timeline-entry">
+                  <span className={`timeline-dot ${described.tone}`} />
+
+                  <div className="min-w-0 flex-1 pb-4">
+                    <div className="text-[11px] leading-[1.5] text-[#a7b0bd]">
+                      {described.title}
+                    </div>
+
+                    {described.detail && (
+                      <div className="mt-1 text-[10px] leading-[1.55] text-[#6f7887]">
+                        {described.detail}
+                      </div>
+                    )}
+
+                    <div className="mono mt-1.5 text-[9px] text-[#3a4250]">
+                      {formatRelativeTime(event.timestamp)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ),
+    });
+  }
+
   return (
-    <div className="mx-auto max-w-[1180px] fade-up">
-      <Link to="/work" className="button-quiet mb-4 inline-flex">
+    <div className="mx-auto max-w-[1080px] fade-up">
+      <Link to="/work" className="button-quiet mb-5 inline-flex">
         <ArrowLeft size={12} />
         All work
       </Link>
 
-      <Panel
-        eyebrow="Objective"
-        title={
-          <span className="block text-[14px] leading-[1.6] font-normal text-slate-200">
-            {work.objective}
-          </span>
-        }
-        action={
+      <header className="border-b border-[#161a21] pb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="t-eyebrow mb-3">The run</div>
+
+            <h2 className="max-w-[30ch] text-[clamp(22px,3.2vw,34px)] font-[660] leading-[1.14] tracking-[-0.032em] text-[#f2f4f7]">
+              {work.objective}
+            </h2>
+          </div>
+
           <StatusPill
             tone={workStatusTone(work.status)}
             pulse={work.status === "executing"}
           >
             {statusLabel(work.status)}
           </StatusPill>
-        }
-      >
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <TimeStamp
-            iso={work.createdAt}
-            relative={`created ${formatRelativeTime(work.createdAt)}`}
-          />
-
-          {work.startedAt && work.completedAt && (
-            <span className="mono text-[9.5px] text-slate-500">
-              ran for {formatDuration(work.startedAt, work.completedAt)}
-            </span>
-          )}
-
-          <span className="mono text-[9.5px] uppercase tracking-[0.1em] text-slate-600">
-            {work.priority} priority
-          </span>
-
-          {tasks.length > 0 && (
-            <span className="mono text-[9.5px] text-slate-500">
-              {completedCount}/{tasks.length} tasks complete
-            </span>
-          )}
         </div>
 
-        {tasks.length > 0 && (
-          <div className="progress-track mt-4">
-            <div
-              className="progress-fill"
-              style={{ width: `${progress}%` }}
-              role="progressbar"
-              aria-valuenow={progress}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            />
-          </div>
-        )}
+        <div className="dispatch-meta !mt-7">
+          <Fact label="Tasks" value={tasks.length === 0 ? "—" : `${completedCount}/${tasks.length}`} />
+          <Fact
+            label="Ran for"
+            value={formatDuration(work.startedAt, work.completedAt)}
+          />
+          <Fact label="Priority" value={work.priority} />
+          <Fact label="Tool calls" value={toolCalls.length} />
+          <Fact label="Artifacts" value={artifacts.length} />
+        </div>
 
-        {typeof work.metadata.executionError === "string" && (
-          <div
-            className={`callout mt-4 ${
-              work.metadata.interrupted ? "callout-warning" : "callout-error"
-            }`}
-          >
-            {/* An interrupted run is not a failure of the work itself - it
-                stopped because the process did - so it reads as recoverable
-                rather than broken. */}
+        {failureMessage && (
+          <div className="mt-6">
             {work.metadata.interrupted ? (
-              <>
+              <div className="callout callout-warning">
                 <div className="detail-label mb-1.5">Interrupted</div>
-                {work.metadata.executionError}
-              </>
+                {failureMessage}
+                <div className="mt-2 text-[10.5px] text-[#c9a06a]">
+                  The process stopped, not the work. Completed tasks were kept
+                  and it can be resumed from where it stopped.
+                </div>
+              </div>
             ) : (
-              work.metadata.executionError
+              <Failure
+                headline="Work failed"
+                detail={failureMessage}
+                consequence="Nothing was lost. Completed tasks are kept, and a retry resumes from the first task that did not finish."
+              />
             )}
           </div>
         )}
 
-        {typeof work.metadata.planningError === "string" && (
-          <div className="callout callout-error mt-4">
-            {work.metadata.planningError}
+        {executionJob?.lastError && executionJob.status === "queued" && (
+          <div className="callout callout-warning mt-4">
+            <div className="detail-label mb-1.5">
+              Attempt {executionJob.attempts} did not finish
+            </div>
+            {executionJob.lastError} It is queued to be tried again.
           </div>
         )}
 
-        <div className="mt-5 flex flex-wrap items-center gap-2">
+        {actionError && (
+          <div className="mt-4">
+            <Failure
+              headline="That action did not go through"
+              detail={actionError}
+              consequence="Nothing was changed."
+            />
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-wrap items-center gap-2">
           {tasks.length === 0 &&
             (work.status === "queued" || work.status === "planning") && (
               <button
@@ -347,283 +748,231 @@ export default function WorkDetail() {
             Refresh
           </button>
         </div>
+      </header>
 
-        {executionJob?.lastError && executionJob.status === "queued" && (
-          <div className="callout callout-warning mt-4">
-            <div className="detail-label mb-1.5">
-              Attempt {executionJob.attempts} did not finish
-            </div>
-            {executionJob.lastError} It is queued to be tried again.
-          </div>
-        )}
-
-        {actionError && (
-          <div className="callout callout-error mt-4">{actionError}</div>
-        )}
-      </Panel>
-
+      {/* The answer, before any of the machinery that produced it. */}
       {finalResult && (
-        <Panel
-          className="mt-4"
-          eyebrow="Delivered"
-          title="What the company produced"
-        >
-          <ResultBody value={finalResult.value} />
+        <div className="mt-7">
+          <div className="delivery">
+            <div className="delivery-eyebrow">What the company produced</div>
 
-          <div className="mt-3 mono text-[9.5px] text-slate-600">
-            produced by {agentName(finalResult.agentId)} ·{" "}
-            {finalResult.title}
-          </div>
-        </Panel>
-      )}
-
-      {pendingApprovals.length > 0 && (
-        <Panel
-          className="mt-4"
-          eyebrow="Governance"
-          title="This work is waiting on your decision"
-        >
-          <div className="space-y-3">
-            {pendingApprovals.map((approval) => (
-              <div key={approval.id} className="approval-card">
-                <div className="flex items-start gap-3">
-                  <ShieldCheck size={16} className="mt-0.5 text-amber-300" />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[12px] font-semibold text-slate-200">
-                      {approval.action}
-                    </div>
-
-                    <p className="mt-1.5 text-[11px] leading-[1.65] text-slate-400">
-                      {approval.reason}
-                    </p>
-
-                    <div className="mt-2 text-[10px] text-slate-500">
-                      Requested by {agentName(approval.agentId)} ·{" "}
-                      {formatRelativeTime(approval.createdAt)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={Boolean(action)}
-                    onClick={() =>
-                      run("approve", () =>
-                        resolveApproval(approval.id, "approve", RESOLVER_ID),
-                      )
-                    }
-                    className="button-ghost button-approve"
-                  >
-                    Approve and continue
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={Boolean(action)}
-                    onClick={() =>
-                      run("reject", () =>
-                        resolveApproval(approval.id, "reject", RESOLVER_ID),
-                      )
-                    }
-                    className="button-ghost button-reject"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      )}
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-        <div className="min-w-0 space-y-4">
-          <Panel eyebrow="Plan" title="Tasks and execution" padded={false}>
-            {tasks.length === 0 ? (
-              <EmptyState
-                icon={Boxes}
-                title="No plan yet"
-                description="The planner has not produced tasks for this objective. Build the plan above to see them."
-              />
-            ) : (
-              <div className="stack-list">
-                {tasks.map((task, index) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    index={index}
-                    agentName={agentName(task.assignedAgentId)}
-                    dependencyTitles={task.dependsOn
-                      .map(
-                        (id) => tasks.find((entry) => entry.id === id)?.title,
-                      )
-                      .filter((title): title is string => Boolean(title))}
-                  />
-                ))}
-              </div>
-            )}
-          </Panel>
-
-          <Panel eyebrow="Output" title="Artifacts" padded={false}>
-            {artifacts.length === 0 ? (
-              <EmptyState
-                icon={FileOutput}
-                title="No artifacts yet"
-                description="Each completed task stores its result as a durable artifact."
-              />
-            ) : (
-              <div className="stack-list">
-                {artifacts.map((artifact) => (
-                  <div key={artifact.id} className="px-[18px] py-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="text-[12px] font-semibold text-slate-200">
-                          {artifact.name}
-                        </div>
-
-                        <div className="mt-1 text-[10.5px] text-slate-500">
-                          {artifact.description}
-                        </div>
-                      </div>
-
-                      <Chip tone="live">{artifact.type}</Chip>
-                    </div>
-
-                    {artifact.metadata.content !== undefined && (
-                      <div className="mt-3">
-                        <ResultBody value={artifact.metadata.content} />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Panel>
-        </div>
-
-        <Panel
-          eyebrow="Timeline"
-          title="What actually happened"
-          padded={false}
-          className="self-start"
-        >
-          {events.length === 0 ? (
-            <EmptyState
-              icon={Boxes}
-              title="No events recorded"
-              description="Events are written as the work progresses."
-            />
-          ) : (
-            <div className="timeline">
-              {[...events].reverse().map((event) => {
-                const described = describeEvent(event);
-
-                return (
-                  <div key={event.id} className="timeline-entry">
-                    <span className={`timeline-dot ${described.tone}`} />
-
-                    <div className="min-w-0 flex-1 pb-4">
-                      <div className="text-[11px] leading-[1.5] text-slate-300">
-                        {described.title}
-                      </div>
-
-                      {described.detail && (
-                        <div className="mt-1 text-[10px] leading-[1.55] text-slate-600">
-                          {described.detail}
-                        </div>
-                      )}
-
-                      <div className="mt-1.5 mono text-[9px] text-slate-700">
-                        {formatRelativeTime(event.timestamp)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="delivery-body">
+              <ResultBody value={finalResult.result} />
             </div>
-          )}
-        </Panel>
+
+            <div className="delivery-foot">
+              <span className="t-machine">
+                {agentName(finalResult.assignedAgentId)}
+              </span>
+              <span className="t-machine">{finalResult.title}</span>
+              <span className="t-machine">
+                {formatRelativeTime(
+                  finalResult.completedAt ?? finalResult.updatedAt,
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tasks.length === 0 && !work.metadata.planningError && (
+        <Quiet
+          line="This objective has no plan yet."
+          detail="Nothing has been decomposed, delegated or executed. Build the plan and every stage of the run appears here as it happens."
+        />
+      )}
+
+      <div className="story">
+        {steps.map((step, index) => (
+          <section
+            key={step.key}
+            className={`story-step ${step.tone} story-step-${step.state}`}
+            style={{ "--step-index": index } as React.CSSProperties}
+          >
+            <div className="story-label">
+              <div className="story-label-name">{step.label}</div>
+              <div className="story-label-index">
+                {String(index + 1).padStart(2, "0")}
+              </div>
+            </div>
+
+            <div className="story-spine" aria-hidden="true" />
+
+            <div className="story-body">{step.body}</div>
+          </section>
+        ))}
       </div>
+
+      {openArtifact && (
+        <ArtifactSheet
+          artifact={openArtifact}
+          producedBy={agentName(openArtifact.createdByAgentId)}
+          onClose={() => setOpenArtifact(undefined)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface StoryStep {
+  key: string;
+  label: string;
+  /** done | live | idle - drives the node on the spine. */
+  state: "done" | "live" | "idle";
+  tone: string;
+  body: ReactNode;
+}
+
+function Fact({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="dispatch-stat tone-idle">
+      <div className="dispatch-stat-value !text-[19px]">{value}</div>
+      <div className="dispatch-stat-label">{label}</div>
     </div>
   );
 }
 
 /**
- * Agent output is prose far more often than it is data, and rendering it in a
- * monospace code block made every deliverable read like a log dump. Strings
- * render as text with their bullet lists and light markdown emphasis honoured;
- * anything structured keeps the code block, where monospace is the right
- * answer.
+ * Who got a task and why the delegator picked them. The reason matters: a
+ * partial capability match means the company did the work with the closest
+ * available specialist rather than the right one, and that is worth knowing
+ * before trusting the result.
  */
-function ResultBody({ value }: { value: unknown }) {
-  if (typeof value !== "string") {
-    return <pre className="code-block">{safeStringify(value, 2)}</pre>;
-  }
+function DelegationRow({
+  task,
+  agent,
+}: {
+  task: TaskItem;
+  agent?: AgentSummary;
+}) {
+  const delegation = task.metadata.delegation;
 
-  return <div className="prose-result">{renderBlocks(value)}</div>;
+  return (
+    <div className="presence-row">
+      <span className="presence-mark tone-active">
+        {agent ? (
+          <AgentMark
+            agentId={agent.id}
+            capabilities={agent.capabilities}
+            tools={agent.toolIds.length}
+            type={agent.type}
+            size={22}
+          />
+        ) : (
+          <span className="text-[11px]">?</span>
+        )}
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+          <span className="text-[12px] font-semibold text-[#f2f4f7]">
+            {agent?.name ?? "Unassigned"}
+          </span>
+
+          {agent && (
+            <span className="roster-role">{profileOf(agent).label}</span>
+          )}
+        </span>
+
+        <span className="mt-1 block text-[10.5px] leading-[1.55] text-[#6f7887]">
+          {task.title}
+        </span>
+
+        {delegation?.selectionReason && (
+          <span className="mt-1 block text-[10px] leading-[1.55] text-[#535b68]">
+            {delegation.selectionReason}
+          </span>
+        )}
+
+        {delegation?.capabilityFit === "partial" && (
+          <span className="mt-1.5 block text-[10px] text-[#c9a06a]">
+            Closest available match — does not hold{" "}
+            {(delegation.unmatchedCapabilities ?? []).join(", ")}.
+          </span>
+        )}
+      </span>
+
+      <StatusPill tone={taskStatusTone(task.status)}>
+        {statusLabel(task.status)}
+      </StatusPill>
+    </div>
+  );
 }
 
-const BULLET = /^\s*[-*•]\s+/;
+/**
+ * One approval, stated the way the Approvals surface states it: what is being
+ * asked, why it stopped, and what happens either way. A decision the person
+ * has already made keeps the record but loses the buttons.
+ */
+function ApprovalBlock({
+  approval,
+  requestedBy,
+  busy,
+  onDecide,
+}: {
+  approval: ApprovalItem;
+  requestedBy: string;
+  busy: boolean;
+  onDecide: (decision: "approve" | "reject") => void;
+}) {
+  const pending = approval.status === "pending";
 
-function renderBlocks(text: string) {
-  return text
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block, blockIndex) => {
-      const lines = splitLines(block);
-      const bullets = lines.filter((line) => BULLET.test(line));
-
-      // Models emit bullets on single newlines, so a paragraph-only splitter
-      // ran "- Salaries: 48,200 - Cloud: 9,350" together into one line.
-      if (bullets.length > 1) {
-        const lead = lines.find((line) => !BULLET.test(line));
-
-        return (
-          <div key={blockIndex}>
-            {lead && <p>{renderEmphasis(lead)}</p>}
-
-            <ul>
-              {bullets.map((line, index) => (
-                <li key={index}>{renderEmphasis(line.replace(BULLET, ""))}</li>
-              ))}
-            </ul>
+  return (
+    <div className={pending ? "approval-card" : "callout"}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[12.5px] font-semibold text-[#f2f4f7]">
+            {approval.action}
           </div>
-        );
-      }
+          <div className="t-machine mt-1">{approval.resource}</div>
+        </div>
 
-      return (
-        <p key={blockIndex}>
-          {renderEmphasis(block.replace(/\s*\n\s*/g, " "))}
-        </p>
-      );
-    });
-}
+        <StatusPill
+          tone={
+            approval.status === "approved"
+              ? "live"
+              : approval.status === "rejected"
+                ? "error"
+                : "warning"
+          }
+          pulse={pending}
+        >
+          {approval.status}
+        </StatusPill>
+      </div>
 
-/**
- * Bullets are not always on their own line - a model that wrote the list
- * inline still means a list, so " - " before a new item breaks too.
- */
-function splitLines(block: string): string[] {
-  return block
-    .split(/\n|(?=\s-\s(?=[A-Z0-9]))/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
+      <p className="mt-3 text-[11.5px] leading-[1.7] text-[#a7b0bd]">
+        {approval.reason}
+      </p>
 
-/**
- * The models reliably emit **bold** and nothing else worth parsing, so this
- * handles exactly that rather than pulling in a markdown renderer.
- */
-function renderEmphasis(text: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
-    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
-      <strong key={index}>{part.slice(2, -2)}</strong>
-    ) : (
-      <span key={index}>{part}</span>
-    ),
+      <div className="t-machine mt-2.5">
+        requested by {requestedBy} · {formatRelativeTime(approval.createdAt)}
+        {approval.resolvedAt &&
+          ` · resolved ${formatRelativeTime(approval.resolvedAt)}`}
+      </div>
+
+      {pending && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onDecide("approve")}
+            className="button-primary button-approve-strong"
+          >
+            Approve and continue
+          </button>
+
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onDecide("reject")}
+            className="button-ghost button-reject"
+          >
+            Reject
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -641,22 +990,23 @@ function TaskRow({
   const [open, setOpen] = useState(false);
   const toolCalls = task.metadata.execution?.toolCalls ?? [];
   const requiredTools = task.metadata.routing?.requiredTools ?? [];
-  const delegation = task.metadata.delegation;
   const hasResult = task.result !== undefined && task.result !== "";
 
   return (
-    <div>
+    <div className="border-b border-[#161a21] last:border-b-0">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="task-row"
+        className="task-row !px-0"
         aria-expanded={open}
       >
-        <span className="task-index mono">{String(index + 1).padStart(2, "0")}</span>
+        <span className="task-index mono">
+          {String(index + 1).padStart(2, "0")}
+        </span>
 
         <div className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] font-semibold text-slate-200">
+            <span className="text-[12px] font-semibold text-[#f2f4f7]">
               {task.title}
             </span>
 
@@ -669,7 +1019,9 @@ function TaskRow({
           </div>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-            <span className="mono text-[9.5px] text-slate-500">{agentName}</span>
+            <span className="mono text-[9.5px] text-[#6f7887]">
+              {agentName}
+            </span>
 
             {requiredTools.map((tool) => (
               <Chip key={tool} tone="active" title="Required tool">
@@ -679,14 +1031,20 @@ function TaskRow({
             ))}
 
             {toolCalls.length > 0 && (
-              <span className="mono text-[9px] text-slate-600">
+              <span className="mono text-[9px] text-[#535b68]">
                 {toolCalls.length} tool{" "}
                 {toolCalls.length === 1 ? "call" : "calls"}
               </span>
             )}
 
+            {task.startedAt && task.completedAt && (
+              <span className="mono text-[9px] text-[#535b68]">
+                {formatDuration(task.startedAt, task.completedAt)}
+              </span>
+            )}
+
             {dependencyTitles.length > 0 && (
-              <span className="mono text-[9px] text-slate-600">
+              <span className="mono text-[9px] text-[#535b68]">
                 after {dependencyTitles.join(", ")}
               </span>
             )}
@@ -695,75 +1053,15 @@ function TaskRow({
 
         <ChevronRight
           size={14}
-          className={`shrink-0 text-slate-600 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`shrink-0 text-[#535b68] transition-transform ${open ? "rotate-90" : ""}`}
         />
       </button>
 
       {open && (
-        <div className="task-detail">
-          <p className="text-[11.5px] leading-[1.7] text-slate-400">
+        <div className="task-detail !pl-[34px] !pr-0">
+          <p className="text-[11.5px] leading-[1.7] text-[#a7b0bd]">
             {task.description}
           </p>
-
-          {delegation?.selectionReason && (
-            <div className="mt-4">
-              <div className="detail-label">Why this agent</div>
-              <p className="mt-1.5 text-[11px] leading-[1.65] text-slate-500">
-                {delegation.selectionReason}
-              </p>
-
-              {delegation.capabilityFit === "partial" && (
-                <div className="callout callout-warning mt-2.5">
-                  Closest available match — this agent does not hold{" "}
-                  {(delegation.unmatchedCapabilities ?? []).join(", ")}.
-                </div>
-              )}
-            </div>
-          )}
-
-          {toolCalls.length > 0 && (
-            <div className="mt-4">
-              <div className="detail-label">Tool calls</div>
-
-              <div className="mt-2 space-y-2">
-                {toolCalls.map((call, callIndex) => (
-                  <div key={`${call.toolId}-${callIndex}`} className="tool-call">
-                    <div className="flex items-center gap-2">
-                      <Wrench size={12} className="text-cyan-300" />
-
-                      <span className="mono text-[10.5px] font-semibold text-slate-200">
-                        {call.toolId}
-                      </span>
-
-                      <StatusPill
-                        tone={call.status === "completed" ? "live" : "error"}
-                      >
-                        {call.status}
-                      </StatusPill>
-                    </div>
-
-                    <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
-                      <div>
-                        <div className="detail-label">Input</div>
-                        <pre className="code-block mt-1">
-                          {safeStringify(call.input, 2)}
-                        </pre>
-                      </div>
-
-                      <div>
-                        <div className="detail-label">
-                          {call.error ? "Error" : "Output"}
-                        </div>
-                        <pre className="code-block mt-1">
-                          {safeStringify(call.error ?? call.output, 2)}
-                        </pre>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {task.metadata.execution?.error && (
             <div className="callout callout-error mt-4">
@@ -781,8 +1079,8 @@ function TaskRow({
           )}
 
           {!hasResult && !task.metadata.execution?.error && (
-            <p className="mt-4 text-[10.5px] text-slate-600">
-              {summarizeValue(task.status) === "waiting"
+            <p className="mt-4 text-[10.5px] text-[#535b68]">
+              {task.status === "waiting"
                 ? "This task is holding for an approval decision."
                 : "This task has not produced a result yet."}
             </p>
