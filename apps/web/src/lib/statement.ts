@@ -102,7 +102,7 @@ export function describeCompany(
 }
 
 /** Small numbers read better as words at display size. */
-function spellOut(value: number): string {
+export function spellOut(value: number): string {
   const words = [
     "ZERO",
     "ONE",
