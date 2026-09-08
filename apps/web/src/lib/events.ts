@@ -321,3 +321,17 @@ export function safeStringify(value: unknown, indent = 0): string {
     return "";
   }
 }
+
+/**
+ * A single-line rendering of a result or artifact body, for a row or tile
+ * that previews it. Unlike summarizeValue this always returns a string, so a
+ * caller rendering a preview does not have to handle the empty case twice.
+ */
+export function excerptOf(value: unknown, maxChars = 220): string {
+  const text = typeof value === "string" ? value : safeStringify(value, 0);
+  const collapsed = text.replace(/\s+/g, " ").trim();
+
+  return collapsed.length > maxChars
+    ? `${collapsed.slice(0, maxChars)}…`
+    : collapsed;
+}
