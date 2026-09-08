@@ -1,16 +1,18 @@
 import {
   Activity,
-  Bell,
+  ArrowRight,
   Boxes,
   Brain,
   ChevronRight,
+  CircleAlert,
   Command as CommandIcon,
   FileOutput,
   LayoutGrid,
   Menu,
   Network,
+  RotateCcw,
+  Scale,
   Search,
-  Settings,
   ShieldAlert,
   Users,
   Wrench,
@@ -19,18 +21,23 @@ import {
 
 import type { LucideIcon } from "lucide-react";
 
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  fetchOverview,
-  formatRelativeTime,
-  type CompanyOverview,
-} from "./lib/api";
+import { fetchOverview, type CompanyOverview } from "./lib/api";
 
 import { useResource } from "./lib/useResource";
-import { describeEvent } from "./lib/events";
+
+import {
+  attentionTime,
+  collectAttention,
+  summarizeAttention,
+  type AttentionItem,
+} from "./lib/attention";
+
+import { toneClass } from "./lib/tone";
+import { profileOf } from "./lib/workforce";
 
 interface NavEntry {
   label: string;
@@ -41,10 +48,12 @@ interface NavEntry {
 }
 
 /**
- * Navigation grouped by what the person is trying to do, not by which table
- * the data came from. Running the company, staffing it, understanding it, and
- * the machinery underneath are four different intents, and the old flat list
- * of ten equal entries made you read all of them every time.
+ * Navigation grouped by intent rather than by table.
+ *
+ * Artifacts moved out of "System" and into an Output group of its own. It was
+ * filed next to Tools and Governance, which reads as machinery you configure;
+ * it is in fact the pile of things the company made, which is the opposite
+ * end of the product and deserves to be found on its own terms.
  */
 const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
   {
@@ -80,16 +89,25 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
     ],
   },
   {
+    label: "Output",
+    entries: [{ label: "Artifacts", path: "/artifacts", icon: FileOutput }],
+  },
+  {
     label: "System",
     entries: [
       { label: "Tools", path: "/tools", icon: Wrench },
-      { label: "Artifacts", path: "/artifacts", icon: FileOutput },
-      { label: "Governance", path: "/governance", icon: Settings },
+      { label: "Governance", path: "/governance", icon: Scale },
     ],
   },
 ];
 
 const ALL_ENTRIES = NAV_GROUPS.flatMap((group) => group.entries);
+
+const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
+  decision: ShieldAlert,
+  failure: CircleAlert,
+  recovering: RotateCcw,
+};
 
 /** The group a route belongs to, shown as context in the header. */
 function locate(pathname: string): { group: string; title: string } {
@@ -144,9 +162,7 @@ function Navigation({
 
                       <span>{entry.label}</span>
 
-                      {count > 0 && (
-                        <span className="nav-badge">{count}</span>
-                      )}
+                      {count > 0 && <span className="nav-badge">{count}</span>}
                     </>
                   )}
                 </NavLink>
@@ -180,11 +196,15 @@ function Brand({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
+  const [paletteIndex, setPaletteIndex] = useState(0);
+
+  const attentionButton = useRef<HTMLButtonElement>(null);
 
   // The shell reads the same overview every page reads, so the counts in the
   // rail can never disagree with the surface they point at.
@@ -193,11 +213,26 @@ export default function App() {
     { pollMs: 20_000 },
   );
 
+  const attention = useMemo(
+    () => collectAttention(overview.data),
+    [overview.data],
+  );
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      const key = event.key.toLowerCase();
+
+      if ((event.metaKey || event.ctrlKey) && key === "k") {
         event.preventDefault();
         setCommandOpen(true);
+        setPaletteIndex(0);
+      }
+
+      // The attention queue is the one thing that must be reachable from
+      // anywhere without hunting for a bell.
+      if ((event.metaKey || event.ctrlKey) && key === "j") {
+        event.preventDefault();
+        setAttentionOpen((open) => !open);
       }
 
       if (event.key === "Escape") {
@@ -222,71 +257,43 @@ export default function App() {
     setAttentionOpen(false);
   }
 
-  const attention = useMemo(() => {
-    const data = overview.data;
-    if (!data) return [];
-
-    return [
-      ...data.approvals.map((approval) => ({
-        id: approval.id,
-        tone: "tone-warning",
-        label: approval.action,
-        detail: approval.reason,
-        to: "/approvals",
-      })),
-      ...data.work.recentlyCompleted
-        .filter((work) => work.status === "failed")
-        .slice(0, 3)
-        .map((work) => ({
-          id: work.id,
-          tone: "tone-error",
-          label: "Work failed",
-          detail: work.objective,
-          to: `/work/${work.id}`,
-        })),
-      ...data.activity.slice(0, 2).map((event) => {
-        const described = describeEvent(event);
-        return {
-          id: event.id,
-          tone: described.tone,
-          label: described.title,
-          detail: formatRelativeTime(event.timestamp),
-          to: event.workId ? `/work/${event.workId}` : "/activity",
-        };
-      }),
-    ];
-  }, [overview.data]);
-
-  const pendingCount = overview.data?.approvals.length ?? 0;
-
   const paletteResults = useMemo(() => {
     const needle = paletteQuery.trim().toLowerCase();
 
     const surfaces = ALL_ENTRIES.map((entry) => ({
-      key: entry.path,
+      key: `surface:${entry.path}`,
       label: entry.label,
       path: entry.path,
       icon: entry.icon,
-      kind: "Go to",
+      kind: "Surface",
     }));
 
     const work = (overview.data?.work.active ?? [])
       .concat(overview.data?.work.recentlyCompleted ?? [])
-      .slice(0, 8)
+      .slice(0, 10)
       .map((item) => ({
-        key: item.id,
+        key: `work:${item.id}`,
         label: item.objective,
         path: `/work/${item.id}`,
         icon: LayoutGrid,
         kind: "Work",
       }));
 
-    return [...surfaces, ...work].filter(
+    const agents = (overview.data?.agents ?? []).map((agent) => ({
+      key: `agent:${agent.agentId}`,
+      label: `${agent.name} — ${profileOf(agent).label}`,
+      path: "/agents",
+      icon: Users,
+      kind: "Agent",
+    }));
+
+    return [...surfaces, ...work, ...agents].filter(
       (entry) => !needle || entry.label.toLowerCase().includes(needle),
     );
   }, [paletteQuery, overview.data]);
 
   const { group, title } = locate(location.pathname);
+  const attentionCount = attention.length;
 
   return (
     <div className="app-shell">
@@ -358,14 +365,30 @@ export default function App() {
 
         <span className="mobile-brand">UNI-OFFICE</span>
 
-        <button
-          type="button"
-          onClick={() => setCommandOpen(true)}
-          className="icon-button"
-          aria-label="Search"
-        >
-          <Search size={15} />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* On a phone the attention queue outranks search, so it stays in
+              the bar rather than behind the drawer. */}
+          <button
+            type="button"
+            onClick={() => setAttentionOpen(true)}
+            className={`icon-button${attentionCount > 0 ? " icon-button-attention" : ""}`}
+            aria-label={`Attention queue, ${attentionCount} items`}
+          >
+            <ShieldAlert size={15} />
+            {attentionCount > 0 && (
+              <span className="attention-count">{attentionCount}</span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCommandOpen(true)}
+            className="icon-button"
+            aria-label="Search"
+          >
+            <Search size={15} />
+          </button>
+        </div>
       </div>
 
       <main className="main-content">
@@ -393,61 +416,24 @@ export default function App() {
 
             <div className="relative">
               <button
+                ref={attentionButton}
                 type="button"
-                className={`icon-button${pendingCount > 0 ? " icon-button-attention" : ""}`}
-                aria-label={`Attention queue, ${pendingCount} awaiting approval`}
+                className={`attention-button${attentionCount > 0 ? " attention-button-live" : ""}`}
+                aria-expanded={attentionOpen}
+                aria-label={`Attention queue, ${attentionCount} items`}
                 onClick={() => setAttentionOpen((open) => !open)}
               >
-                <Bell size={14} />
-
-                {pendingCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#e5484d] px-1 font-mono text-[8px] font-semibold text-white">
-                    {pendingCount}
-                  </span>
-                )}
+                <ShieldAlert size={13} />
+                <span className="attention-button-label">
+                  {attentionCount > 0 ? summarizeAttention(attention) : "Clear"}
+                </span>
               </button>
 
               {attentionOpen && (
-                <div className="notification-popover">
-                  <div className="flex items-center justify-between border-b border-[#1e232b] px-3 py-2.5">
-                    <span className="t-eyebrow">Attention</span>
-
-                    {pendingCount > 0 && (
-                      <span className="rounded-sm bg-[rgba(229,72,77,0.1)] px-1.5 py-0.5 font-mono text-[8px] text-[#ff7176]">
-                        {pendingCount} WAITING
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-0.5 p-1.5">
-                    {attention.length === 0 ? (
-                      <div className="px-2 py-5 text-center text-[10.5px] text-[#6f7887]">
-                        Nothing needs you.
-                      </div>
-                    ) : (
-                      attention.slice(0, 6).map((entry) => (
-                        <NavLink
-                          key={entry.id}
-                          to={entry.to}
-                          onClick={() => setAttentionOpen(false)}
-                          className="notification-item"
-                        >
-                          <span className={`pill-dot mt-1 ${entry.tone}`} />
-
-                          <span className="min-w-0">
-                            <span className="block truncate">{entry.label}</span>
-
-                            {entry.detail && (
-                              <span className="mt-0.5 block truncate text-[9.5px] text-[#535b68]">
-                                {entry.detail}
-                              </span>
-                            )}
-                          </span>
-                        </NavLink>
-                      ))
-                    )}
-                  </div>
-                </div>
+                <AttentionPanel
+                  items={attention}
+                  onClose={() => setAttentionOpen(false)}
+                />
               )}
             </div>
 
@@ -469,7 +455,9 @@ export default function App() {
           </div>
         </header>
 
-        <section className="page-surface">
+        {/* Keyed on the path so every navigation replays the page's entrance
+            rather than swapping content inside a static frame. */}
+        <section className="page-surface" key={location.pathname}>
           <Outlet />
         </section>
       </main>
@@ -492,8 +480,33 @@ export default function App() {
               <input
                 autoFocus
                 value={paletteQuery}
-                onChange={(event) => setPaletteQuery(event.target.value)}
-                placeholder="Go to a surface, or find an objective..."
+                onChange={(event) => {
+                  setPaletteQuery(event.target.value);
+                  setPaletteIndex(0);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setPaletteIndex((index) =>
+                      Math.min(index + 1, paletteResults.length - 1),
+                    );
+                  }
+
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setPaletteIndex((index) => Math.max(index - 1, 0));
+                  }
+
+                  if (event.key === "Enter") {
+                    const target = paletteResults[paletteIndex];
+                    if (!target) return;
+                    event.preventDefault();
+                    setCommandOpen(false);
+                    setPaletteQuery("");
+                    navigate(target.path);
+                  }
+                }}
+                placeholder="Go to a surface, an objective or an agent…"
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-[#f2f4f7] outline-none placeholder:text-[#535b68]"
               />
 
@@ -508,28 +521,105 @@ export default function App() {
                   Nothing matches “{paletteQuery}”.
                 </div>
               ) : (
-                paletteResults.map(({ key, label, path, icon: Icon, kind }) => (
-                  <NavLink
-                    key={key}
-                    to={path}
-                    onClick={() => {
-                      setCommandOpen(false);
-                      setPaletteQuery("");
-                    }}
-                    className="palette-item"
-                  >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-[#1e232b] bg-[#0e1116] text-[#6f7887]">
-                      <Icon size={12} />
-                    </span>
+                paletteResults.map(
+                  ({ key, label, path, icon: Icon, kind }, index) => (
+                    <NavLink
+                      key={key}
+                      to={path}
+                      onClick={() => {
+                        setCommandOpen(false);
+                        setPaletteQuery("");
+                      }}
+                      onMouseEnter={() => setPaletteIndex(index)}
+                      className={`palette-item${index === paletteIndex ? " palette-item-active" : ""}`}
+                    >
+                      <span className="palette-icon">
+                        <Icon size={12} />
+                      </span>
 
-                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                      <span className="min-w-0 flex-1 truncate">{label}</span>
 
-                    <span className="t-machine shrink-0">{kind}</span>
-                  </NavLink>
-                ))
+                      <span className="t-machine shrink-0">{kind}</span>
+                    </NavLink>
+                  ),
+                )
               )}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The attention queue.
+ *
+ * Every entry says what it is, why it stopped and what happens next, because
+ * a list of red labels with no consequence attached is just an alarm. The
+ * empty state is a full sentence rather than a dash - "nothing needs you" is
+ * a genuinely good answer and should read like one.
+ */
+function AttentionPanel({
+  items,
+  onClose,
+}: {
+  items: AttentionItem[];
+  onClose: () => void;
+}) {
+  return (
+    <div className="attention-panel" role="region" aria-label="Attention queue">
+      <div className="attention-panel-head">
+        <span className="t-eyebrow">What needs you</span>
+
+        <span className="t-machine">
+          {items.length === 0 ? "CLEAR" : summarizeAttention(items)}
+        </span>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="attention-empty">
+          <p>Nothing needs your decision.</p>
+          <p className="attention-empty-detail">
+            The company runs unattended until it reaches a step it will not
+            take on its own.
+          </p>
+        </div>
+      ) : (
+        <div className="attention-list">
+          {items.slice(0, 8).map((item) => {
+            const Icon = ATTENTION_ICON[item.kind];
+
+            return (
+              <NavLink
+                key={`${item.kind}:${item.id}`}
+                to={item.to}
+                onClick={onClose}
+                className={`attention-item ${toneClass[item.tone]}`}
+              >
+                <Icon size={13} className="attention-item-icon" />
+
+                <span className="min-w-0 flex-1">
+                  <span className="attention-item-label">{item.label}</span>
+                  <span className="attention-item-detail">{item.detail}</span>
+                  <span className="attention-item-consequence">
+                    {item.consequence}
+                  </span>
+                </span>
+
+                <span className="t-machine shrink-0">
+                  {attentionTime(item)}
+                </span>
+              </NavLink>
+            );
+          })}
+
+          {items.length > 8 && (
+            <NavLink to="/approvals" onClick={onClose} className="attention-more">
+              {items.length - 8} more
+              <ArrowRight size={11} />
+            </NavLink>
+          )}
         </div>
       )}
     </div>
