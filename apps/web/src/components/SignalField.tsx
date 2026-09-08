@@ -58,8 +58,14 @@ export function SignalField({
       const reach = 18 + intensity * 74 + wobble * 8;
       const lift = wobble * (3 + intensity * 6);
 
+      // Drawn right-to-left. Anchored on the left they ran underneath the
+      // headline and read as accidental rules through the type; from the
+      // right they occupy the half of the composition the words leave empty.
+      const start = 100;
+      const end = 100 - reach;
+
       return {
-        d: `M0 ${y} C ${reach * 0.3} ${y + lift}, ${reach * 0.65} ${y - lift}, ${reach} ${y + lift * 0.4}`,
+        d: `M${start} ${y} C ${start - reach * 0.3} ${y + lift}, ${start - reach * 0.65} ${y - lift}, ${end} ${y + lift * 0.4}`,
         opacity: 0.1 + (index % 3) * 0.05 + intensity * 0.22,
         width: index % 4 === 0 ? 0.5 : 0.3,
         running: index < live,
