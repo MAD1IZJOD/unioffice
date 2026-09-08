@@ -21,7 +21,7 @@ export interface DescribedEvent {
  * Turns a raw event row into a line a person can read.
  *
  * The event log is the company's actual history, so this deliberately reads
- * fields off the payload rather than printing the event type verbatim: "Atlas
+ * fields off the payload rather than printing the event type verbatim: "Harvey
  * called calculator" is the story, "tool.completed" is the plumbing.
  */
 export function describeEvent(event: ActivityEvent): DescribedEvent {

@@ -47,12 +47,12 @@ test("filter_equals keeps only matching array items", async () => {
 test("map_field projects a single field from every array item", async () => {
   const validation = jsonTransformTool.validate({
     operation: "map_field",
-    data: [{ name: "Nova" }, { name: "Forge" }],
+    data: [{ name: "Mike" }, { name: "Tony" }],
     field: "name",
   });
   assert.ok(validation.valid);
   const output = await jsonTransformTool.execute(validation.value, context);
-  assert.deepEqual(output, ["Nova", "Forge"]);
+  assert.deepEqual(output, ["Mike", "Tony"]);
 });
 
 test("rejects mismatched data shapes at validation time", () => {

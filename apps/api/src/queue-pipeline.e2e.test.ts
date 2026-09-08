@@ -79,7 +79,7 @@ function workforce(): Agent[] {
     {
       id: ledgerId,
       organizationId,
-      name: "Ledger",
+      name: "Harvey",
       description: "Performs exact calculation.",
       type: "specialist",
       status: "active",

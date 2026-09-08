@@ -25,49 +25,49 @@ const developmentOrganization = {
 const workforce = [
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c501",
-    name: "Atlas",
+    name: "Tyrion",
     type: "orchestrator" as const,
-    description: "Coordinates company work, sequences execution and keeps outcomes aligned to the objective.",
+    description: "Reads the objective, decides the order of the work, routes each task to whoever can actually do it, and holds the outcome together.",
     capabilities: ["planning", "coordination", "decision_support"],
     toolIds: [] as string[],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c502",
-    name: "Forge",
+    name: "Tony",
     type: "specialist" as const,
-    description: "Delivers engineering analysis, technical design and structured data transformation.",
+    description: "Builds. Engineering analysis, technical design and structured data transformation.",
     capabilities: ["coding", "technical_design", "data_transformation"],
     toolIds: ["calculator", "datetime", "json_transform"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c503",
-    name: "Ledger",
+    name: "Harvey",
     type: "specialist" as const,
-    description: "Performs exact calculation and financial, operational and decision analysis.",
+    description: "Runs the numbers exactly. Calculation, financial analysis and quantitative decision support.",
     capabilities: ["calculation", "financial_analysis", "decision_support"],
     toolIds: ["calculator", "datetime"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c504",
-    name: "Nova",
+    name: "Mike",
     type: "specialist" as const,
-    description: "Researches markets, customers, competitors and strategic questions, and synthesises findings.",
+    description: "Works the question over: reads the supplied context and company memory, synthesises what it finds and writes the analysis.",
     capabilities: ["research", "synthesis", "writing"],
     toolIds: ["datetime", "json_transform"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c505",
-    name: "Kindred",
+    name: "Jamie",
     type: "specialist" as const,
-    description: "Supports people operations, process design and internal ways of working.",
+    description: "Handles people operations, process design and the internal ways of working the company runs on.",
     capabilities: ["people_operations", "process_design", "writing"],
     toolIds: ["datetime"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c506",
-    name: "Relay",
+    name: "Peter",
     type: "specialist" as const,
-    description: "Prepares clear customer and stakeholder communication without sending anything externally.",
+    description: "Turns what the company knows into clear customer and stakeholder messages. Drafts them; never sends anything externally.",
     capabilities: ["communication", "stakeholder_messaging", "writing"],
     toolIds: ["datetime"],
   },
@@ -144,6 +144,7 @@ export async function ensureDevelopmentWorkforce(
     // between deploys; an agent seeded before toolIds existed must not be
     // stuck without them forever just because its row already exists.
     const isOutOfDate =
+      currentAgent.name !== blueprint.name ||
       JSON.stringify([...currentAgent.toolIds].sort()) !== JSON.stringify([...toolIds].sort()) ||
       JSON.stringify([...currentAgent.capabilities].sort()) !== JSON.stringify([...blueprint.capabilities].sort()) ||
       currentAgent.description !== blueprint.description ||
@@ -152,6 +153,7 @@ export async function ensureDevelopmentWorkforce(
     if (isOutOfDate) {
       await agentRepository.update({
         ...currentAgent,
+        name: blueprint.name,
         description: blueprint.description,
         capabilities: blueprint.capabilities,
         toolIds,

@@ -20,7 +20,7 @@ export interface AgentSigilProps {
  * avatars, but inventing artwork per agent would be decoration that says
  * nothing. So the glyph is computed from what the agent actually is: a spoke
  * per capability, a node per authorised tool, and a rotation seeded by its id.
- * Forge and Ledger genuinely differ because they genuinely differ, and a new
+ * Tony and Harvey genuinely differ because they genuinely differ, and a new
  * agent gets a coherent mark without anyone drawing one.
  */
 export function AgentSigil({

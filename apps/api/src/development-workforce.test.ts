@@ -16,7 +16,7 @@ import type {
 import { ensureDevelopmentWorkforce } from "./development-workforce.js";
 
 const organizationId = "2f6b579a-f0f8-45a5-868a-21c08bde1314" as OrganizationId;
-const ledgerId = "e32813a2-dda6-4a89-a756-c2991510c503" as AgentId;
+const harveyId = "e32813a2-dda6-4a89-a756-c2991510c503" as AgentId;
 
 function organizationRepository(organization: Organization | null): OrganizationRepository {
   let current = organization;
@@ -61,17 +61,17 @@ test("creates the full workforce with their granted tools when nothing exists ye
 
   await ensureDevelopmentWorkforce(organizationRepository(null), agents);
 
-  const ledger = agents.agents.get(ledgerId);
-  assert.ok(ledger);
-  assert.deepEqual([...ledger.toolIds].sort(), ["calculator", "datetime"]);
+  const harvey = agents.agents.get(harveyId);
+  assert.ok(harvey);
+  assert.deepEqual([...harvey.toolIds].sort(), ["calculator", "datetime"]);
 });
 
 test("grants tools to an agent seeded before toolIds existed, without touching its identity", async () => {
   const now = new Date();
-  const staleLedger: Agent = {
-    id: ledgerId,
+  const staleHarvey: Agent = {
+    id: harveyId,
     organizationId,
-    name: "Ledger",
+    name: "Harvey",
     description: "Performs careful financial, operational and decision analysis.",
     type: "specialist",
     status: "active",
@@ -81,27 +81,27 @@ test("grants tools to an agent seeded before toolIds existed, without touching i
     updatedAt: now,
     metadata: { developmentSeed: true },
   };
-  const agents = agentRepository([staleLedger]);
+  const agents = agentRepository([staleHarvey]);
 
   await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents);
 
-  const updated = agents.agents.get(ledgerId);
+  const updated = agents.agents.get(harveyId);
   assert.ok(updated);
   assert.deepEqual([...updated.toolIds].sort(), ["calculator", "datetime"]);
   // Identity and creation metadata must survive the reconciliation.
-  assert.equal(updated.id, ledgerId);
+  assert.equal(updated.id, harveyId);
   assert.equal(updated.createdAt.getTime(), now.getTime());
   assert.equal(updated.status, "active");
 });
 
 test("does not rewrite an agent that already matches the blueprint", async () => {
   const now = new Date();
-  const upToDateLedger: Agent = {
-    id: ledgerId,
+  const upToDateHarvey: Agent = {
+    id: harveyId,
     organizationId,
-    name: "Ledger",
+    name: "Harvey",
     description:
-      "Performs exact calculation and financial, operational and decision analysis.",
+      "Runs the numbers exactly. Calculation, financial analysis and quantitative decision support.",
     type: "specialist",
     status: "active",
     capabilities: ["calculation", "financial_analysis", "decision_support"],
@@ -111,15 +111,15 @@ test("does not rewrite an agent that already matches the blueprint", async () =>
     metadata: {
       developmentSeed: true,
       systemInstructions: [
-        "You are Ledger, a UNI-OFFICE specialist.",
-        "Performs exact calculation and financial, operational and decision analysis.",
+        "You are Harvey, a UNI-OFFICE specialist.",
+        "Runs the numbers exactly. Calculation, financial analysis and quantitative decision support.",
         "Complete the assigned task using the supplied context.",
         "Be concise. Lead with the answer, and surface an assumption only when a different one would change it.",
         "Use your available tools for calculations or lookups instead of guessing; never claim to have used a tool you did not actually call.",
       ].join("\n"),
     },
   };
-  const agents = agentRepository([upToDateLedger]);
+  const agents = agentRepository([upToDateHarvey]);
   let updateCalls = 0;
   const originalUpdate = agents.update.bind(agents);
   agents.update = async (agent) => {
@@ -130,4 +130,34 @@ test("does not rewrite an agent that already matches the blueprint", async () =>
   await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents);
 
   assert.equal(updateCalls, 0, "an already-current agent must not be rewritten");
+});
+
+test("renames an agent seeded under an earlier name", async () => {
+  const now = new Date();
+  const previouslyNamed: Agent = {
+    id: harveyId,
+    organizationId,
+    name: "Ledger",
+    description:
+      "Performs exact calculation and financial, operational and decision analysis.",
+    type: "specialist",
+    status: "active",
+    capabilities: ["calculation", "financial_analysis", "decision_support"],
+    toolIds: ["calculator", "datetime"],
+    createdAt: now,
+    updatedAt: now,
+    metadata: { developmentSeed: true },
+  };
+  const agents = agentRepository([previouslyNamed]);
+
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents);
+
+  const updated = agents.agents.get(harveyId);
+  assert.ok(updated);
+  assert.equal(updated.name, "Harvey");
+  assert.match(
+    String(updated.metadata.systemInstructions),
+    /^You are Harvey, /,
+  );
+  assert.equal(updated.createdAt.getTime(), now.getTime());
 });

@@ -91,20 +91,20 @@ function workforce(): Agent[] {
   return [
     agent({
       id: atlasId,
-      name: "Atlas",
+      name: "Tyrion",
       type: "orchestrator",
       capabilities: ["planning", "coordination"],
       toolIds: [],
     }),
     agent({
       id: ledgerId,
-      name: "Ledger",
+      name: "Harvey",
       capabilities: ["calculation", "financial_analysis"],
       toolIds: ["calculator", "datetime"],
     }),
     agent({
       id: novaId,
-      name: "Nova",
+      name: "Mike",
       capabilities: ["research", "writing"],
       toolIds: ["datetime"],
     }),

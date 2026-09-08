@@ -52,12 +52,27 @@ import { AgentSigil } from "../components/AgentSigil";
  */
 type LaunchStage = "idle" | "creating" | "planning" | "executing" | "done";
 
-const stageCopy: Record<Exclude<LaunchStage, "idle">, string> = {
-  creating: "Recording the objective",
-  planning: "Atlas is building the work plan",
-  executing: "Queueing the plan for a worker",
-  done: "Execution is under way",
-};
+/**
+ * The planner runs as the organization's orchestrator, so the line naming it
+ * reads the roster rather than hard-coding a name the seed could change.
+ */
+function stageCopy(
+  stage: Exclude<LaunchStage, "idle">,
+  orchestrator: string | undefined,
+): string {
+  switch (stage) {
+    case "creating":
+      return "Recording the objective";
+    case "planning":
+      return orchestrator
+        ? `${orchestrator} is building the work plan`
+        : "Building the work plan";
+    case "executing":
+      return "Queueing the plan for a worker";
+    default:
+      return "Execution is under way";
+  }
+}
 
 const suggestions = [
   "Calculate our total monthly operating cost from salaries 48200, cloud 9350, lease 12500 and licences 3875, then explain what it means for runway.",
@@ -118,6 +133,9 @@ export default function Command() {
   const approvals = data?.approvals ?? [];
   const toolCalls =
     data?.tools.reduce((total, tool) => total + tool.callCount, 0) ?? 0;
+  const orchestratorName = data?.agents.find(
+    (agent) => agent.type === "orchestrator",
+  )?.name;
 
   if (overview.error) {
     return (
@@ -282,7 +300,11 @@ export default function Command() {
           </div>
 
           {stage !== "idle" && (
-            <LaunchPipeline stage={stage} workId={launchedWorkId} />
+            <LaunchPipeline
+              stage={stage}
+              workId={launchedWorkId}
+              orchestrator={orchestratorName}
+            />
           )}
 
           {launchError && stage === "idle" && (
@@ -550,9 +572,11 @@ function DispatchStat({
 function LaunchPipeline({
   stage,
   workId,
+  orchestrator,
 }: {
   stage: LaunchStage;
   workId?: string;
+  orchestrator?: string;
 }) {
   const order: Array<Exclude<LaunchStage, "idle">> = [
     "creating",
@@ -594,7 +618,7 @@ function LaunchPipeline({
           )}
           {stage === "done"
             ? "Handed to a worker. Opening the live view."
-            : stageCopy[stage as Exclude<LaunchStage, "idle">]}
+            : stageCopy(stage as Exclude<LaunchStage, "idle">, orchestrator)}
         </span>
 
         {workId && (

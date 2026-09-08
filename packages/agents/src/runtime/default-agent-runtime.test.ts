@@ -27,7 +27,7 @@ const echoTool: ToolDefinition<{ value: number }, { doubled: number }> = {
 function toolDefinition(toolIds: string[]): AgentDefinition {
   return {
     id: "agent-1",
-    name: "Ledger",
+    name: "Harvey",
     description: "Performs calculations.",
     type: "specialist",
     systemInstructions: "Use tools when they help.",
@@ -74,7 +74,7 @@ test("provides the model with structured work and dependency context", async () 
   };
   const definition: AgentDefinition = {
     id: "agent-1",
-    name: "Forge",
+    name: "Tony",
     description: "Engineering specialist.",
     type: "specialist",
     systemInstructions: "Complete engineering tasks precisely.",
@@ -129,7 +129,7 @@ test("bounds oversized and circular dependency context before model execution", 
   const runtime = new DefaultAgentRuntime(provider);
   const definition: AgentDefinition = {
     id: "agent-1",
-    name: "Nova",
+    name: "Mike",
     description: "Research specialist.",
     type: "specialist",
     systemInstructions: "Research accurately.",

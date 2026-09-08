@@ -302,7 +302,7 @@ function makeAgent(): Agent {
   return {
     id: agentId,
     organizationId,
-    name: "Atlas",
+    name: "Tyrion",
     description: "Coordinates work.",
     type: "orchestrator",
     status: "active",

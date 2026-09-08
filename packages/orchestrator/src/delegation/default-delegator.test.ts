@@ -16,8 +16,8 @@ import type {
 import { DefaultDelegator } from "./default-delegator.js";
 
 const organizationId = "org-1" as OrganizationId;
-const atlasId = "agent-atlas" as AgentId;
-const forgeId = "agent-forge" as AgentId;
+const atlasId = "agent-tyrion" as AgentId;
+const forgeId = "agent-tony" as AgentId;
 
 function agent(
   id: AgentId,
@@ -183,7 +183,7 @@ test("still refuses to route a tool-required task to an unauthorized agent", asy
 
 test("routes a tool-required task to the tool-authorized agent even when the orchestrator would otherwise win", async () => {
   const delegator = new DefaultDelegator(repository([
-    // Atlas has no tools but IS the suggested agent type, so it would win
+    // Tyrion has no tools but IS the suggested agent type, so it would win
     // on agentType/agentTypeSuitability if tool authorization weren't a
     // hard filter. This is the exact bug this test exists to prevent.
     agent(atlasId, "active", { type: "orchestrator" }),
