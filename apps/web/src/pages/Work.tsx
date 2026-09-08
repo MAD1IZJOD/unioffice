@@ -1,10 +1,11 @@
-import { GitBranch, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
   fetchWorkList,
+  formatDuration,
   formatRelativeTime,
   type WorkItem,
   type WorkStatus,
@@ -13,20 +14,15 @@ import {
 import { useResource } from "../lib/useResource";
 
 import {
-  EmptyState,
+  Connecting,
+  Failure,
   PageOpening,
+  Quiet,
   Reading,
-  ErrorState,
-  Panel,
-  Skeleton,
   StatusPill,
 } from "../components/primitives";
 
-import {
-  statusLabel,
-  toneClass,
-  workStatusTone,
-} from "../lib/tone";
+import { statusLabel, toneClass, workStatusTone } from "../lib/tone";
 
 const filters: Array<{ id: WorkStatus | "all"; label: string }> = [
   { id: "all", label: "All" },
@@ -36,6 +32,14 @@ const filters: Array<{ id: WorkStatus | "all"; label: string }> = [
   { id: "completed", label: "Completed" },
   { id: "failed", label: "Failed" },
 ];
+
+/** The plan the planner wrote for this objective, when it wrote one. */
+function planOf(work: WorkItem): { taskCount?: number } {
+  const plan = work.metadata.plan;
+  return typeof plan === "object" && plan !== null
+    ? (plan as { taskCount?: number })
+    : {};
+}
 
 export default function Work() {
   const [filter, setFilter] = useState<WorkStatus | "all">("all");
@@ -69,15 +73,21 @@ export default function Work() {
     }, {});
   }, [work.data]);
 
+  const total = work.data?.length ?? 0;
+
   return (
     <div className="fade-up">
       <PageOpening
         eyebrow="Operate"
         title="EVERY OBJECTIVE"
         lead="THE COMPANY HAS TAKEN."
-        detail="From the plan it produced to the result it delivered."
+        detail="From the plan it produced to the result it delivered, newest first."
         tone={
-          counts.executing > 0 ? "moving" : counts.failed > 0 ? "broken" : "quiet"
+          counts.executing > 0
+            ? "moving"
+            : counts.failed > 0
+              ? "broken"
+              : "quiet"
         }
         meta={
           <>
@@ -93,7 +103,11 @@ export default function Work() {
               tone="warning"
               live={(counts.waiting_approval ?? 0) > 0}
             />
-            <Reading label="Completed" value={counts.completed ?? 0} tone="live" />
+            <Reading
+              label="Completed"
+              value={counts.completed ?? 0}
+              tone="live"
+            />
             <Reading
               label="Failed"
               value={counts.failed ?? 0}
@@ -105,122 +119,136 @@ export default function Work() {
       />
 
       <div className="mx-auto max-w-[1180px]">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="filter-group">
-          {filters.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() => setFilter(entry.id)}
-              className={`filter-tab${filter === entry.id ? " filter-tab-active" : ""}`}
-            >
-              {entry.label}
-              {work.data && (
-                <span className="filter-count">{counts[entry.id] ?? 0}</span>
-              )}
-            </button>
-          ))}
+        <div className="mb-2 flex flex-wrap items-center gap-3">
+          <div className="filter-group">
+            {filters.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setFilter(entry.id)}
+                className={`filter-tab${filter === entry.id ? " filter-tab-active" : ""}`}
+              >
+                {entry.label}
+                {work.data && (
+                  <span className="filter-count">{counts[entry.id] ?? 0}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <label className="search-field ml-auto">
+            <Search size={13} className="text-slate-500" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search objectives"
+              aria-label="Search objectives"
+            />
+          </label>
         </div>
 
-        <label className="search-field ml-auto">
-          <Search size={13} className="text-slate-500" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search objectives"
-            aria-label="Search objectives"
-          />
-        </label>
-      </div>
-
-      <Panel padded={false}>
         {work.loading ? (
-          <div className="p-[18px]">
-            <Skeleton rows={6} />
-          </div>
+          <Connecting what="Fetching the company's work…" />
         ) : work.error ? (
-          <ErrorState
-            message={work.error.message}
-            offline={work.error.isOffline}
-            onRetry={work.reload}
+          <Failure
+            headline={
+              work.error.isOffline ? "The company is unreachable" : "That read failed"
+            }
+            detail={work.error.message}
+            consequence="Work already on the queue keeps running; this page just cannot see it."
+            action={
+              <button type="button" onClick={work.reload} className="button-ghost">
+                Try again
+              </button>
+            }
           />
         ) : visible.length === 0 ? (
-          <EmptyState
-            icon={GitBranch}
-            title={
-              (work.data?.length ?? 0) === 0
-                ? "No work has been created yet"
-                : "Nothing matches this filter"
-            }
-            description={
-              (work.data?.length ?? 0) === 0
-                ? "Give the company an objective from the Command Center and it will appear here with its full execution history."
-                : "Try a different status or clear the search."
-            }
-            action={
-              (work.data?.length ?? 0) === 0 ? (
+          total === 0 ? (
+            <Quiet
+              line="The company is quiet."
+              detail="Nothing has been asked of it yet. Give it an objective and every step it takes — the plan, who it went to, which tools were called — is recorded here."
+              action={
                 <Link to="/command" className="button-primary">
-                  Go to Command Center
+                  Go to the Command Center
                 </Link>
-              ) : undefined
-            }
-          />
+              }
+            />
+          ) : (
+            <Quiet
+              line="Nothing matches that."
+              detail="Try another status, or clear the search."
+              action={
+                <button
+                  type="button"
+                  className="button-ghost"
+                  onClick={() => {
+                    setFilter("all");
+                    setQuery("");
+                  }}
+                >
+                  Clear filters
+                </button>
+              }
+            />
+          )
         ) : (
-          <div className="op-list px-[14px]">
-            {visible.map((item) => {
-              const plan =
-                typeof item.metadata.plan === "object" && item.metadata.plan
-                  ? (item.metadata.plan as Record<string, unknown>)
-                  : undefined;
+          <div className="ledger">
+            {visible.map((item, index) => {
+              const plan = planOf(item);
+              const ran = formatDuration(item.startedAt, item.completedAt);
 
               return (
                 <Link
                   key={item.id}
                   to={`/work/${item.id}`}
-                  className="op-row"
+                  className="ledger-row"
                 >
                   <span
-                    className={`op-rail ${toneClass[workStatusTone(item.status)]}${item.status === "executing" ? " op-rail-running" : ""}`}
+                    className={`ledger-rail ${toneClass[workStatusTone(item.status)]}${item.status === "executing" ? " op-rail-running" : ""}`}
                   />
 
-                  <span className="min-w-0 flex-1">
-                    <span className="op-row-title">{item.objective}</span>
-
-                    <span className="op-row-meta">
-                      <span className="t-machine">
-                        {formatRelativeTime(item.createdAt)}
-                      </span>
-
-                      <span className="t-machine uppercase">
-                        {item.priority}
-                      </span>
-
-                      {plan?.taskCount !== undefined && (
-                        <span className="t-machine">
-                          {String(plan.taskCount)} tasks
-                        </span>
-                      )}
-
-                      {typeof item.metadata.executionError === "string" && (
-                        <span className="truncate text-[9.5px] text-[#c9868a]">
-                          {item.metadata.executionError}
-                        </span>
-                      )}
-                    </span>
+                  <span className="ledger-index">
+                    {String(visible.length - index).padStart(3, "0")}
                   </span>
 
-                  <StatusPill
-                    tone={workStatusTone(item.status)}
-                    pulse={item.status === "executing"}
-                  >
-                    {statusLabel(item.status)}
-                  </StatusPill>
+                  <span className="min-w-0">
+                    <span className="ledger-title">{item.objective}</span>
+
+                    <span className="ledger-meta">
+                      <span>{formatRelativeTime(item.createdAt)}</span>
+
+                      <span className="uppercase">{item.priority}</span>
+
+                      {plan.taskCount !== undefined && (
+                        <span>
+                          {plan.taskCount}{" "}
+                          {plan.taskCount === 1 ? "task" : "tasks"}
+                        </span>
+                      )}
+
+                      {ran !== "—" && <span>ran {ran}</span>}
+                    </span>
+
+                    {typeof item.metadata.executionError === "string" && (
+                      <span className="ledger-preview text-[#c9868a]">
+                        {item.metadata.executionError}
+                      </span>
+                    )}
+                  </span>
+
+                  <span className="ledger-status">
+                    <StatusPill
+                      tone={workStatusTone(item.status)}
+                      pulse={item.status === "executing"}
+                    >
+                      {statusLabel(item.status)}
+                    </StatusPill>
+                  </span>
                 </Link>
               );
             })}
           </div>
         )}
-      </Panel>
       </div>
     </div>
   );
