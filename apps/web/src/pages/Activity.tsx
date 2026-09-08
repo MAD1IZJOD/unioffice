@@ -1,30 +1,63 @@
-import { Activity as ActivityIcon } from "lucide-react";
-
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import {
-  fetchActivity,
-  formatRelativeTime,
-  type ActivityEvent,
-} from "../lib/api";
+import { fetchActivity, type ActivityEvent } from "../lib/api";
 
 import { useResource } from "../lib/useResource";
 
 import {
   describeEvent,
   eventCategories,
+  type DescribedEvent,
   type EventCategory,
 } from "../lib/events";
 
 import {
-  EmptyState,
+  Connecting,
+  Failure,
   PageOpening,
+  Quiet,
   Reading,
-  ErrorState,
-  Panel,
-  Skeleton,
 } from "../components/primitives";
+
+interface LogEntry {
+  event: ActivityEvent;
+  described: DescribedEvent;
+}
+
+/** The log is read by day, so it is grouped by day. */
+function groupByDay(entries: LogEntry[]) {
+  const groups = new Map<string, LogEntry[]>();
+
+  for (const entry of entries) {
+    const day = new Date(entry.event.timestamp).toDateString();
+    groups.set(day, [...(groups.get(day) ?? []), entry]);
+  }
+
+  return [...groups.entries()];
+}
+
+function dayLabel(day: string): string {
+  const date = new Date(day);
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now() - 86_400_000).toDateString();
+
+  if (day === today) return "Today";
+  if (day === yesterday) return "Yesterday";
+
+  return date.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function Activity() {
   const [category, setCategory] = useState<EventCategory | "all">("all");
@@ -34,7 +67,7 @@ export default function Activity() {
     { pollMs: 12_000 },
   );
 
-  const described = useMemo(
+  const described = useMemo<LogEntry[]>(
     () =>
       (activity.data ?? []).map((event) => ({
         event,
@@ -43,9 +76,15 @@ export default function Activity() {
     [activity.data],
   );
 
-  const visible = described.filter(
-    (entry) => category === "all" || entry.described.category === category,
+  const visible = useMemo(
+    () =>
+      described.filter(
+        (entry) => category === "all" || entry.described.category === category,
+      ),
+    [described, category],
   );
+
+  const days = useMemo(() => groupByDay(visible), [visible]);
 
   const counts = useMemo(
     () =>
@@ -59,16 +98,34 @@ export default function Activity() {
   );
 
   return (
-    <div className="mx-auto max-w-[1080px] fade-up">
+    <div className="mx-auto max-w-[1000px] fade-up">
       <PageOpening
         eyebrow="Intelligence"
         title="WHAT THE COMPANY"
         lead="ACTUALLY DID."
-        detail="Every plan, delegation, tool call, approval and artifact, in the order it happened."
-        meta={<Reading label="Recorded events" value={activity.loading ? "—" : described.length} tone="active" />}
+        detail="Every plan, delegation, tool call, approval and artifact, in the order it happened. This is the record the rest of the product is derived from."
+        meta={
+          <>
+            <Reading
+              label="Recorded"
+              value={activity.loading ? "—" : described.length}
+              tone="active"
+            />
+            <Reading
+              label="Tool calls"
+              value={activity.loading ? "—" : (counts.tool ?? 0)}
+              tone="idle"
+            />
+            <Reading
+              label="Decisions"
+              value={activity.loading ? "—" : (counts.approval ?? 0)}
+              tone="warning"
+            />
+          </>
+        }
       />
 
-      <div className="filter-group mb-4">
+      <div className="filter-group mb-1">
         {eventCategories.map((entry) => (
           <button
             key={entry.id}
@@ -84,59 +141,77 @@ export default function Activity() {
         ))}
       </div>
 
-      <Panel padded={false}>
-        {activity.loading ? (
-          <div className="p-[18px]">
-            <Skeleton rows={9} />
-          </div>
-        ) : activity.error ? (
-          <ErrorState
-            message={activity.error.message}
-            offline={activity.error.isOffline}
-            onRetry={activity.reload}
-          />
-        ) : visible.length === 0 ? (
-          <EmptyState
-            icon={ActivityIcon}
-            title={
-              described.length === 0
-                ? "The company has not done anything yet"
-                : "Nothing in this category"
-            }
-            description={
-              described.length === 0
-                ? "Launch an objective and every step the company takes will be recorded here."
-                : "Switch to another category to see the rest of the log."
+      {activity.loading ? (
+        <Connecting what="Reading the company log…" />
+      ) : activity.error ? (
+        <Failure
+          headline={
+            activity.error.isOffline
+              ? "The company is unreachable"
+              : "The log could not be read"
+          }
+          detail={activity.error.message}
+          action={
+            <button
+              type="button"
+              onClick={activity.reload}
+              className="button-ghost"
+            >
+              Try again
+            </button>
+          }
+        />
+      ) : visible.length === 0 ? (
+        described.length === 0 ? (
+          <Quiet
+            line="Nothing has happened yet."
+            detail="Launch an objective and every step the company takes — planning, delegation, each tool call, each decision — is written here as it happens."
+            action={
+              <Link to="/command" className="button-primary">
+                Go to the Command Center
+              </Link>
             }
           />
         ) : (
-          <div className="timeline timeline-wide">
-            {visible.map(({ event, described: detail }) => {
+          <Quiet
+            line="Nothing in this category."
+            detail="The rest of the log is still there."
+            action={
+              <button
+                type="button"
+                className="button-ghost"
+                onClick={() => setCategory("all")}
+              >
+                Show everything
+              </button>
+            }
+          />
+        )
+      ) : (
+        days.map(([day, entries]) => (
+          <section key={day}>
+            <div className="log-day">
+              <span className="log-day-name">{dayLabel(day)}</span>
+              <span className="log-day-rule" />
+              <span className="log-day-count">
+                {entries.length} {entries.length === 1 ? "entry" : "entries"}
+              </span>
+            </div>
+
+            {entries.map(({ event, described: detail }) => {
               const body = (
                 <>
-                  <span className={`timeline-dot ${detail.tone}`} />
+                  <span className="log-time">{clockTime(event.timestamp)}</span>
 
-                  <div className="min-w-0 flex-1 pb-4">
-                    <div className="flex flex-wrap items-baseline gap-2.5">
-                      <span className="text-[12px] text-slate-200">
-                        {detail.title}
-                      </span>
+                  <span className={`log-dot ${detail.tone}`} />
 
-                      <span className="mono text-[8.5px] uppercase tracking-[0.11em] text-slate-600">
-                        {detail.category}
-                      </span>
-
-                      <span className="mono ml-auto text-[9px] text-slate-600">
-                        {formatRelativeTime(event.timestamp)}
-                      </span>
-                    </div>
+                  <span className="min-w-0">
+                    <span className="log-title">{detail.title}</span>
 
                     {detail.detail && (
-                      <div className="mt-1 line-clamp-2 text-[10.5px] leading-[1.6] text-slate-500">
-                        {detail.detail}
-                      </div>
+                      <span className="log-detail">{detail.detail}</span>
                     )}
-                  </div>
+                  </span>
                 </>
               );
 
@@ -144,19 +219,19 @@ export default function Activity() {
                 <Link
                   key={event.id}
                   to={`/work/${event.workId}`}
-                  className="timeline-entry timeline-entry-link"
+                  className="log-entry"
                 >
                   {body}
                 </Link>
               ) : (
-                <div key={event.id} className="timeline-entry">
+                <div key={event.id} className="log-entry">
                   {body}
                 </div>
               );
             })}
-          </div>
-        )}
-      </Panel>
+          </section>
+        ))
+      )}
     </div>
   );
 }
