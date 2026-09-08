@@ -1,33 +1,33 @@
 import {
   ArrowRight,
-  Bot,
   CircleDot,
   LoaderCircle,
-  ShieldAlert,
   Zap,
 } from "lucide-react";
 
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import {
   createWork,
   executeWork,
+  fetchMemory,
   fetchOverview,
   formatRelativeTime,
   planWork,
   type CompanyOverview,
+  type MemoryItem,
   type WorkItem,
 } from "../lib/api";
 
 import { useResource } from "../lib/useResource";
 
 import {
-  EmptyState,
-  ErrorState,
-  Section,
-  Skeleton,
+  Chapter,
+  Connecting,
+  Failure,
+  Quiet,
   StatusPill,
 } from "../components/primitives";
 
@@ -40,8 +40,10 @@ import {
 
 import { describeEvent } from "../lib/events";
 import { describeCompany } from "../lib/statement";
+import { collectAttention, summarizeAttention } from "../lib/attention";
+import { profileOf } from "../lib/workforce";
 import { SignalField } from "../components/SignalField";
-import { AgentSigil } from "../components/AgentSigil";
+import { AgentMark } from "../components/AgentMark";
 
 /**
  * The launch pipeline mirrors the real API calls, one stage per call. Nothing
@@ -88,6 +90,13 @@ export default function Command() {
     { pollMs: 15_000 },
   );
 
+  // The company's recent memory is context rather than live state, so it is
+  // read on a much slower clock than the operational overview.
+  const memory = useResource<MemoryItem[]>(
+    useCallback(() => fetchMemory(undefined, 6), []),
+    { pollMs: 60_000 },
+  );
+
   const [objective, setObjective] = useState("");
   const [priority, setPriority] = useState<WorkItem["priority"]>("normal");
   const [stage, setStage] = useState<LaunchStage>("idle");
@@ -128,22 +137,51 @@ export default function Command() {
 
   const data = overview.data;
   const activeWork = data?.work.active ?? [];
-  const workingAgents =
-    data?.agents.filter((agent) => agent.presence === "working") ?? [];
-  const approvals = data?.approvals ?? [];
+  const finished = data?.work.recentlyCompleted ?? [];
+  const agents = useMemo(() => data?.agents ?? [], [data]);
+  const workingAgents = agents.filter((agent) => agent.presence === "working");
+  const executing = activeWork.filter(
+    (work) => work.status === "executing",
+  ).length;
   const toolCalls =
     data?.tools.reduce((total, tool) => total + tool.callCount, 0) ?? 0;
-  const orchestratorName = data?.agents.find(
+  const orchestratorName = agents.find(
     (agent) => agent.type === "orchestrator",
   )?.name;
 
+  const attention = useMemo(() => collectAttention(data), [data]);
+
+  // Who is on which objective, so a row in the stream can name the worker
+  // rather than leaving the reader to cross-reference the roster.
+  const workersByWork = useMemo(() => {
+    const map = new Map<string, string[]>();
+
+    for (const agent of agents) {
+      if (!agent.activeTask) continue;
+      const current = map.get(agent.activeTask.workId) ?? [];
+      current.push(agent.name);
+      map.set(agent.activeTask.workId, current);
+    }
+
+    return map;
+  }, [agents]);
+
   if (overview.error) {
     return (
-      <div className="mx-auto max-w-[1340px]">
-        <ErrorState
-          message={overview.error.message}
-          offline={overview.error.isOffline}
-          onRetry={overview.reload}
+      <div className="mx-auto max-w-[1340px] pt-6">
+        <Failure
+          headline={overview.error.isOffline ? "The company is unreachable" : "That read failed"}
+          detail={overview.error.message}
+          consequence={
+            overview.error.isOffline
+              ? "Nothing is lost - work already queued keeps running on the worker. The page just cannot see it."
+              : "Nothing was changed by this request."
+          }
+          action={
+            <button type="button" onClick={overview.reload} className="button-ghost">
+              Try again
+            </button>
+          }
         />
       </div>
     );
@@ -161,7 +199,8 @@ export default function Command() {
         <SignalField
           mood={statement.mood}
           activity={data?.activity.length ?? 0}
-          agents={data?.agents.length ?? 0}
+          agents={agents.length}
+          executing={executing}
         />
 
         <div className="dispatch-inner">
@@ -190,9 +229,9 @@ export default function Command() {
             />
             <DispatchStat
               label="Awaiting you"
-              value={overview.loading ? "—" : approvals.length}
+              value={overview.loading ? "—" : attention.length}
               tone="warning"
-              live={approvals.length > 0}
+              live={attention.length > 0}
             />
             <DispatchStat
               label="Tool calls"
@@ -209,257 +248,229 @@ export default function Command() {
       </header>
 
       <div className="mx-auto max-w-[1340px] pt-7">
-      {approvals.length > 0 && (
-        <Link to="/approvals" className="attention-bar">
-          <ShieldAlert size={15} className="shrink-0 text-[#ff7176]" />
-
-          <span className="min-w-0 flex-1">
-            <span className="block text-[12.5px] font-semibold text-[#ffd9da]">
-              {approvals[0]!.action}
+        {attention.length > 0 && (
+          <Link to={attention[0]!.to} className="attention-bar">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12.5px] font-semibold text-[#ffd9da]">
+                {attention[0]!.label}
+              </span>
+              <span className="mt-1 block truncate text-[11px] text-[#c9868a]">
+                {attention[0]!.detail}
+              </span>
+              <span className="mt-1.5 block text-[10px] text-[#9d6c70]">
+                {attention[0]!.consequence}
+                {attention.length > 1 && ` · ${summarizeAttention(attention)}`}
+              </span>
             </span>
-            <span className="mt-0.5 block truncate text-[11px] text-[#c9868a]">
-              {approvals[0]!.reason}
+
+            <span className="shrink-0 text-[11px] font-semibold text-[#ff7176]">
+              Review
             </span>
-          </span>
+            <ArrowRight size={14} className="shrink-0 text-[#ff7176]" />
+          </Link>
+        )}
 
-          <span className="shrink-0 text-[11px] font-semibold text-[#ff7176]">
-            Review
-          </span>
-          <ArrowRight size={14} className="shrink-0 text-[#ff7176]" />
-        </Link>
-      )}
-
-      <div className="command-grid">
-        <div className="min-w-0">
-          {/* The one genuinely elevated surface on the page, because it is
-              the only thing here you act with rather than read. */}
-          <div className="composer">
-            <div className="composer-head">
-              <span className="t-eyebrow">New objective</span>
-              <span className="t-machine">{busy ? "RUNNING" : "READY"}</span>
-            </div>
-
-            <textarea
-              id="work-objective"
-              value={objective}
-              onChange={(event) => setObjective(event.target.value)}
-              disabled={busy}
-              rows={3}
-              className="command-textarea w-full bg-transparent text-[14.5px] leading-[1.65] text-[#f2f4f7] placeholder:text-[#535b68] disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="What should the company accomplish?"
-            />
-
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setObjective(suggestion)}
-                  className="suggestion-chip"
-                  title={suggestion}
-                >
-                  {suggestion.slice(0, 42)}…
-                </button>
-              ))}
-            </div>
-
-            <div className="composer-foot">
-              <label className="flex items-center gap-2">
-                <span className="t-eyebrow">Priority</span>
-
-                <select
-                  value={priority}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setPriority(event.target.value as WorkItem["priority"])
-                  }
-                  className="select-control"
-                >
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </label>
-
-              <button
-                type="button"
-                onClick={launch}
-                disabled={!objective.trim() || busy}
-                className="button-primary"
-              >
-                {busy ? (
-                  <LoaderCircle size={13} className="spin-slow" />
-                ) : (
-                  <Zap size={13} />
-                )}
-                {busy ? "Working…" : "Launch"}
-              </button>
-            </div>
+        {/* The one genuinely elevated surface on the page, because it is the
+            only thing here you act with rather than read. */}
+        <div className="composer">
+          <div className="composer-head">
+            <span className="t-eyebrow">New objective</span>
+            <span className="t-machine">{busy ? "RUNNING" : "READY"}</span>
           </div>
 
-          {stage !== "idle" && (
-            <LaunchPipeline
-              stage={stage}
-              workId={launchedWorkId}
-              orchestrator={orchestratorName}
-            />
-          )}
+          <textarea
+            id="work-objective"
+            value={objective}
+            onChange={(event) => setObjective(event.target.value)}
+            disabled={busy}
+            rows={3}
+            className="command-textarea w-full bg-transparent text-[15.5px] leading-[1.6] text-[#f2f4f7] placeholder:text-[#535b68] disabled:cursor-not-allowed disabled:opacity-50"
+            placeholder="What should the company accomplish?"
+          />
 
-          {launchError && stage === "idle" && (
-            <div className="callout callout-error mt-3">
-              {launchError}
-              {launchedWorkId && (
-                <Link
-                  to={`/work/${launchedWorkId}`}
-                  className="ml-2 underline underline-offset-2"
-                >
-                  Inspect it
-                </Link>
-              )}
-            </div>
-          )}
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                disabled={busy}
+                onClick={() => setObjective(suggestion)}
+                className="suggestion-chip"
+                title={suggestion}
+              >
+                {suggestion.slice(0, 42)}…
+              </button>
+            ))}
+          </div>
 
-          <div className="mt-7">
-            <Section
-              title="In flight"
-              count={activeWork.length > 0 ? activeWork.length : undefined}
-              action={
-                <Link to="/work" className="button-quiet">
-                  All work
-                  <ArrowRight size={11} />
-                </Link>
-              }
+          <div className="composer-foot">
+            <label className="flex items-center gap-2">
+              <span className="t-eyebrow">Priority</span>
+
+              <select
+                value={priority}
+                disabled={busy}
+                onChange={(event) =>
+                  setPriority(event.target.value as WorkItem["priority"])
+                }
+                className="select-control"
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              onClick={launch}
+              disabled={!objective.trim() || busy}
+              className="button-primary"
             >
-              {overview.loading ? (
-                <Skeleton rows={3} />
-              ) : activeWork.length === 0 ? (
-                <p className="t-meta py-2">
-                  Nothing is executing. Give the company an objective above and
-                  its plan, tasks and tool calls appear here as they happen.
-                </p>
+              {busy ? (
+                <LoaderCircle size={13} className="spin-slow" />
               ) : (
-                <div className="op-list">
-                  {activeWork.map((work) => (
-                    <Link
-                      key={work.id}
-                      to={`/work/${work.id}`}
-                      className="op-row"
-                    >
-                      <span
-                        className={`op-rail ${toneClass[workStatusTone(work.status)]}${work.status === "executing" ? " op-rail-running" : ""}`}
-                      />
-
-                      <span className="min-w-0 flex-1">
-                        <span className="op-row-title">{work.objective}</span>
-
-                        <span className="op-row-meta">
-                          <span className="t-machine">
-                            {formatRelativeTime(work.createdAt)}
-                          </span>
-                          <span className="t-machine uppercase">
-                            {work.priority}
-                          </span>
-                        </span>
-                      </span>
-
-                      <StatusPill
-                        tone={workStatusTone(work.status)}
-                        pulse={work.status === "executing"}
-                      >
-                        {statusLabel(work.status)}
-                      </StatusPill>
-                    </Link>
-                  ))}
-                </div>
+                <Zap size={13} />
               )}
-            </Section>
-
-            <Section
-              title="Recently finished"
-              action={
-                <Link to="/activity" className="button-quiet">
-                  Activity
-                </Link>
-              }
-            >
-              {overview.loading ? (
-                <Skeleton rows={2} />
-              ) : (data?.work.recentlyCompleted.length ?? 0) === 0 ? (
-                <p className="t-meta py-2">
-                  Finished objectives land here with their results and the
-                  memory they contributed.
-                </p>
-              ) : (
-                <div className="op-list">
-                  {data!.work.recentlyCompleted.map((work) => (
-                    <Link
-                      key={work.id}
-                      to={`/work/${work.id}`}
-                      className="op-row op-row-quiet"
-                    >
-                      <span
-                        className={`op-rail ${toneClass[workStatusTone(work.status)]}${work.status === "executing" ? " op-rail-running" : ""}`}
-                      />
-
-                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[#a7b0bd]">
-                        {work.objective}
-                      </span>
-
-                      <span className="t-machine shrink-0">
-                        {formatRelativeTime(work.completedAt ?? work.updatedAt)}
-                      </span>
-
-                      <StatusPill tone={workStatusTone(work.status)}>
-                        {statusLabel(work.status)}
-                      </StatusPill>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Section>
+              {busy ? "Working…" : "Launch"}
+            </button>
           </div>
         </div>
 
-        {/* Right rail: who is doing what, and what the company just did. */}
-        <aside className="min-w-0 space-y-6">
-          <Section
-            title="Workforce"
-            count={
-              workingAgents.length > 0
-                ? `${workingAgents.length} working`
-                : undefined
-            }
-            action={
-              <Link to="/agents" className="button-quiet">
-                Manage
-              </Link>
-            }
-          >
+        {stage !== "idle" && (
+          <LaunchPipeline
+            stage={stage}
+            workId={launchedWorkId}
+            orchestrator={orchestratorName}
+          />
+        )}
+
+        {launchError && stage === "idle" && (
+          <div className="mt-3">
+            <Failure
+              headline="The objective was not launched"
+              detail={launchError}
+              consequence={
+                launchedWorkId
+                  ? "The objective was recorded, so it can be planned and run from its own page."
+                  : "Nothing was recorded. Try again."
+              }
+              action={
+                launchedWorkId ? (
+                  <Link to={`/work/${launchedWorkId}`} className="button-ghost">
+                    Open it
+                  </Link>
+                ) : undefined
+              }
+            />
+          </div>
+        )}
+
+        <Chapter
+          index="01"
+          title="On the floor"
+          action={
+            <Link to="/work" className="button-quiet">
+              All work
+              <ArrowRight size={11} />
+            </Link>
+          }
+        />
+
+        <div className="command-grid">
+          <div className="min-w-0">
             {overview.loading ? (
-              <Skeleton rows={4} />
-            ) : (data?.agents.length ?? 0) === 0 ? (
-              <EmptyState
-                icon={Bot}
-                title="No agents registered"
-                description="Seed the development workforce to give this organization a roster."
+              <Connecting what="Fetching current operations…" />
+            ) : activeWork.length === 0 ? (
+              <Quiet
+                line="Nothing is running."
+                detail="Give the company an objective above and its plan, delegation and tool calls appear here as they happen."
+              />
+            ) : (
+              <div className="ledger">
+                {activeWork.map((work, index) => {
+                  const workers = workersByWork.get(work.id) ?? [];
+
+                  return (
+                    <Link
+                      key={work.id}
+                      to={`/work/${work.id}`}
+                      className="ledger-row"
+                    >
+                      <span
+                        className={`ledger-rail ${toneClass[workStatusTone(work.status)]}${work.status === "executing" ? " op-rail-running" : ""}`}
+                      />
+
+                      <span className="ledger-index">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+
+                      <span className="min-w-0">
+                        <span className="ledger-title">{work.objective}</span>
+
+                        <span className="ledger-meta">
+                          {workers.length > 0 && (
+                            <span className="ledger-meta-agent">
+                              {workers.join(" · ")}
+                            </span>
+                          )}
+                          <span>{formatRelativeTime(work.createdAt)}</span>
+                          <span className="uppercase">{work.priority}</span>
+                        </span>
+                      </span>
+
+                      <span className="ledger-status">
+                        <StatusPill
+                          tone={workStatusTone(work.status)}
+                          pulse={work.status === "executing"}
+                        >
+                          {statusLabel(work.status)}
+                        </StatusPill>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Who is doing it. */}
+          <aside className="min-w-0">
+            <div className="section-head">
+              <div className="section-head-title">
+                Workforce
+                <span className="section-head-count">
+                  {workingAgents.length > 0
+                    ? `${workingAgents.length} working`
+                    : `${agents.length} on the roster`}
+                </span>
+              </div>
+
+              <Link to="/agents" className="button-quiet">
+                Roster
+              </Link>
+            </div>
+
+            {overview.loading ? (
+              <Connecting what="Loading the workforce…" />
+            ) : agents.length === 0 ? (
+              <Quiet
+                line="No one is on the roster."
+                detail="Run the API with SEED_DEVELOPMENT_WORKFORCE=true to create the starting workforce."
               />
             ) : (
               <div className="space-y-px">
-                {data!.agents.map((agent) => (
-                  <Link
-                    key={agent.agentId}
-                    to="/agents"
-                    className="presence-row"
-                  >
+                {agents.map((agent) => (
+                  <Link key={agent.agentId} to="/agents" className="presence-row">
                     <span
                       className={`presence-mark ${toneClass[presenceTone(agent.presence)]}`}
                     >
-                      <AgentSigil
+                      <AgentMark
                         agentId={agent.agentId}
                         capabilities={agent.capabilities}
                         tools={agent.toolIds.length}
+                        type={agent.type}
                         size={22}
                         active={agent.presence === "working"}
                       />
@@ -467,10 +478,12 @@ export default function Command() {
 
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline gap-2">
-                        <span className="text-[11.5px] font-semibold text-[#f2f4f7]">
+                        <span className="text-[12px] font-semibold text-[#f2f4f7]">
                           {agent.name}
                         </span>
-                        <span className="t-machine">{agent.type}</span>
+                        <span className="roster-role">
+                          {profileOf(agent).label}
+                        </span>
                       </span>
 
                       <span className="mt-0.5 block truncate text-[10px] text-[#6f7887]">
@@ -490,25 +503,85 @@ export default function Command() {
                 ))}
               </div>
             )}
-          </Section>
+          </aside>
+        </div>
 
-          <Section
-            title="Live stream"
-            action={
-              <Link to="/activity" className="button-quiet">
-                Full log
+        <Chapter
+          index="02"
+          title="What it just did"
+          action={
+            <Link to="/artifacts" className="button-quiet">
+              Everything produced
+            </Link>
+          }
+        />
+
+        {overview.loading ? (
+          <Connecting what="Reading recent outcomes…" />
+        ) : finished.length === 0 ? (
+          <Quiet
+            line="The company has not finished anything yet."
+            detail="Completed objectives land here with the result they produced and the memory they contributed."
+          />
+        ) : (
+          <div className="ledger">
+            {finished.map((work) => (
+              <Link key={work.id} to={`/work/${work.id}`} className="ledger-row">
+                <span
+                  className={`ledger-rail ${toneClass[workStatusTone(work.status)]}`}
+                />
+
+                <span className="ledger-index">
+                  {work.status === "failed" ? "✕" : "✓"}
+                </span>
+
+                <span className="min-w-0">
+                  <span className="ledger-title">{work.objective}</span>
+
+                  <span className="ledger-meta">
+                    <span>
+                      {formatRelativeTime(work.completedAt ?? work.updatedAt)}
+                    </span>
+                    {typeof work.metadata.executionError === "string" && (
+                      <span className="text-[#c9868a]">
+                        {work.metadata.executionError}
+                      </span>
+                    )}
+                  </span>
+                </span>
+
+                <span className="ledger-status">
+                  <StatusPill tone={workStatusTone(work.status)}>
+                    {statusLabel(work.status)}
+                  </StatusPill>
+                </span>
               </Link>
-            }
-          >
+            ))}
+          </div>
+        )}
+
+        <div className="grid gap-x-9 gap-y-0 lg:grid-cols-2">
+          <div className="min-w-0">
+            <Chapter
+              index="03"
+              title="The log"
+              action={
+                <Link to="/activity" className="button-quiet">
+                  Full history
+                </Link>
+              }
+            />
+
             {overview.loading ? (
-              <Skeleton rows={5} />
+              <Connecting what="Reading the log…" />
             ) : (data?.activity.length ?? 0) === 0 ? (
-              <p className="t-meta py-2">
-                Every plan, delegation, tool call and approval is recorded here.
-              </p>
+              <Quiet
+                line="Nothing has been recorded."
+                detail="Every plan, delegation, tool call and approval is written here as it happens."
+              />
             ) : (
-              <div className="scroll-area max-h-[400px] pr-1">
-                {data!.activity.slice(0, 16).map((event) => {
+              <div className="scroll-area max-h-[380px] pr-1">
+                {data!.activity.slice(0, 18).map((event) => {
                   const described = describeEvent(event);
 
                   return (
@@ -538,9 +611,51 @@ export default function Command() {
                 })}
               </div>
             )}
-          </Section>
-        </aside>
-      </div>
+          </div>
+
+          <div className="min-w-0">
+            <Chapter
+              index="04"
+              title="What it remembers"
+              action={
+                <Link to="/brain" className="button-quiet">
+                  Company brain
+                </Link>
+              }
+            />
+
+            {memory.loading ? (
+              <Connecting what="Recalling company memory…" />
+            ) : memory.error ? (
+              <p className="t-meta py-2">
+                Memory could not be read: {memory.error.message}
+              </p>
+            ) : (memory.data?.length ?? 0) === 0 ? (
+              <Quiet
+                line="The company has not learned anything yet."
+                detail="Every completed and failed task writes a memory, and agents read from it before starting related work."
+              />
+            ) : (
+              <div className="space-y-px">
+                {memory.data!.slice(0, 5).map((item) => (
+                  <div key={item.id} className="stream-row">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] leading-[1.55] text-[#a7b0bd]">
+                        {item.content.length > 130
+                          ? `${item.content.slice(0, 130)}…`
+                          : item.content}
+                      </span>
+
+                      <span className="mt-1 block text-[9px] uppercase tracking-[0.13em] text-[#535b68]">
+                        {item.type} · {formatRelativeTime(item.createdAt)}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
