@@ -82,13 +82,11 @@ export default function Work() {
         title="EVERY OBJECTIVE"
         lead="THE COMPANY HAS TAKEN."
         detail="From the plan it produced to the result it delivered, newest first."
-        tone={
-          counts.executing > 0
-            ? "moving"
-            : counts.failed > 0
-              ? "broken"
-              : "quiet"
-        }
+        // Deliberately not "broken" when the list merely contains old
+        // failures. A page that stays red because something went wrong last
+        // week teaches people that red means nothing; the failed count below
+        // is red on its own, and each failed row carries its reason.
+        tone={counts.executing > 0 ? "moving" : "quiet"}
         meta={
           <>
             <Reading
