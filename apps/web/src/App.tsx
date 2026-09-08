@@ -23,7 +23,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchOverview, type CompanyOverview } from "./lib/api";
 
@@ -204,8 +204,6 @@ export default function App() {
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
 
-  const attentionButton = useRef<HTMLButtonElement>(null);
-
   // The shell reads the same overview every page reads, so the counts in the
   // rail can never disagree with the surface they point at.
   const overview = useResource<CompanyOverview>(
@@ -229,8 +227,10 @@ export default function App() {
       }
 
       // The attention queue is the one thing that must be reachable from
-      // anywhere without hunting for a bell.
-      if ((event.metaKey || event.ctrlKey) && key === "j") {
+      // anywhere without hunting for it. Alt rather than Ctrl: Ctrl+J is
+      // Chrome's downloads shelf, and taking a browser shortcut away from
+      // someone is worse than the convenience of owning it.
+      if (event.altKey && !event.ctrlKey && !event.metaKey && key === "a") {
         event.preventDefault();
         setAttentionOpen((open) => !open);
       }
@@ -416,7 +416,6 @@ export default function App() {
 
             <div className="relative">
               <button
-                ref={attentionButton}
                 type="button"
                 className={`attention-button${attentionCount > 0 ? " attention-button-live" : ""}`}
                 aria-expanded={attentionOpen}
@@ -427,6 +426,7 @@ export default function App() {
                 <span className="attention-button-label">
                   {attentionCount > 0 ? summarizeAttention(attention) : "Clear"}
                 </span>
+                <kbd>Alt A</kbd>
               </button>
 
               {attentionOpen && (
