@@ -7,6 +7,8 @@ export interface SignalFieldProps {
   /** Real counts. Density is derived from them, never invented. */
   activity: number;
   agents: number;
+  /** Real running work. The only thing that makes the field move. */
+  executing?: number;
 }
 
 const MOOD_STROKE: Record<CompanyStatement["mood"], string> = {
@@ -19,23 +21,33 @@ const MOOD_STROKE: Record<CompanyStatement["mood"], string> = {
 /**
  * The backdrop behind the Command Center statement.
  *
- * It is a readout, not decoration: the number of traces is the number of
- * agents on the roster, and how far each one reaches across is that agent's
- * real share of recent activity. A quiet company draws a nearly flat field; a
- * busy one draws a dense one. Nothing here animates on a timer, so an idle
- * page costs nothing.
+ * It is a readout, not decoration: one trace per agent on the roster, each
+ * reaching across in proportion to real recent activity. A quiet company
+ * draws a nearly flat field; a busy one draws a dense one.
  *
- * Deliberately SVG rather than canvas or WebGL - it is a few dozen paths, it
- * scales, and it disappears entirely under prefers-reduced-motion without
- * needing a code path of its own.
+ * The one thing that moves is the traces belonging to work that is genuinely
+ * executing right now - as many as there are running objectives, no more. An
+ * idle company draws a completely static field, which is the point: motion
+ * here means something is actually happening, so the page cannot look busy
+ * while the company is asleep.
+ *
+ * Deliberately SVG rather than canvas or WebGL. It is a few dozen paths, it
+ * scales, and it stops entirely under prefers-reduced-motion without needing
+ * a code path of its own.
  */
-export function SignalField({ mood, activity, agents }: SignalFieldProps) {
+export function SignalField({
+  mood,
+  activity,
+  agents,
+  executing = 0,
+}: SignalFieldProps) {
   const stroke = MOOD_STROKE[mood];
 
   const traces = useMemo(() => {
     // One trace per agent, capped so a large roster stays legible.
     const count = Math.max(3, Math.min(agents || 3, 10));
     const intensity = Math.min(activity, 40) / 40;
+    const live = Math.min(executing, count);
 
     return Array.from({ length: count }, (_, index) => {
       const y = 8 + (index * 84) / count;
@@ -48,11 +60,12 @@ export function SignalField({ mood, activity, agents }: SignalFieldProps) {
 
       return {
         d: `M0 ${y} C ${reach * 0.3} ${y + lift}, ${reach * 0.65} ${y - lift}, ${reach} ${y + lift * 0.4}`,
-        opacity: 0.10 + (index % 3) * 0.05 + intensity * 0.22,
+        opacity: 0.1 + (index % 3) * 0.05 + intensity * 0.22,
         width: index % 4 === 0 ? 0.5 : 0.3,
+        running: index < live,
       };
     });
-  }, [agents, activity]);
+  }, [agents, activity, executing]);
 
   return (
     <svg
@@ -71,6 +84,12 @@ export function SignalField({ mood, activity, agents }: SignalFieldProps) {
           strokeWidth={trace.width}
           strokeOpacity={trace.opacity}
           vectorEffect="non-scaling-stroke"
+          className={trace.running ? "signal-trace-running" : undefined}
+          style={
+            trace.running
+              ? ({ "--trace-index": index } as React.CSSProperties)
+              : undefined
+          }
         />
       ))}
     </svg>
