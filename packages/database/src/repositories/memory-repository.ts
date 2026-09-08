@@ -5,12 +5,16 @@ import type {
   MemoryScope,
   MemoryType,
   OrganizationId,
+  WorkId,
 } from "@unioffice/core";
 
 export interface MemoryQuery {
   organizationId: OrganizationId;
 
   agentId?: AgentId;
+
+  /** Narrows to what one work item contributed to the company's memory. */
+  workId?: WorkId;
 
   scope?: MemoryScope;
 

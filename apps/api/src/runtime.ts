@@ -140,6 +140,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     artifactRepository,
     agentRepository,
     approvalRepository,
+    memoryRepository,
   );
 
   const executionQueueService = new ExecutionQueueService(

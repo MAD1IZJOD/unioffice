@@ -68,6 +68,7 @@ export class SupabaseMemoryRepository implements MemoryRepository {
       .limit(query.limit ?? DEFAULT_QUERY_LIMIT);
 
     if (query.agentId) builder = builder.eq("agent_id", query.agentId);
+    if (query.workId) builder = builder.eq("work_id", query.workId);
     if (query.scope) builder = builder.eq("scope", query.scope);
     if (query.type) builder = builder.eq("type", query.type);
 

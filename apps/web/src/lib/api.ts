@@ -196,6 +196,8 @@ export interface WorkDetail {
   artifacts: ArtifactItem[];
   approvals: ApprovalItem[];
   agents: AgentSummary[];
+  /** What this run wrote into the company's memory. Often empty. */
+  memories: MemoryItem[];
   /** Present only while a job for this work is queued or running. */
   executionJob?: ExecutionJobSummary | null;
 }

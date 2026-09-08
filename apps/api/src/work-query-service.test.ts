@@ -17,6 +17,7 @@ import type {
   ApprovalRepository,
   ArtifactRepository,
   EventRepository,
+  MemoryRepository,
   TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
@@ -59,6 +60,14 @@ const approvalRepository: ApprovalRepository = {
   async findPendingByOrganization() { return []; },
   async update(approval) { return approval; },
   async resolvePending(approval) { return approval; },
+};
+
+const memoryRepository: MemoryRepository = {
+  async create(memory) { return memory; },
+  async findById() { return null; },
+  async query() { return []; },
+  async update(memory) { return memory; },
+  async delete() {},
 };
 
 const noAgentsRepository: AgentRepository = {
@@ -105,6 +114,7 @@ test("getOrganizationActivity returns only events for the requested organization
     artifactRepository,
     noAgentsRepository,
     approvalRepository,
+    memoryRepository,
   );
 
   const activity = await service.getOrganizationActivity(organizationId);
@@ -131,6 +141,7 @@ test("getOrganizationActivity forwards a limit to the repository", async () => {
     artifactRepository,
     noAgentsRepository,
     approvalRepository,
+    memoryRepository,
   );
 
   await service.getOrganizationActivity(organizationId, 5);
@@ -142,7 +153,7 @@ test("getAgents returns the organization's agent directory", async () => {
   const agents: Agent[] = [{
     id: "agent-1" as Agent["id"],
     organizationId,
-    name: "Ledger",
+    name: "Harvey",
     description: "Operations analysis.",
     type: "specialist",
     status: "active",
@@ -173,6 +184,7 @@ test("getAgents returns the organization's agent directory", async () => {
     artifactRepository,
     agentRepository,
     approvalRepository,
+    memoryRepository,
   );
 
   const result = await service.getAgents(organizationId);
@@ -205,6 +217,7 @@ function serviceWithWork(work: Work[]): WorkQueryService {
     artifactRepository,
     noAgentsRepository,
     approvalRepository,
+    memoryRepository,
   );
 }
 
@@ -296,6 +309,7 @@ test("getWorkDetail includes only the agents this work actually assigned", async
     artifactRepository,
     { ...noAgentsRepository, async findByOrganization() { return agents; } },
     approvalRepository,
+    memoryRepository,
   );
 
   const detail = await service.getWorkDetail("work-1" as WorkId);

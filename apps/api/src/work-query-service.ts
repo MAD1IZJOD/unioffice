@@ -4,6 +4,7 @@ import type {
   ApprovalRequest,
   Event,
   Artifact,
+  Memory,
   OrganizationId,
   Task,
   Work,
@@ -16,6 +17,7 @@ import type {
   ApprovalRepository,
   EventRepository,
   ArtifactRepository,
+  MemoryRepository,
   TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
@@ -37,6 +39,8 @@ export interface WorkDetail {
   artifacts: Artifact[];
   approvals: ApprovalRequest[];
   agents: Agent[];
+  /** What this run left behind in the company's memory. Often empty. */
+  memories: Memory[];
 }
 
 export class WorkQueryService {
@@ -47,6 +51,7 @@ export class WorkQueryService {
     private readonly artifactRepository: ArtifactRepository,
     private readonly agentRepository: AgentRepository,
     private readonly approvalRepository: ApprovalRepository,
+    private readonly memoryRepository: MemoryRepository,
   ) {}
 
   async getWork(workId: WorkId): Promise<Work> {
@@ -107,13 +112,19 @@ export class WorkQueryService {
   async getWorkDetail(workId: WorkId): Promise<WorkDetail> {
     const work = await this.getWork(workId);
 
-    const [tasks, events, artifacts, approvals, agents] = await Promise.all([
-      this.taskRepository.findByWork(workId),
-      this.eventRepository.findByWork(workId),
-      this.artifactRepository.findByWork(workId),
-      this.approvalRepository.findByWork(workId),
-      this.agentRepository.findByOrganization(work.organizationId),
-    ]);
+    const [tasks, events, artifacts, approvals, agents, memories] =
+      await Promise.all([
+        this.taskRepository.findByWork(workId),
+        this.eventRepository.findByWork(workId),
+        this.artifactRepository.findByWork(workId),
+        this.approvalRepository.findByWork(workId),
+        this.agentRepository.findByOrganization(work.organizationId),
+        this.memoryRepository.query({
+          organizationId: work.organizationId,
+          workId,
+          limit: 50,
+        }),
+      ]);
 
     // Only the agents this work actually involves - the page renders their
     // names and roles inline, and shipping the whole roster to render two
@@ -129,6 +140,7 @@ export class WorkQueryService {
       artifacts,
       approvals,
       agents: agents.filter((agent) => involvedAgentIds.has(agent.id)),
+      memories,
     };
   }
 
