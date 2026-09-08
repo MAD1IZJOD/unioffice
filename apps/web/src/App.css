@@ -353,6 +353,20 @@
   white-space: nowrap;
 }
 
+.attention-button kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 8px;
+}
+
+.attention-button-live kbd {
+  border-color: var(--red-line);
+  color: #c9868a;
+}
+
 /* Red only when a person really is being waited on. */
 .attention-button-live {
   border-color: var(--red-line);
@@ -694,8 +708,14 @@
 
   .topbar-actions .search-button span,
   .topbar-actions .search-button kbd,
+  .attention-button-label,
+  .attention-button kbd,
   .system-status span {
     display: none;
+  }
+
+  .attention-button {
+    padding: 0 9px;
   }
 
   .system-status {
