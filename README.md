@@ -56,6 +56,70 @@ healthy worker would lose its own job to recovery mid-run.
 
 You can run more than one worker; they will share the queue safely.
 
+## The workforce
+
+Six agents are seeded into the development organization. The names are product
+codenames; what actually routes work is the capability set and the tool grant
+beside each one.
+
+| Agent | Role | Capabilities | Tools |
+| --- | --- | --- | --- |
+| Tyrion | Orchestration - plans the work and routes it | planning, coordination, decision_support | none |
+| Tony | Engineering - builds and transforms | coding, technical_design, data_transformation | calculator, datetime, json_transform |
+| Harvey | Quantitative - measures and calculates | calculation, financial_analysis, decision_support | calculator, datetime |
+| Mike | Research - reads, synthesises, writes | research, synthesis, writing | datetime, json_transform |
+| Jamie | Operations - designs how the work runs | people_operations, process_design, writing | datetime |
+| Peter | Communication - turns work into messages | communication, stakeholder_messaging, writing | datetime |
+
+The seed reconciles an existing row against this table on every boot, including
+its name, so changing the table renames the agent rather than creating a second
+one.
+
+## The web app
+
+`apps/web` reads the API and nothing else - there is no mock data anywhere in
+it, and a surface with nothing to show says so rather than inventing a row.
+
+- `lib/api.ts` - typed fetch client. Every type mirrors a real response.
+- `lib/attention.ts` - the single definition of "what needs a person", shared
+  by the rail, the header control and the Command Center opening.
+- `lib/workforce.ts` - derives an agent's discipline from the capabilities the
+  delegator routes on, which is what gives each one its own mark and role line.
+- `lib/statement.ts` - the company's own account of its state, rendered as the
+  largest type on the Command Center.
+- `components/AgentMark.tsx` - a generated figure per discipline. A member per
+  capability, a filled node per authorized tool, so an agent holding no tools
+  draws as visibly hollow.
+- `styles/system.css` - tokens, tones and shared pieces.
+- `styles/surfaces.css` - each screen's own composition.
+
+Black carries the interface. Blue means the system is working; red means a
+person is needed or something broke. Nothing is coloured decoratively.
+
+## Known limitations
+
+These are real gaps, listed so the UI does not have to pretend otherwise.
+
+- **The planner can invent an unroutable capability.** It is given the union of
+  capabilities the available agents actually hold, but it sometimes emits one
+  outside that vocabulary (`mathematical_analysis` rather than `calculation`).
+  The delegator then correctly refuses the task and the run fails with "No
+  eligible agent is authorized for...". Retry replans and usually succeeds.
+- **Memory retrieval is keyword and importance based.** There are no
+  embeddings and no semantic similarity, and the Company Brain says so rather
+  than drawing a graph it cannot back up.
+- **Agents have no internet access.** The only tools that exist are the three
+  in the registry, so "research" means working over supplied context and
+  company memory.
+- **There is no auth.** Approval decisions are attributed to a seeded requester
+  id, and there is no organization switcher - the web app targets the seeded
+  development organization unless `VITE_ORGANIZATION_ID` says otherwise.
+- **A failure stays in the attention queue until it is retried.** There is no
+  "acknowledged" state on a work row, so a failure you have decided to ignore
+  cannot be dismissed.
+- **Organization and Governance have no backend.** Both routes deliberately
+  show what belongs there instead of a convincing mock.
+
 ## Checks
 
 ```
