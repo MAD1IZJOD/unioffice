@@ -160,7 +160,10 @@ export function buildApiServer(
         workspaceId: optionalText(body.workspaceId) as
           | CreateWorkInput["workspaceId"]
           | undefined,
-        metadata: objectMetadata(body.metadata),
+        metadata: withBriefing(
+          objectMetadata(body.metadata),
+          parseBriefing(body.briefing),
+        ),
       };
   
       const work =
@@ -399,6 +402,44 @@ function requiredOrganizationId(
   }
 
   return organizationId as OrganizationId;
+}
+
+/**
+ * The briefing a requester attaches to an objective: constraints, figures,
+ * background. It is stored on the work row and read by the planner, so it is
+ * bounded here - an unbounded body would end up verbatim in a model prompt.
+ */
+function parseBriefing(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new ApiError(400, "briefing must be a string.");
+  }
+
+  const briefing = value.trim();
+
+  if (!briefing) {
+    return undefined;
+  }
+
+  if (briefing.length > 4_000) {
+    throw new ApiError(400, "briefing must be 4000 characters or fewer.");
+  }
+
+  return briefing;
+}
+
+function withBriefing(
+  metadata: Record<string, unknown> | undefined,
+  briefing: string | undefined,
+): Record<string, unknown> | undefined {
+  if (briefing === undefined) {
+    return metadata;
+  }
+
+  return { ...metadata, briefing };
 }
 
 function parseWorkStatus(value: unknown): WorkStatus | undefined {

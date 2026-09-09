@@ -329,3 +329,83 @@ test("rejects a malformed requiredTools field", () => {
     /requiredTools array/,
   );
 });
+
+test("puts the requester's briefing in front of the model, and says so", async () => {
+  let request: Parameters<ModelProvider["generate"]>[0] | undefined;
+  const modelProvider: ModelProvider = {
+    async generate(input) {
+      request = input;
+
+      return {
+        model: "test-model",
+        content: JSON.stringify({
+          tasks: [
+            {
+              ref: "plan",
+              title: "Plan",
+              description: "Write the launch plan.",
+              ...taskFields(),
+              dependsOn: [],
+            },
+          ],
+        }),
+        metadata: {},
+      };
+    },
+  };
+  const planner = new OllamaPlanner(modelProvider, "test-model");
+
+  await planner.plan({
+    workId: "work-1" as WorkId,
+    objective: "Prepare the launch.",
+    briefing: "Budget is capped at 40k.",
+    availableAgentIds: [],
+    context: {},
+  });
+
+  const system = request?.messages[0]?.content ?? "";
+  const user = request?.messages[1]?.content ?? "";
+
+  assert.match(system, /briefing/i);
+  assert.match(user, /Budget is capped at 40k\./);
+});
+
+test("says nothing about a briefing when the requester attached none", async () => {
+  let request: Parameters<ModelProvider["generate"]>[0] | undefined;
+  const modelProvider: ModelProvider = {
+    async generate(input) {
+      request = input;
+
+      return {
+        model: "test-model",
+        content: JSON.stringify({
+          tasks: [
+            {
+              ref: "plan",
+              title: "Plan",
+              description: "Write the launch plan.",
+              ...taskFields(),
+              dependsOn: [],
+            },
+          ],
+        }),
+        metadata: {},
+      };
+    },
+  };
+  const planner = new OllamaPlanner(modelProvider, "test-model");
+
+  await planner.plan({
+    workId: "work-1" as WorkId,
+    objective: "Prepare the launch.",
+    availableAgentIds: [],
+    context: {},
+  });
+
+  const system = request?.messages[0]?.content ?? "";
+
+  assert.doesNotMatch(system, /briefing/i);
+  // The instruction list is joined, so an absent briefing must not leave a
+  // blank line pretending to be an instruction.
+  assert.doesNotMatch(system, /\n\n/);
+});

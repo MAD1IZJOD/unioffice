@@ -61,13 +61,19 @@ export class OllamaPlanner implements Planner {
               "suggestedAgentType must be specialist, manager, or orchestrator when present.",
               "requiresApproval must be true only when a human decision is required before executing the task. Include approvalReason when true.",
               "Use an empty dependsOn array when a task has no prerequisites.",
+              context.briefing
+                ? "The user attached a briefing. Treat it as binding: its constraints, figures and preferences must shape the tasks you write, and must never be contradicted."
+                : "",
               "Keep the plan practical and minimal.",
-            ].join("\n"),
+            ]
+              .filter((line) => line !== "")
+              .join("\n"),
           },
           {
             role: "user",
             content: JSON.stringify({
               objective: context.objective,
+              briefing: context.briefing,
               availableAgentIds:
                 context.availableAgentIds,
               context: context.context,

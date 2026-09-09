@@ -31,6 +31,13 @@ export interface PlanningContext {
    */
   availableCapabilities?: string[];
 
+  /**
+   * The requester's own briefing: constraints, background, and anything the
+   * objective sentence alone leaves out. Optional, and never invented - it is
+   * only ever the text a person typed when they opened the mission.
+   */
+  briefing?: string;
+
   context: Record<string, unknown>;
 }
 

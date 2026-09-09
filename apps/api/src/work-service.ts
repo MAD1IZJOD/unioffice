@@ -134,6 +134,8 @@ export class WorkService {
 
           availableCapabilities,
 
+          briefing: briefingOf(updatedWork),
+
           context: {
             organizationId:
               updatedWork.organizationId,
@@ -314,6 +316,22 @@ export class WorkService {
       throw error;
     }
   }
+}
+
+/**
+ * The requester's own briefing, when they attached one.
+ *
+ * It is stored on the work row at creation and read back here so the planner
+ * sees the constraints the person actually typed. Anything that is not a
+ * non-empty string is treated as absent - a briefing is never fabricated to
+ * give the planner something to read.
+ */
+function briefingOf(work: Work): string | undefined {
+  const briefing = work.metadata.briefing;
+
+  return typeof briefing === "string" && briefing.trim()
+    ? briefing.trim()
+    : undefined;
 }
 
 function errorMessage(error: unknown): string {

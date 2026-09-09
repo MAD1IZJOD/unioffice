@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { OrganizationId, Work, WorkId } from "@unioffice/core";
 
+import type { CreateWorkInput } from "./application.js";
 import { buildApiServer, type ApiServices } from "./server.js";
 import type { WorkQueryService } from "./work-query-service.js";
 
@@ -124,4 +125,95 @@ test("returns the created work for a valid request", async () => {
   assert.equal(response.statusCode, 201);
   const body = response.json();
   assert.equal(body.work.id, "work-1");
+});
+
+test("stores a mission briefing on the work it creates", async () => {
+  const now = new Date();
+  let received: CreateWorkInput | undefined;
+  const applicationService = {
+    createWork: async (input: CreateWorkInput) => {
+      received = input;
+
+      return {
+        id: "work-2" as WorkId,
+        organizationId: "org-1" as OrganizationId,
+        requesterId: "user-1" as Work["requesterId"],
+        objective: input.objective,
+        status: "queued",
+        priority: "normal",
+        createdAt: now,
+        updatedAt: now,
+        metadata: input.metadata ?? {},
+      } satisfies Work;
+    },
+  } as unknown as ApiServices["applicationService"];
+  const app = buildApiServer(baseServices({
+    applicationService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/work",
+    payload: {
+      objective: "Plan the launch.",
+      briefing: "  Budget is capped at 40k and legal must see the copy.  ",
+    },
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(
+    received?.metadata?.briefing,
+    "Budget is capped at 40k and legal must see the copy.",
+  );
+});
+
+test("rejects a briefing too long to put in front of the planner", async () => {
+  const app = buildApiServer(baseServices({
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/work",
+    payload: { objective: "Plan the launch.", briefing: "x".repeat(4_001) },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.json().error.message, /4000 characters/);
+});
+
+test("treats a blank briefing as no briefing at all", async () => {
+  const now = new Date();
+  let received: CreateWorkInput | undefined;
+  const applicationService = {
+    createWork: async (input: CreateWorkInput) => {
+      received = input;
+
+      return {
+        id: "work-3" as WorkId,
+        organizationId: "org-1" as OrganizationId,
+        requesterId: "user-1" as Work["requesterId"],
+        objective: input.objective,
+        status: "queued",
+        priority: "normal",
+        createdAt: now,
+        updatedAt: now,
+        metadata: input.metadata ?? {},
+      } satisfies Work;
+    },
+  } as unknown as ApiServices["applicationService"];
+  const app = buildApiServer(baseServices({
+    applicationService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/work",
+    payload: { objective: "Plan the launch.", briefing: "   " },
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(received?.metadata, undefined);
 });
