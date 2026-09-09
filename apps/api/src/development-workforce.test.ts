@@ -166,3 +166,33 @@ test("renames an agent seeded under an earlier name", async () => {
   );
   assert.equal(updated.createdAt.getTime(), now.getTime());
 });
+
+test("leaves an agent alone once a person has configured it", async () => {
+  const now = new Date();
+  const configured: Agent = {
+    id: "e32813a2-dda6-4a89-a756-c2991510c503" as AgentId,
+    organizationId,
+    name: "Harvey",
+    description: "Rewritten by the person who runs this company.",
+    type: "specialist",
+    status: "paused",
+    capabilities: ["calculation"],
+    toolIds: ["calculator"],
+    createdAt: now,
+    updatedAt: now,
+    metadata: { userConfigured: true, developmentSeed: true },
+  };
+  const agents = agentRepository([configured]);
+
+  await ensureDevelopmentWorkforce(
+    organizationRepository(existingOrganization()),
+    agents,
+  );
+
+  const after = agents.agents.get(configured.id)!;
+
+  assert.equal(after.description, configured.description);
+  assert.deepEqual(after.capabilities, ["calculation"]);
+  assert.deepEqual(after.toolIds, ["calculator"]);
+  assert.equal(after.status, "paused");
+});

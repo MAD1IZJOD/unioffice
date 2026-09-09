@@ -140,6 +140,14 @@ export async function ensureDevelopmentWorkforce(
       continue;
     }
 
+    // Once a person has configured an agent through the product, the seed
+    // stops owning it. Re-syncing a user-edited row on the next boot would
+    // silently throw their capabilities and tool grants away, which is a far
+    // worse failure than a seeded agent drifting from its blueprint.
+    if (currentAgent.metadata.userConfigured) {
+      continue;
+    }
+
     // The blueprint (capabilities, granted tools, instructions) can change
     // between deploys; an agent seeded before toolIds existed must not be
     // stuck without them forever just because its row already exists.
