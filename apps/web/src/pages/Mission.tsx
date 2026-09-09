@@ -449,9 +449,17 @@ export default function Mission() {
                 </div>
               ) : (
                 <Failure
-                  headline="The mission stopped"
+                  headline={
+                    tasks.length === 0
+                      ? "The plan was never written"
+                      : "The mission stopped"
+                  }
                   detail={failure}
-                  consequence="Nothing finished was lost. A retry resumes from the first task that did not complete."
+                  consequence={
+                    tasks.length === 0
+                      ? "Nothing was delegated and nothing ran. A retry starts the planning again."
+                      : "Nothing finished was lost. A retry resumes from the first task that did not complete."
+                  }
                 />
               )}
             </div>
@@ -536,9 +544,11 @@ export default function Mission() {
               </>
             ) : (
               <>
-                <p className="mission-act-headline">No plan was produced</p>
+                <p className="mission-act-headline">Nothing was decided</p>
                 <p className="mission-act-lead">
-                  {String(work.metadata.planningError)}
+                  Planning did not return a usable plan, so the objective was
+                  never broken into tasks and no one was given anything. The
+                  reason is above.
                 </p>
               </>
             )}
