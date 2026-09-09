@@ -8,8 +8,15 @@ import {
   Wrench,
 } from "lucide-react";
 
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactElement, ReactNode } from "react";
+import {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -517,8 +524,8 @@ export default function Mission() {
             />
           )}
 
+          <Acts>
           <Act
-            index="01"
             title="Strategy"
             question={
               planner ? `What ${planner} decided to do` : "What was decided"
@@ -567,7 +574,6 @@ export default function Mission() {
           </Act>
 
           <Act
-            index="02"
             title="Workforce"
             question="Who is working on it"
             tone="active"
@@ -586,7 +592,6 @@ export default function Mission() {
           </Act>
 
           <Act
-            index="03"
             title="Execution"
             question="What is happening now"
             tone={state.live ? "active" : "live"}
@@ -668,7 +673,6 @@ export default function Mission() {
           </Act>
 
           <Act
-            index="04"
             title="Decisions"
             question="What needed a person"
             tone="warning"
@@ -715,7 +719,6 @@ export default function Mission() {
           </Act>
 
           <Act
-            index="05"
             title="Output"
             question="What the company produced"
             tone="live"
@@ -789,6 +792,7 @@ export default function Mission() {
               </div>
             )}
           </Act>
+          </Acts>
         </div>
 
         <aside className="mission-record">
@@ -908,35 +912,53 @@ function Stations({
   );
 }
 
-function Act({
-  index,
-  title,
-  question,
-  tone,
-  when,
-  children,
-}: {
-  index: string;
+/**
+ * One act of the mission, numbered by where it actually falls.
+ *
+ * An act that did not happen is not rendered as an empty one - a mission with
+ * no approval has no decisions chapter - so the numbers have to be counted
+ * over what renders. Hard-coding them left missions reading 01, 02, 03, 05.
+ */
+function Acts({ children }: { children: ReactNode }) {
+  const acts = Children.toArray(children).filter(
+    (child): child is ReactElement<ActProps> =>
+      isValidElement<ActProps>(child) && child.props.when,
+  );
+
+  return (
+    <>
+      {acts.map((act, index) => (
+        <section
+          key={act.props.title}
+          className={`mission-act ${toneClass[act.props.tone]}`}
+        >
+          <div className="mission-act-head">
+            <span className="mission-act-index">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <span className="mission-act-title">{act.props.title}</span>
+            <span className="mission-act-question">{act.props.question}</span>
+          </div>
+
+          {act.props.children}
+        </section>
+      ))}
+    </>
+  );
+}
+
+interface ActProps {
   title: string;
   question: string;
   tone: "active" | "live" | "warning" | "idle";
   /** An act that did not happen is not rendered as an empty one. */
   when: boolean;
   children: ReactNode;
-}) {
-  if (!when) return null;
+}
 
-  return (
-    <section className={`mission-act ${toneClass[tone]}`}>
-      <div className="mission-act-head">
-        <span className="mission-act-index">{index}</span>
-        <span className="mission-act-title">{title}</span>
-        <span className="mission-act-question">{question}</span>
-      </div>
-
-      {children}
-    </section>
-  );
+/** Declared by the page, rendered (and numbered) by Acts. */
+function Act(props: ActProps) {
+  return <>{props.children}</>;
 }
 
 function Fact({ label, value }: { label: string; value: ReactNode }) {
