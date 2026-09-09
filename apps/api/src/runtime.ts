@@ -14,6 +14,7 @@ import {
   SupabaseOrganizationRepository,
   SupabaseTaskRepository,
   SupabaseWorkRepository,
+  SupabaseWorkspaceRepository,
 } from "@unioffice/database";
 
 import { DefaultMemoryRetriever } from "@unioffice/memory";
@@ -26,6 +27,7 @@ import {
 
 import { createDefaultToolRegistry } from "@unioffice/tools";
 
+import { AgentDirectoryService } from "./agent-directory-service.js";
 import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
@@ -39,6 +41,7 @@ import { WorkExecutionService } from "./work-execution-service.js";
 import { WorkQueryService } from "./work-query-service.js";
 import { WorkRecoveryService } from "./work-recovery-service.js";
 import { WorkService } from "./work-service.js";
+import { WorkspaceService } from "./workspace-service.js";
 
 import type { ApiConfig } from "./config.js";
 
@@ -63,6 +66,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const eventRepository = new SupabaseEventRepository(supabase);
   const memoryRepository = new SupabaseMemoryRepository(supabase);
   const executionJobRepository = new SupabaseExecutionJobRepository(supabase);
+  const workspaceRepository = new SupabaseWorkspaceRepository(supabase);
 
   const eventRecorder = new EventRecorder(eventRepository);
   const memoryRetriever = new DefaultMemoryRetriever(memoryRepository);
@@ -174,6 +178,27 @@ export function createExecutionRuntime(config: ApiConfig) {
     toolRegistry,
   );
 
+  const workspaceService = new WorkspaceService(
+    workspaceRepository,
+    organizationRepository,
+    agentRepository,
+    workRepository,
+    artifactRepository,
+    eventRepository,
+    eventRecorder,
+  );
+
+  const agentDirectoryService = new AgentDirectoryService(
+    agentRepository,
+    workspaceRepository,
+    taskRepository,
+    workRepository,
+    artifactRepository,
+    eventRepository,
+    toolRegistry,
+    eventRecorder,
+  );
+
   const staleRunReconciler = new StaleRunReconciler(
     workRepository,
     taskRepository,
@@ -185,6 +210,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     config,
     supabase,
     organizationRepository,
+    workspaceRepository,
     agentRepository,
     workRepository,
     taskRepository,
@@ -206,6 +232,8 @@ export function createExecutionRuntime(config: ApiConfig) {
     workRecoveryService,
     companyBrainService,
     companyOverviewService,
+    workspaceService,
+    agentDirectoryService,
     staleRunReconciler,
   };
 }

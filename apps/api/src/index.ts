@@ -53,6 +53,8 @@ export async function createApiServer() {
     executionQueueService: runtime.executionQueueService,
     companyBrainService: runtime.companyBrainService,
     companyOverviewService: runtime.companyOverviewService,
+    workspaceService: runtime.workspaceService,
+    agentDirectoryService: runtime.agentDirectoryService,
     toolRegistry: runtime.toolRegistry,
     developmentOrganizationId: developmentOrganization?.organization.id,
     corsOrigins: config.corsOrigins,

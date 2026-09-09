@@ -4,7 +4,12 @@ import test from "node:test";
 import type { OrganizationId, Work, WorkId } from "@unioffice/core";
 
 import type { CreateWorkInput } from "./application.js";
+import { AgentValidationError } from "./agent-directory-service.js";
 import { buildApiServer, type ApiServices } from "./server.js";
+import {
+  WorkspaceNotFoundError,
+  WorkspaceValidationError,
+} from "./workspace-service.js";
 import type { WorkQueryService } from "./work-query-service.js";
 
 function baseServices(overrides: Partial<ApiServices> = {}): ApiServices {
@@ -16,6 +21,8 @@ function baseServices(overrides: Partial<ApiServices> = {}): ApiServices {
     workQueryService: {} as ApiServices["workQueryService"],
     companyBrainService: {} as ApiServices["companyBrainService"],
     companyOverviewService: {} as ApiServices["companyOverviewService"],
+    workspaceService: {} as ApiServices["workspaceService"],
+    agentDirectoryService: {} as ApiServices["agentDirectoryService"],
     workRecoveryService: {} as ApiServices["workRecoveryService"],
     executionQueueService: {} as ApiServices["executionQueueService"],
     toolRegistry: {} as ApiServices["toolRegistry"],
@@ -216,4 +223,154 @@ test("treats a blank briefing as no briefing at all", async () => {
 
   assert.equal(response.statusCode, 201);
   assert.equal(received?.metadata, undefined);
+});
+
+test("creating a workspace returns it and reports validation failures plainly", async () => {
+  const now = new Date();
+  const workspaceService = {
+    createWorkspace: async (input: { name: string }) => {
+      if (input.name === "  ") {
+        throw new WorkspaceValidationError("A workspace needs a name.");
+      }
+
+      return {
+        id: "workspace-1",
+        organizationId: "org-1",
+        name: input.name,
+        slug: "engineering",
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+        metadata: {},
+      };
+    },
+  } as unknown as ApiServices["workspaceService"];
+  const app = buildApiServer(baseServices({
+    workspaceService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const created = await app.inject({
+    method: "POST",
+    url: "/workspaces",
+    payload: { name: "Engineering" },
+  });
+
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.json().workspace.name, "Engineering");
+
+  const rejected = await app.inject({
+    method: "POST",
+    url: "/workspaces",
+    payload: { name: "" },
+  });
+
+  assert.equal(rejected.statusCode, 400);
+  assert.match(rejected.json().error.message, /name is required/);
+});
+
+test("a workspace from another organization is not found rather than forbidden", async () => {
+  const workspaceService = {
+    getWorkspaceDetail: async () => {
+      throw new WorkspaceNotFoundError("Workspace not found: workspace-9");
+    },
+  } as unknown as ApiServices["workspaceService"];
+  const app = buildApiServer(baseServices({
+    workspaceService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/workspaces/33333333-3333-3333-3333-333333333333",
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json().error.code, "NOT_FOUND");
+});
+
+test("rejects an agent type the domain model does not have", async () => {
+  const app = buildApiServer(baseServices({
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/agents",
+    payload: {
+      name: "Dana",
+      description: "Does things.",
+      type: "wizard",
+      capabilities: ["research"],
+      toolIds: [],
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.json().error.message, /specialist, manager or orchestrator/);
+});
+
+test("surfaces an unknown tool grant as a client error, not a server one", async () => {
+  const agentDirectoryService = {
+    createAgent: async () => {
+      throw new AgentValidationError("No such tool: telepathy");
+    },
+  } as unknown as ApiServices["agentDirectoryService"];
+  const app = buildApiServer(baseServices({
+    agentDirectoryService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/agents",
+    payload: {
+      name: "Dana",
+      description: "Does things.",
+      type: "specialist",
+      capabilities: ["research"],
+      toolIds: ["telepathy"],
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.json().error.message, /No such tool: telepathy/);
+});
+
+test("clearing an agent's workspace is passed through as null, not dropped", async () => {
+  let received: { workspaceId?: unknown } | undefined;
+  const agentDirectoryService = {
+    updateAgent: async (input: { workspaceId?: unknown }) => {
+      received = input;
+      return { id: "agent-1", name: "Dana" };
+    },
+  } as unknown as ApiServices["agentDirectoryService"];
+  const app = buildApiServer(baseServices({
+    agentDirectoryService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/agents/44444444-4444-4444-4444-444444444444",
+    payload: { workspaceId: null },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(received?.workspaceId, null);
+});
+
+test("names the field that was left blank, not just that it was blank", async () => {
+  const app = buildApiServer(baseServices({
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/work",
+    payload: { objective: "   " },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.json().error.message, /objective is required/);
 });

@@ -3,11 +3,16 @@ import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 
 import type {
+  AgentId,
+  AgentStatus,
+  AgentType,
   OrganizationId,
   ApprovalId,
   UserId,
   WorkId,
   WorkPriority,
+  WorkspaceId,
+  WorkspaceStatus,
   WorkStatus,
 } from "@unioffice/core";
 
@@ -51,6 +56,24 @@ import type {
 } from "./company-overview-service.js";
 
 import type {
+  WorkspaceService,
+} from "./workspace-service.js";
+
+import {
+  WorkspaceNotFoundError,
+  WorkspaceValidationError,
+} from "./workspace-service.js";
+
+import type {
+  AgentDirectoryService,
+} from "./agent-directory-service.js";
+
+import {
+  AgentNotFoundError,
+  AgentValidationError,
+} from "./agent-directory-service.js";
+
+import type {
   ToolRegistry,
 } from "@unioffice/tools";
 
@@ -67,6 +90,8 @@ export interface ApiServices {
   executionQueueService: ExecutionQueueService;
   companyBrainService: CompanyBrainService;
   companyOverviewService: CompanyOverviewService;
+  workspaceService: WorkspaceService;
+  agentDirectoryService: AgentDirectoryService;
   toolRegistry: ToolRegistry;
   healthCheck: () => Promise<Record<string, unknown>>;
   developmentOrganizationId?: OrganizationId;
@@ -338,6 +363,122 @@ export function buildApiServer(
       return { approval };
     });
   
+    // ---------------------------------------------------------------------
+    // Organization, workspaces and the workforce.
+    //
+    // Every one of these resolves the organization first and refuses to act
+    // on a workspace or agent belonging to another one. There is no
+    // authentication yet; this is the shape that lets one be added without
+    // revisiting each handler.
+    // ---------------------------------------------------------------------
+
+    instance.get("/organization", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.workspaceService.getOrganizationOverview(
+        requiredOrganizationId(services, query.organizationId),
+      );
+    });
+
+    instance.get("/workspaces", async (request) => {
+      const query = objectBody(request.query);
+      const workspaces = await services.workspaceService.listWorkspaces(
+        requiredOrganizationId(services, query.organizationId),
+      );
+
+      return { workspaces };
+    });
+
+    instance.post("/workspaces", async (request, reply) => {
+      const body = objectBody(request.body);
+
+      const workspace = await services.workspaceService.createWorkspace({
+        organizationId: requiredOrganizationId(services, body.organizationId),
+        name: requiredText(body.name, "name"),
+        description: optionalText(body.description),
+      });
+
+      return reply.status(201).send({ workspace });
+    });
+
+    instance.get("/workspaces/:id", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.workspaceService.getWorkspaceDetail(
+        requiredOrganizationId(services, query.organizationId),
+        parameterId(request.params) as unknown as WorkspaceId,
+      );
+    });
+
+    instance.post("/workspaces/:id", async (request) => {
+      const body = objectBody(request.body);
+
+      const workspace = await services.workspaceService.updateWorkspace({
+        organizationId: requiredOrganizationId(services, body.organizationId),
+        workspaceId: parameterId(request.params) as unknown as WorkspaceId,
+        name: optionalText(body.name),
+        description: nullableText(body.description),
+        status: parseWorkspaceStatus(body.status),
+      });
+
+      return { workspace };
+    });
+
+    instance.get("/agents/:id", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.agentDirectoryService.getAgentDetail(
+        requiredOrganizationId(services, query.organizationId),
+        parameterId(request.params) as unknown as AgentId,
+      );
+    });
+
+    instance.post("/agents", async (request, reply) => {
+      const body = objectBody(request.body);
+
+      const agent = await services.agentDirectoryService.createAgent({
+        organizationId: requiredOrganizationId(services, body.organizationId),
+        name: requiredText(body.name, "name"),
+        description: requiredText(body.description, "description"),
+        type: parseAgentType(body.type),
+        capabilities: stringArray(body.capabilities, "capabilities"),
+        toolIds: stringArray(body.toolIds, "toolIds"),
+        workspaceId: optionalText(body.workspaceId) as
+          | WorkspaceId
+          | undefined,
+      });
+
+      return reply.status(201).send({ agent });
+    });
+
+    instance.post("/agents/:id", async (request) => {
+      const body = objectBody(request.body);
+
+      const agent = await services.agentDirectoryService.updateAgent({
+        organizationId: requiredOrganizationId(services, body.organizationId),
+        agentId: parameterId(request.params) as unknown as AgentId,
+        description: optionalText(body.description),
+        capabilities:
+          body.capabilities === undefined
+            ? undefined
+            : stringArray(body.capabilities, "capabilities"),
+        toolIds:
+          body.toolIds === undefined
+            ? undefined
+            : stringArray(body.toolIds, "toolIds"),
+        // null is meaningful: it takes the agent out of its workspace.
+        workspaceId:
+          body.workspaceId === undefined
+            ? undefined
+            : body.workspaceId === null
+              ? null
+              : (requiredText(body.workspaceId, "workspaceId") as WorkspaceId),
+        status: parseAgentStatus(body.status),
+      });
+
+      return { agent };
+    });
+
     instance.get("/agents", async (request) => {
       const query = objectBody(request.query);
       const agents = await services.workQueryService.getAgents(
@@ -442,6 +583,65 @@ function withBriefing(
   return { ...metadata, briefing };
 }
 
+function parseWorkspaceStatus(
+  value: unknown,
+): WorkspaceStatus | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  if (value === "active" || value === "archived") {
+    return value;
+  }
+
+  throw new ApiError(400, "status is invalid.");
+}
+
+function parseAgentType(value: unknown): AgentType {
+  if (
+    value === "specialist" ||
+    value === "manager" ||
+    value === "orchestrator"
+  ) {
+    return value;
+  }
+
+  throw new ApiError(400, "type must be specialist, manager or orchestrator.");
+}
+
+function parseAgentStatus(value: unknown): AgentStatus | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  if (value === "active" || value === "paused" || value === "disabled") {
+    return value;
+  }
+
+  throw new ApiError(400, "status must be active, paused or disabled.");
+}
+
+function stringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new ApiError(400, `${field} must be an array of strings.`);
+  }
+
+  return value.map((entry) => {
+    if (typeof entry !== "string" || !entry.trim()) {
+      throw new ApiError(400, `${field} must contain non-empty strings.`);
+    }
+
+    return entry.trim();
+  });
+}
+
+/**
+ * Text where null is a real instruction to clear the field, distinct from
+ * undefined meaning "leave it as it is".
+ */
+function nullableText(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  return optionalText(value) ?? null;
+}
+
 function parseWorkStatus(value: unknown): WorkStatus | undefined {
   const text = optionalText(value);
 
@@ -506,14 +706,18 @@ function resolverId(body: unknown): string {
   return requiredText(objectBody(body).resolvedBy, "resolvedBy");
 }
 
+/**
+ * A required field, named in its own error. This used to defer to
+ * optionalText, which meant an empty string was reported as the generic
+ * "Expected a non-empty string." - true, but it never told the caller which
+ * field they had left blank.
+ */
 function requiredText(value: unknown, field: string): string {
-  const text = optionalText(value);
-
-  if (!text) {
+  if (typeof value !== "string" || !value.trim()) {
     throw new ApiError(400, `${field} is required.`);
   }
 
-  return text;
+  return value.trim();
 }
 
 function optionalText(value: unknown): string | undefined {
@@ -582,6 +786,20 @@ function statusForError(error: Error): number {
 
   if (error instanceof ApprovalConflictError) {
     return 409;
+  }
+
+  if (
+    error instanceof WorkspaceNotFoundError ||
+    error instanceof AgentNotFoundError
+  ) {
+    return 404;
+  }
+
+  if (
+    error instanceof WorkspaceValidationError ||
+    error instanceof AgentValidationError
+  ) {
+    return 400;
   }
 
   if (error.message.startsWith("Work not found:")) {
