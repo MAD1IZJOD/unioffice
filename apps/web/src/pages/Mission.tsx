@@ -14,6 +14,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
   executeWork,
+  fetchAgents,
   fetchTools,
   fetchWorkDetail,
   formatDuration,
@@ -21,6 +22,7 @@ import {
   planWork,
   resolveApproval,
   retryWork,
+  type AgentSummary,
   type ApprovalItem,
   type ArtifactItem,
   type TaskItem,
@@ -114,6 +116,11 @@ export default function Mission() {
   // of printing a registry id. Read once - the catalog does not move.
   const tools = useResource<ToolDescriptor[]>(useCallback(() => fetchTools(), []));
 
+  // The mission's own agent list holds only the specialists it was delegated
+  // to, so the orchestrator that planned it is not in there. The record needs
+  // to name it, which is what the roster is for.
+  const roster = useResource<AgentSummary[]>(useCallback(() => fetchAgents(), []));
+
   const run = useCallback(
     async (label: string, operation: () => Promise<unknown>) => {
       setAction(label);
@@ -189,15 +196,24 @@ export default function Mission() {
   const { work, tasks, events, artifacts, approvals, agents, memories, executionJob } =
     detail.data;
 
+  // Everyone the record might have to name: the specialists this mission used,
+  // plus the rest of the roster once it has loaded.
+  const everyone = [
+    ...agents,
+    ...(roster.data ?? []).filter(
+      (candidate) => !agents.some((agent) => agent.id === candidate.id),
+    ),
+  ];
+
   const data = missionDataOf(detail.data);
   const state = readMission(data);
   const cast = missionCast(data);
-  const planner = orchestratorOf(agents);
+  const planner = orchestratorOf(everyone);
   const briefing = briefingOf(work);
 
   const moments = narrateMission(events, {
     tasks,
-    agents,
+    agents: everyone,
     tools: tools.data,
   });
 
@@ -212,7 +228,15 @@ export default function Mission() {
   const failure = messageOf(work);
 
   const agentName = (id?: string) =>
-    agents.find((agent) => agent.id === id)?.name ?? "Unassigned";
+    everyone.find((agent) => agent.id === id)?.name ?? "Unassigned";
+
+  // An approval's resource is stored as "task:<uuid>", which is the right way
+  // to store it and the wrong way to read it. The task it points at is on this
+  // page, so it is named; anything else is shown as it was recorded.
+  const resourceName = (resource: string) => {
+    const taskId = resource.startsWith("task:") ? resource.slice(5) : undefined;
+    return tasks.find((task) => task.id === taskId)?.title ?? resource;
+  };
 
   const busy = Boolean(action);
   const opening = action === "open";
@@ -233,7 +257,13 @@ export default function Mission() {
           </div>
 
           <div className="flex flex-wrap items-start justify-between gap-5">
-            <h2 className="mission-objective">{work.objective}</h2>
+            <h2
+              className={`mission-objective${
+                work.objective.length > 90 ? " mission-objective-long" : ""
+              }`}
+            >
+              {work.objective}
+            </h2>
 
             <StatusPill tone={state.tone} pulse={state.live}>
               {state.label}
@@ -394,6 +424,7 @@ export default function Mission() {
                   key={approval.id}
                   approval={approval}
                   requestedBy={agentName(approval.agentId)}
+                  holding={resourceName(approval.resource)}
                   busy={busy}
                   onDecide={(decision) =>
                     run(decision, () =>
@@ -634,7 +665,9 @@ export default function Mission() {
                       <div className="text-[12.5px] font-semibold text-[#f2f4f7]">
                         {approval.action}
                       </div>
-                      <div className="t-machine mt-1">{approval.resource}</div>
+                      <div className="t-machine mt-1">
+                        held up {resourceName(approval.resource)}
+                      </div>
                     </div>
 
                     <StatusPill
@@ -903,11 +936,14 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
 function Decision({
   approval,
   requestedBy,
+  holding,
   busy,
   onDecide,
 }: {
   approval: ApprovalItem;
   requestedBy: string;
+  /** The step this decision is holding up, named rather than referenced. */
+  holding: string;
   busy: boolean;
   onDecide: (decision: "approve" | "reject") => void;
 }) {
@@ -923,7 +959,7 @@ function Decision({
       </p>
 
       <div className="t-machine mt-2.5">
-        {approval.resource} · asked by {requestedBy} ·{" "}
+        holding up {holding} · asked by {requestedBy} ·{" "}
         {formatRelativeTime(approval.createdAt)}
       </div>
 

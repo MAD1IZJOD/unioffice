@@ -17,11 +17,15 @@
    The opening
    -------------------------------------------------------------------------- */
 
+/* The header is full-bleed, so it cancels the page surface's own padding
+   exactly. These two numbers are the .page-surface padding and have to move
+   with it - getting them wrong pushes the header past the viewport edge and
+   gives the whole page a horizontal scrollbar. */
 .mission-open {
   position: relative;
   overflow: hidden;
-  margin: -28px -28px 0;
-  padding: 46px 28px 30px;
+  margin: -24px -22px 0;
+  padding: 44px 22px 30px;
   border-bottom: 1px solid var(--line-subtle);
   background:
     radial-gradient(
@@ -101,6 +105,16 @@
   text-wrap: balance;
 }
 
+/* A long objective is a paragraph, not a headline, and setting it at display
+   size turns the whole opening into a wall. It steps down instead. */
+.mission-objective-long {
+  max-width: 34ch;
+  font-size: clamp(21px, 2.9vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  line-height: 1.16;
+}
+
 .mission-state {
   max-width: 62ch;
   margin-top: 22px;
@@ -139,6 +153,13 @@
   font-size: 9px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .mission-open {
+    margin: -18px -14px 0;
+    padding: 30px 14px 24px;
+  }
 }
 
 /* --------------------------------------------------------------------------
