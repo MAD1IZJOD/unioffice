@@ -23,6 +23,7 @@ import {
   executeWork,
   fetchAgents,
   fetchTools,
+  fetchWorkspaces,
   fetchWorkDetail,
   formatDuration,
   formatRelativeTime,
@@ -35,6 +36,7 @@ import {
   type TaskItem,
   type ToolDescriptor,
   type WorkDetail as WorkDetailData,
+  type WorkspaceSummary,
   type WorkStatus,
 } from "../lib/api";
 
@@ -67,6 +69,7 @@ import { ResultBody } from "../components/ResultBody";
 import { ArtifactSheet } from "../components/ArtifactSheet";
 import { MissionRecord } from "../components/MissionRecord";
 import { MissionCast } from "../components/MissionCast";
+import { WorkspaceMark } from "../components/WorkspaceMark";
 
 import { statusLabel, taskStatusTone, toneClass } from "../lib/tone";
 
@@ -127,6 +130,12 @@ export default function Mission() {
   // to, so the orchestrator that planned it is not in there. The record needs
   // to name it, which is what the roster is for.
   const roster = useResource<AgentSummary[]>(useCallback(() => fetchAgents(), []));
+
+  // A mission carries a workspace id, not a workspace. The directory is small
+  // and does not move, so it is read once to put a name on it.
+  const workspaces = useResource<WorkspaceSummary[]>(
+    useCallback(() => fetchWorkspaces(), []),
+  );
 
   const run = useCallback(
     async (label: string, operation: () => Promise<unknown>) => {
@@ -217,6 +226,10 @@ export default function Mission() {
   const cast = missionCast(data);
   const planner = orchestratorOf(everyone);
   const briefing = briefingOf(work);
+  const workspace = work.workspaceId
+    ? workspaces.data?.find((entry) => entry.workspace.id === work.workspaceId)
+        ?.workspace
+    : undefined;
 
   const moments = narrateMission(events, {
     tasks,
@@ -262,6 +275,27 @@ export default function Mission() {
             <span>opened {formatRelativeTime(work.createdAt)}</span>
             <span>{work.priority} priority</span>
           </div>
+
+          {/* Where this mission sits in the company. A scoped mission could
+              only ever have been given to the workspace's own agents, so it
+              belongs next to the objective rather than buried in metadata. */}
+          {work.workspaceId && (
+            <div className="mb-4">
+              {workspace ? (
+                <Link
+                  to={`/workspaces/${workspace.id}`}
+                  className="place-tag"
+                >
+                  <span className="place-tag-mark">
+                    <WorkspaceMark slug={workspace.slug} size={14} />
+                  </span>
+                  Running in {workspace.name}
+                </Link>
+              ) : (
+                <span className="place-tag">Running in a workspace</span>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-start justify-between gap-5">
             <h2

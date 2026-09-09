@@ -34,7 +34,7 @@ export function MissionCast({ members }: { members: MissionMember[] }) {
         return (
           <Link
             key={member.agent.id}
-            to={`/agents?agent=${member.agent.id}`}
+            to={`/agents/${member.agent.id}`}
             className={`mission-member ${toneClass[tone]}`}
           >
             <div className="mission-member-head">

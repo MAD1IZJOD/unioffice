@@ -1,18 +1,21 @@
 import { ArrowRight, LoaderCircle, Plus, Zap } from "lucide-react";
 
 import { useCallback, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   createWork,
   fetchAgents,
+  fetchWorkspaces,
   type AgentSummary,
   type WorkItem,
+  type WorkspaceSummary,
 } from "../lib/api";
 
 import { useResource } from "../lib/useResource";
 import { orchestratorOf } from "../lib/mission";
 import { Failure } from "../components/primitives";
+import { WorkspaceMark } from "../components/WorkspaceMark";
 
 /**
  * Opening a mission.
@@ -45,10 +48,18 @@ const STARTERS = [
 export default function MissionStart() {
   const navigate = useNavigate();
 
+  // A mission opened from inside a workspace arrives with it already chosen,
+  // which is the difference between "where does this belong" being a question
+  // and being a fact you carried in with you.
+  const [params] = useSearchParams();
+
   const [objective, setObjective] = useState("");
   const [briefing, setBriefing] = useState("");
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [priority, setPriority] = useState<WorkItem["priority"]>("normal");
+  const [workspaceId, setWorkspaceId] = useState<string | null>(
+    params.get("workspace"),
+  );
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -56,6 +67,10 @@ export default function MissionStart() {
   // picks the objective up rather than saying "the system".
   const roster = useResource<AgentSummary[]>(
     useCallback(() => fetchAgents(), []),
+  );
+
+  const workspaces = useResource<WorkspaceSummary[]>(
+    useCallback(() => fetchWorkspaces(), []),
   );
 
   const planner = orchestratorOf(roster.data ?? []);
@@ -72,6 +87,7 @@ export default function MissionStart() {
         objective: objective.trim(),
         priority,
         briefing: briefing.trim() || undefined,
+        workspaceId: workspaceId ?? undefined,
       });
 
       // The mission surface takes it from here: it runs the planning and the
@@ -158,6 +174,50 @@ export default function MissionStart() {
           <Plus size={12} />
           Add context
         </button>
+      )}
+
+      {(workspaces.data?.length ?? 0) > 0 && (
+        <div className="mission-field">
+          <span className="mission-field-label">Where it runs</span>
+
+          <div className="config-choices mt-3">
+            <button
+              type="button"
+              disabled={opening}
+              onClick={() => setWorkspaceId(null)}
+              className={`config-choice${workspaceId === null ? " config-choice-on" : ""}`}
+            >
+              The whole company
+            </button>
+
+            {(workspaces.data ?? [])
+              .filter((entry) => entry.workspace.status === "active")
+              .map((entry) => (
+                <button
+                  key={entry.workspace.id}
+                  type="button"
+                  disabled={opening}
+                  onClick={() => setWorkspaceId(entry.workspace.id)}
+                  className={`config-choice${
+                    workspaceId === entry.workspace.id ? " config-choice-on" : ""
+                  }`}
+                >
+                  <WorkspaceMark slug={entry.workspace.slug} size={12} />
+                  {entry.workspace.name}
+                </button>
+              ))}
+          </div>
+
+          <p className="mission-hint">
+            {workspaceId === null
+              ? "Anyone on the roster can be given this work."
+              : `Only agents in ${
+                  workspaces.data?.find(
+                    (entry) => entry.workspace.id === workspaceId,
+                  )?.workspace.name ?? "that workspace"
+                }, and agents belonging to no workspace, can be given any of it.`}
+          </p>
+        </div>
       )}
 
       <div className="mission-field">

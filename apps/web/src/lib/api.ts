@@ -72,6 +72,8 @@ export interface AgentSummary {
 export interface WorkItem {
   id: string;
   organizationId: string;
+  /** The workspace this mission runs inside, when it was scoped to one. */
+  workspaceId?: string;
   objective: string;
   status: WorkStatus;
   priority: "low" | "normal" | "high" | "critical";

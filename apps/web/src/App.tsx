@@ -316,7 +316,7 @@ export default function App() {
     const agents = (data?.agents ?? []).map((agent) => ({
       key: `agent:${agent.agentId}`,
       label: `${agent.name} — ${profileOf(agent).label}`,
-      path: `/agents?agent=${agent.agentId}`,
+      path: `/agents/${agent.agentId}`,
       icon: Users,
       kind: "Agent",
     }));
