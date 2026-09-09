@@ -132,7 +132,7 @@ export default function Command() {
           detail={overview.error.message}
           consequence={
             overview.error.isOffline
-              ? "Nothing is lost - work already queued keeps running on the worker. The page just cannot see it."
+              ? "Nothing is lost - missions already queued keep running on the worker. The page just cannot see them."
               : "Nothing was changed by this request."
           }
           action={

@@ -64,16 +64,21 @@ export function describeCompany(
       headline: ["THE COMPANY", "IS MOVING."],
       detail:
         working > 0
-          ? `${countOf(executing, "objective")} in flight, ${countOf(working, "agent")} working.`
-          : `${countOf(executing, "objective")} in flight.`,
+          ? `${countOf(executing, "mission")} in flight, ${countOf(working, "agent")} working.`
+          : `${countOf(executing, "mission")} in flight.`,
       mood: "moving",
     };
   }
 
   if (queued > 0) {
     return {
-      headline: ["WORK IS", "ON THE QUEUE."],
-      detail: `${countOf(queued, "objective")} waiting for a worker to pick it up.`,
+      headline:
+        queued === 1
+          ? ["A MISSION IS", "ON THE QUEUE."]
+          : ["MISSIONS ARE", "ON THE QUEUE."],
+      detail: `${countOf(queued, "mission")} waiting for a worker to pick ${
+        queued === 1 ? "it" : "them"
+      } up.`,
       mood: "moving",
     };
   }
@@ -81,7 +86,7 @@ export function describeCompany(
   if (failed > 0) {
     return {
       headline: ["SOMETHING", "DID NOT LAND."],
-      detail: `${countOf(failed, "objective")} failed recently and can be retried.`,
+      detail: `${countOf(failed, "mission")} stopped recently and can be retried.`,
       mood: "broken",
     };
   }
@@ -89,7 +94,7 @@ export function describeCompany(
   if (overview.work.total > 0) {
     return {
       headline: ["THE FLOOR", "IS QUIET."],
-      detail: `${countOf(overview.work.total, "objective")} completed. Nothing is running.`,
+      detail: `${countOf(overview.work.total, "mission")} run. Nothing is moving.`,
       mood: "quiet",
     };
   }

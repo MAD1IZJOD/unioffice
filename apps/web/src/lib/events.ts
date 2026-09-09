@@ -84,7 +84,7 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
       return {
         category: "work",
         tone: "tone-live",
-        title: `Work completed across ${count("taskCount") ?? 0} tasks`,
+        title: `Mission completed across ${count("taskCount") ?? 0} tasks`,
       };
 
     case "work.failed": {
@@ -96,7 +96,7 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
         return {
           category: "work",
           tone: "tone-warning",
-          title: "Work interrupted by a restart",
+          title: "Mission interrupted by a restart",
           detail: `${interrupted} unfinished ${interrupted === 1 ? "task" : "tasks"} - can be resumed`,
         };
       }
@@ -104,7 +104,7 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
       return {
         category: "work",
         tone: "tone-error",
-        title: "Work failed",
+        title: "Mission stopped",
         detail: text("reason") ?? text("error"),
       };
     }
@@ -115,8 +115,8 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
         tone: "tone-warning",
         title:
           payload.mode === "replan"
-            ? "Work retried from planning"
-            : `Work resumed, ${count("resetTaskCount") ?? 0} tasks reset`,
+            ? "Mission sent back to planning"
+            : `Mission resumed, ${count("resetTaskCount") ?? 0} tasks reset`,
         detail:
           count("preservedTaskCount")
             ? `${count("preservedTaskCount")} completed tasks kept`
@@ -124,7 +124,7 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
       };
 
     case "work.cancelled":
-      return { category: "work", tone: "tone-idle", title: "Work cancelled" };
+      return { category: "work", tone: "tone-idle", title: "Mission cancelled" };
 
     case "task.created":
       return {
