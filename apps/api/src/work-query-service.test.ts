@@ -31,6 +31,7 @@ const workRepository: WorkRepository = {
   async create(work) { return work; },
   async findById() { return null; },
   async findByOrganization() { return []; },
+  async findByWorkspace() { return []; },
   async findByStatuses() { return []; },
   async update(work) { return work; },
   async delete() {},
@@ -74,6 +75,7 @@ const noAgentsRepository: AgentRepository = {
   async create(agent) { return agent; },
   async findById() { return null; },
   async findByOrganization() { return []; },
+  async findByWorkspace() { return []; },
   async update(agent) { return agent; },
   async delete() {},
 };
@@ -168,6 +170,11 @@ test("getAgents returns the organization's agent directory", async () => {
     async findById() { return null; },
     async findByOrganization(id) {
       return id === organizationId ? agents : [];
+    },
+    async findByWorkspace(id, workspaceId) {
+      return id === organizationId
+        ? agents.filter((agent) => agent.workspaceId === workspaceId)
+        : [];
     },
     async update(agent) { return agent; },
     async delete() {},

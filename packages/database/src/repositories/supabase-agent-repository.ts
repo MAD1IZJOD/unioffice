@@ -2,6 +2,7 @@ import type {
   Agent,
   AgentId,
   OrganizationId,
+  WorkspaceId,
 } from "@unioffice/core";
 
 import type {
@@ -98,6 +99,37 @@ export class SupabaseAgentRepository
     if (error) {
       throw new Error(
         `Failed to find organization agents: ${error.message}`,
+      );
+    }
+
+    return (data ?? []).map(
+      (row) => this.mapRow(row),
+    );
+  }
+
+  async findByWorkspace(
+    organizationId: OrganizationId,
+    workspaceId: WorkspaceId,
+  ): Promise<Agent[]> {
+    const { data, error } =
+      await this.client
+        .from("agents")
+        .select("*")
+        .eq(
+          "organization_id",
+          organizationId,
+        )
+        .eq(
+          "workspace_id",
+          workspaceId,
+        )
+        .order("created_at", {
+          ascending: true,
+        });
+
+    if (error) {
+      throw new Error(
+        `Failed to find workspace agents: ${error.message}`,
       );
     }
 

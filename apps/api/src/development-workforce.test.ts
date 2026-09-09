@@ -38,6 +38,11 @@ function agentRepository(initial: Agent[]): AgentRepository & { agents: Map<Agen
     async create(agent) { agents.set(agent.id, agent); return agent; },
     async findById(id) { return agents.get(id) ?? null; },
     async findByOrganization() { return [...agents.values()]; },
+    async findByWorkspace(_organizationId, workspaceId) {
+      return [...agents.values()].filter(
+        (agent) => agent.workspaceId === workspaceId,
+      );
+    },
     async update(agent) { agents.set(agent.id, agent); return agent; },
     async delete(id) { agents.delete(id); },
   };

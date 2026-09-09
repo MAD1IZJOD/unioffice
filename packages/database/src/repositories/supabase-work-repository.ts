@@ -2,6 +2,7 @@ import type {
   OrganizationId,
   Work,
   WorkId,
+  WorkspaceId,
   WorkStatus,
 } from "@unioffice/core";
 
@@ -166,6 +167,35 @@ export class SupabaseWorkRepository
     if (error) {
       throw new Error(
         `Failed to find works: ${error.message}`,
+      );
+    }
+
+    return (data as WorkRow[]).map(toWork);
+  }
+
+  async findByWorkspace(
+    organizationId: OrganizationId,
+    workspaceId: WorkspaceId,
+  ): Promise<Work[]> {
+    const { data, error } =
+      await this.supabase
+        .from("works")
+        .select("*")
+        .eq(
+          "organization_id",
+          organizationId,
+        )
+        .eq(
+          "workspace_id",
+          workspaceId,
+        )
+        .order("created_at", {
+          ascending: false,
+        });
+
+    if (error) {
+      throw new Error(
+        `Failed to find workspace works: ${error.message}`,
       );
     }
 

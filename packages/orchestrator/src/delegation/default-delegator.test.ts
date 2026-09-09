@@ -46,6 +46,9 @@ function repository(agents: Agent[]): AgentRepository {
     async create(value) { return value; },
     async findById(id) { return agents.find((value) => value.id === id) ?? null; },
     async findByOrganization() { return agents; },
+    async findByWorkspace(_organizationId, workspaceId) {
+      return agents.filter((value) => value.workspaceId === workspaceId);
+    },
     async update(value) { return value; },
     async delete() {},
   };

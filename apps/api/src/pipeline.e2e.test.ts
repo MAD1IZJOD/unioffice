@@ -146,6 +146,11 @@ function repositories(agents: Agent[]) {
     async create(work) { works.set(work.id, work); return work; },
     async findById(id) { return works.get(id) ?? null; },
     async findByOrganization() { return [...works.values()]; },
+    async findByWorkspace(_organizationId, workspaceId) {
+      return [...works.values()].filter(
+        (value) => value.workspaceId === workspaceId,
+      );
+    },
     async findByStatuses(statuses) {
       return [...works.values()].filter((work) => statuses.includes(work.status));
     },
@@ -180,6 +185,9 @@ function repositories(agents: Agent[]) {
     async create(value) { return value; },
     async findById(id) { return agents.find((value) => value.id === id) ?? null; },
     async findByOrganization() { return agents; },
+    async findByWorkspace(_organizationId, workspaceId) {
+      return agents.filter((value) => value.workspaceId === workspaceId);
+    },
     async update(value) { return value; },
     async delete() {},
   };

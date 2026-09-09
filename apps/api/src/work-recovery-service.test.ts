@@ -70,6 +70,11 @@ function harness(work: Work, tasks: Task[]) {
     async create(value) { return value; },
     async findById(id) { return workStore.get(id) ?? null; },
     async findByOrganization() { return [...workStore.values()]; },
+    async findByWorkspace(_organizationId, workspaceId) {
+      return [...workStore.values()].filter(
+        (value) => value.workspaceId === workspaceId,
+      );
+    },
     async findByStatuses(statuses) {
       return [...workStore.values()].filter((work) => statuses.includes(work.status));
     },

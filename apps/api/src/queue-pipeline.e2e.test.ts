@@ -127,6 +127,11 @@ function harness(
     async create(work) { works.set(work.id, work); return work; },
     async findById(id) { return works.get(id) ?? null; },
     async findByOrganization() { return [...works.values()]; },
+    async findByWorkspace(_organizationId, workspaceId) {
+      return [...works.values()].filter(
+        (value) => value.workspaceId === workspaceId,
+      );
+    },
     async findByStatuses(statuses) {
       return [...works.values()].filter((w) => statuses.includes(w.status));
     },
@@ -155,6 +160,9 @@ function harness(
     async create(value) { return value; },
     async findById(id) { return agents.find((a) => a.id === id) ?? null; },
     async findByOrganization() { return agents; },
+    async findByWorkspace(_organizationId, workspaceId) {
+      return agents.filter((value) => value.workspaceId === workspaceId);
+    },
     async update(value) { return value; },
     async delete() {},
   };

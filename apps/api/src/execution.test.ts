@@ -130,6 +130,16 @@ class MemoryAgentRepository implements AgentRepository {
     );
   }
 
+  async findByWorkspace(
+    id: OrganizationId,
+    workspaceId: Agent["workspaceId"],
+  ): Promise<Agent[]> {
+    return [...this.agents.values()].filter(
+      (agent) =>
+        agent.organizationId === id && agent.workspaceId === workspaceId,
+    );
+  }
+
   async update(agent: Agent): Promise<Agent> {
     this.agents.set(agent.id, agent);
     return agent;
@@ -157,6 +167,16 @@ class MemoryWorkRepository implements WorkRepository {
   async findByOrganization(id: OrganizationId): Promise<Work[]> {
     return [...this.works.values()].filter(
       (work) => work.organizationId === id,
+    );
+  }
+
+  async findByWorkspace(
+    id: OrganizationId,
+    workspaceId: Work["workspaceId"],
+  ): Promise<Work[]> {
+    return [...this.works.values()].filter(
+      (work) =>
+        work.organizationId === id && work.workspaceId === workspaceId,
     );
   }
 

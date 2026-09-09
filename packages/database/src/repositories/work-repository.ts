@@ -3,6 +3,7 @@ import type {
   WorkId,
   WorkStatus,
   OrganizationId,
+  WorkspaceId,
 } from "@unioffice/core";
 
 export interface WorkRepository {
@@ -12,6 +13,12 @@ export interface WorkRepository {
 
   findByOrganization(
     organizationId: OrganizationId,
+  ): Promise<Work[]>;
+
+  /** The work opened inside one workspace, newest first. */
+  findByWorkspace(
+    organizationId: OrganizationId,
+    workspaceId: WorkspaceId,
   ): Promise<Work[]>;
 
   /**
