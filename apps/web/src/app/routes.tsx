@@ -2,6 +2,7 @@ import { createBrowserRouter, redirect } from "react-router-dom";
 
 import App from "../App";
 import Activity from "../pages/Activity";
+import Agent from "../pages/Agent";
 import Agents from "../pages/Agents";
 import Approvals from "../pages/Approvals";
 import Artifacts from "../pages/Artifacts";
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
         loader: ({ params }) => redirect(`/missions/${params.workId ?? ""}`),
       },
       { path: "agents", element: <Agents /> },
+      { path: "agents/:agentId", element: <Agent /> },
       { path: "tools", element: <Tools /> },
       { path: "brain", element: <Brain /> },
       { path: "artifacts", element: <Artifacts /> },
