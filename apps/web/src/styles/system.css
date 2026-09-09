@@ -1946,6 +1946,30 @@
   flex-shrink: 0;
 }
 
+/* A chapter title is a phrase, not a label, and "What is running here" plus
+   an action does not fit a phone. The rule is what gives way: it is the one
+   part of the row carrying no information. */
+@media (max-width: 620px) {
+  .chapter {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: 40px 0 18px;
+  }
+
+  .chapter-title {
+    font-size: 15.5px;
+    white-space: normal;
+  }
+
+  .chapter-rule {
+    display: none;
+  }
+
+  .chapter-action {
+    margin-left: auto;
+  }
+}
+
 /* --------------------------------------------------------------------------
    Agent marks
 
