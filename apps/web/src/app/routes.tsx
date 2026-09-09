@@ -11,7 +11,9 @@ import Mission from "../pages/Mission";
 import MissionStart from "../pages/MissionStart";
 import Missions from "../pages/Missions";
 import NotBuilt from "../pages/NotBuilt";
+import Organization from "../pages/Organization";
 import Tools from "../pages/Tools";
+import Workspace from "../pages/Workspace";
 
 /**
  * Work became Mission.
@@ -42,21 +44,8 @@ export const router = createBrowserRouter([
       { path: "artifacts", element: <Artifacts /> },
       { path: "approvals", element: <Approvals /> },
       { path: "activity", element: <Activity /> },
-      {
-        path: "organization",
-        element: (
-          <NotBuilt
-            title="Organization"
-            description="Workspaces, departments and how the workforce is structured."
-            planned={[
-              "Workspaces, and scoping agents and missions to them",
-              "Departments grouping agents by responsibility",
-              "Creating and configuring agents from the UI rather than a seed script",
-              "Organization membership and roles",
-            ]}
-          />
-        ),
-      },
+      { path: "organization", element: <Organization /> },
+      { path: "workspaces/:workspaceId", element: <Workspace /> },
       {
         path: "governance",
         element: (

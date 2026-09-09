@@ -234,6 +234,37 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
         detail: text("resolvedBy") ? `by ${text("resolvedBy")}` : undefined,
       };
 
+    case "workspace.created":
+      return {
+        category: "system",
+        tone: "tone-live",
+        title: `Workspace created: ${text("name") ?? "untitled"}`,
+      };
+
+    case "workspace.updated":
+      return {
+        category: "system",
+        tone: "tone-idle",
+        title: `Workspace updated: ${text("name") ?? "untitled"}`,
+        detail: text("status") === "archived" ? "archived" : undefined,
+      };
+
+    case "agent.created":
+      return {
+        category: "agent",
+        tone: "tone-live",
+        title: `${text("name") ?? "An agent"} joined the workforce`,
+        detail: describeGrants(payload),
+      };
+
+    case "agent.updated":
+      return {
+        category: "agent",
+        tone: "tone-idle",
+        title: `${text("name") ?? "An agent"} was reconfigured`,
+        detail: describeGrants(payload),
+      };
+
     case "artifact.created":
       return {
         category: "artifact",
@@ -270,6 +301,26 @@ export const eventCategories: Array<{
   { id: "approval", label: "Approvals" },
   { id: "artifact", label: "Artifacts" },
 ];
+
+/** What an agent now holds, for the line describing a configuration change. */
+function describeGrants(payload: Record<string, unknown>): string | undefined {
+  const capabilities = Array.isArray(payload.capabilities)
+    ? (payload.capabilities as unknown[]).filter(
+        (value): value is string => typeof value === "string",
+      )
+    : [];
+  const tools = Array.isArray(payload.toolIds)
+    ? (payload.toolIds as unknown[]).filter(
+        (value): value is string => typeof value === "string",
+      )
+    : [];
+
+  const parts: string[] = [];
+  if (capabilities.length) parts.push(capabilities.join(", "));
+  if (tools.length) parts.push(`holds ${tools.join(", ")}`);
+
+  return parts.length ? parts.join(" · ") : undefined;
+}
 
 function describeRequirements(payload: Record<string, unknown>): string | undefined {
   const tools = Array.isArray(payload.requiredTools)
