@@ -314,9 +314,21 @@ export default function Mission() {
               </span>
             )}
 
+            {/* The backend accepts a plan request while it is already
+                planning, so the button has to go away rather than merely
+                look busy - two planners on one objective is a real outcome. */}
+            {!opening && work.status === "planning" && (
+              <span className="running-indicator">
+                <LoaderCircle size={13} className="spin-slow" />
+                {planner
+                  ? `${planner} is writing the plan`
+                  : "The plan is being written"}
+              </span>
+            )}
+
             {!opening &&
               tasks.length === 0 &&
-              (work.status === "queued" || work.status === "planning") && (
+              work.status === "queued" && (
                 <button
                   type="button"
                   disabled={busy}

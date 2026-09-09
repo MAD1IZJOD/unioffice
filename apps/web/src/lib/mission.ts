@@ -675,10 +675,13 @@ function tell(
           payload.reason === "replan" || payload.mode === "replan"
             ? "The mission was sent back to be planned again."
             : "The mission was resumed from where it stopped.",
-        note:
-          number("preservedTaskCount") !== undefined
-            ? `${number("preservedTaskCount")} finished tasks were kept.`
-            : undefined,
+        // Only worth saying when something actually survived; "0 finished
+        // tasks were kept" is a sentence about nothing.
+        note: number("preservedTaskCount")
+          ? `${number("preservedTaskCount")} finished ${
+              number("preservedTaskCount") === 1 ? "task was" : "tasks were"
+            } kept.`
+          : undefined,
       };
 
     case "work.cancelled":
