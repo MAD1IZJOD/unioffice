@@ -691,9 +691,11 @@ export default function Mission() {
                       <div className="text-[12.5px] font-semibold text-[#f2f4f7]">
                         {approval.action}
                       </div>
-                      <div className="t-machine mt-1">
-                        held up {resourceName(approval.resource)}
-                      </div>
+                      {resourceName(approval.resource) !== approval.action && (
+                        <div className="t-machine mt-1">
+                          held up {resourceName(approval.resource)}
+                        </div>
+                      )}
                     </div>
 
                     <StatusPill
@@ -1003,8 +1005,10 @@ function Decision({
       </p>
 
       <div className="t-machine mt-2.5">
-        holding up {holding} · asked by {requestedBy} ·{" "}
-        {formatRelativeTime(approval.createdAt)}
+        {/* The action and the step it blocks are usually the same sentence,
+            and saying it twice is noise rather than context. */}
+        {holding !== approval.action && <>holding up {holding} · </>}
+        asked by {requestedBy} · {formatRelativeTime(approval.createdAt)}
       </div>
 
       <div className="mission-decision-buttons">
