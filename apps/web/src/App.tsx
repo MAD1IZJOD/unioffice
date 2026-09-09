@@ -120,6 +120,14 @@ function locate(pathname: string): { group: string; title: string } {
     return { group: "Operate", title: "Mission" };
   }
 
+  if (pathname.startsWith("/workspaces/")) {
+    return { group: "Workforce", title: "Workspace" };
+  }
+
+  if (pathname.startsWith("/agents/")) {
+    return { group: "Workforce", title: "Agent" };
+  }
+
   for (const group of NAV_GROUPS) {
     const entry = group.entries.find((candidate) => candidate.path === pathname);
 
