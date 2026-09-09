@@ -64,6 +64,8 @@ export interface AgentSummary {
   status: "active" | "paused" | "disabled";
   capabilities: string[];
   toolIds: string[];
+  /** The workspace this agent belongs to, when it belongs to one. */
+  workspaceId?: string;
   metadata: Record<string, unknown>;
 }
 
@@ -159,6 +161,74 @@ export interface ApprovalItem {
   resolvedAt?: string;
   resolvedBy?: string;
   metadata: Record<string, unknown>;
+}
+
+export type WorkspaceStatus = "active" | "archived";
+
+export interface WorkspaceItem {
+  id: string;
+  organizationId: string;
+  name: string;
+  slug: string;
+  description?: string;
+  status: WorkspaceStatus;
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface WorkspaceSummary {
+  workspace: WorkspaceItem;
+  agentCount: number;
+  workCount: number;
+  activeWorkCount: number;
+}
+
+export interface WorkspaceDetail {
+  workspace: WorkspaceItem;
+  agents: AgentSummary[];
+  work: WorkItem[];
+  artifacts: ArtifactItem[];
+  activity: ActivityEvent[];
+}
+
+export interface OrganizationItem {
+  id: string;
+  name: string;
+  slug: string;
+  status: "active" | "suspended" | "archived";
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface OrganizationOverview {
+  organization: OrganizationItem;
+  workspaces: WorkspaceSummary[];
+  unassignedAgentCount: number;
+  agentCount: number;
+  workCount: number;
+  activeWorkCount: number;
+  activity: ActivityEvent[];
+}
+
+export interface AgentAssignment {
+  task: TaskItem;
+  work?: WorkItem;
+}
+
+export interface AgentDetail {
+  agent: AgentSummary & { workspaceId?: string };
+  workspace?: WorkspaceItem;
+  tools: Array<{ id: string; name: string; description: string }>;
+  /** Tool ids the agent holds that the registry no longer knows about. */
+  unknownToolIds: string[];
+  assignments: AgentAssignment[];
+  current?: AgentAssignment;
+  artifacts: ArtifactItem[];
+  activity: ActivityEvent[];
+  completedCount: number;
+  failedCount: number;
 }
 
 export interface ToolDescriptor {
@@ -417,6 +487,108 @@ export async function fetchArtifacts(limit = 50): Promise<ArtifactItem[]> {
   return data.artifacts;
 }
 
+/* --------------------------------------------------------------------------
+   The company itself: its organization, its workspaces and its workforce.
+   -------------------------------------------------------------------------- */
+
+export async function fetchOrganization(): Promise<OrganizationOverview> {
+  return get<OrganizationOverview>(scoped("/organization"), 60_000);
+}
+
+export async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
+  const data = await get<{ workspaces: WorkspaceSummary[] }>(
+    scoped("/workspaces"),
+  );
+
+  return data.workspaces;
+}
+
+export async function fetchWorkspace(
+  workspaceId: string,
+): Promise<WorkspaceDetail> {
+  return get<WorkspaceDetail>(scoped(`/workspaces/${workspaceId}`), 60_000);
+}
+
+export async function createWorkspace(input: {
+  name: string;
+  description?: string;
+}): Promise<WorkspaceItem> {
+  const data = await post<{ workspace: WorkspaceItem }>(
+    "/workspaces",
+    {
+      organizationId: organizationId(),
+      name: input.name,
+      description: input.description?.trim() || undefined,
+    },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.workspace;
+}
+
+export async function updateWorkspace(
+  workspaceId: string,
+  changes: {
+    name?: string;
+    /** null clears the description; undefined leaves it alone. */
+    description?: string | null;
+    status?: WorkspaceStatus;
+  },
+): Promise<WorkspaceItem> {
+  const data = await post<{ workspace: WorkspaceItem }>(
+    `/workspaces/${workspaceId}`,
+    { organizationId: organizationId(), ...changes },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.workspace;
+}
+
+export async function fetchAgent(agentId: string): Promise<AgentDetail> {
+  return get<AgentDetail>(scoped(`/agents/${agentId}`), 60_000);
+}
+
+export async function createAgent(input: {
+  name: string;
+  description: string;
+  type: AgentSummary["type"];
+  capabilities: string[];
+  toolIds: string[];
+  workspaceId?: string;
+}): Promise<AgentSummary> {
+  const data = await post<{ agent: AgentSummary }>(
+    "/agents",
+    {
+      organizationId: organizationId(),
+      ...input,
+      workspaceId: input.workspaceId || undefined,
+    },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.agent;
+}
+
+export async function updateAgent(
+  agentId: string,
+  changes: {
+    description?: string;
+    capabilities?: string[];
+    toolIds?: string[];
+    /** null takes the agent out of its workspace. */
+    workspaceId?: string | null;
+    status?: AgentSummary["status"];
+  },
+): Promise<AgentSummary> {
+  const data = await post<{ agent: AgentSummary }>(
+    `/agents/${agentId}`,
+    { organizationId: organizationId(), ...changes },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.agent;
+}
+
 export async function fetchPendingApprovals(): Promise<ApprovalItem[]> {
   const data = await get<{ approvals: ApprovalItem[] }>(scoped("/approvals"));
 
@@ -426,6 +598,12 @@ export async function fetchPendingApprovals(): Promise<ApprovalItem[]> {
 export interface NewMission {
   objective: string;
   priority?: WorkItem["priority"];
+  /**
+   * The workspace the mission runs inside. The planner and the delegator both
+   * treat this as a hard boundary, so it decides which agents can be given
+   * any of the work.
+   */
+  workspaceId?: string;
   /**
    * The requester's own context: constraints, figures, background. Stored on
    * the work row and read by the planner, so it genuinely shapes the plan
@@ -441,6 +619,7 @@ export async function createWork(mission: NewMission): Promise<WorkItem> {
       objective: mission.objective,
       priority: mission.priority ?? "normal",
       briefing: mission.briefing?.trim() || undefined,
+      workspaceId: mission.workspaceId || undefined,
     },
     READ_TIMEOUT_MS,
   );
