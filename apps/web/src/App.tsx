@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Menu,
   Network,
+  Plus,
   RotateCcw,
   Scale,
   Search,
@@ -61,8 +62,8 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
     entries: [
       { label: "Command Center", path: "/command", icon: CommandIcon },
       {
-        label: "Work",
-        path: "/work",
+        label: "Missions",
+        path: "/missions",
         icon: LayoutGrid,
         badge: (overview) => overview.work.active.length,
       },
@@ -111,8 +112,12 @@ const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
 
 /** The group a route belongs to, shown as context in the header. */
 function locate(pathname: string): { group: string; title: string } {
-  if (pathname.startsWith("/work/")) {
-    return { group: "Operate", title: "Work detail" };
+  if (pathname === "/missions/new") {
+    return { group: "Operate", title: "Open a mission" };
+  }
+
+  if (pathname.startsWith("/missions/")) {
+    return { group: "Operate", title: "Mission" };
   }
 
   for (const group of NAV_GROUPS) {
@@ -257,8 +262,48 @@ export default function App() {
     setAttentionOpen(false);
   }
 
+  // Everything the palette offers is something this build can actually do:
+  // an action that exists, a mission that exists, an agent on the roster, or
+  // a decision genuinely waiting. Nothing is listed to fill the list out.
   const paletteResults = useMemo(() => {
     const needle = paletteQuery.trim().toLowerCase();
+    const data = overview.data;
+
+    const actions = [
+      {
+        key: "action:new-mission",
+        label: "Open a mission",
+        path: "/missions/new",
+        icon: Plus,
+        kind: "Action",
+      },
+    ];
+
+    const active = (data?.work.active ?? []).map((item) => ({
+      key: `mission:${item.id}`,
+      label: item.objective,
+      path: `/missions/${item.id}`,
+      icon: LayoutGrid,
+      kind: "Active mission",
+    }));
+
+    const recent = (data?.work.recentlyCompleted ?? []).slice(0, 10).map(
+      (item) => ({
+        key: `mission:${item.id}`,
+        label: item.objective,
+        path: `/missions/${item.id}`,
+        icon: LayoutGrid,
+        kind: "Recent mission",
+      }),
+    );
+
+    const decisions = (data?.approvals ?? []).map((approval) => ({
+      key: `approval:${approval.id}`,
+      label: approval.action,
+      path: `/missions/${approval.workId}`,
+      icon: ShieldAlert,
+      kind: "Waiting on you",
+    }));
 
     const surfaces = ALL_ENTRIES.map((entry) => ({
       key: `surface:${entry.path}`,
@@ -268,28 +313,22 @@ export default function App() {
       kind: "Surface",
     }));
 
-    const work = (overview.data?.work.active ?? [])
-      .concat(overview.data?.work.recentlyCompleted ?? [])
-      .slice(0, 10)
-      .map((item) => ({
-        key: `work:${item.id}`,
-        label: item.objective,
-        path: `/work/${item.id}`,
-        icon: LayoutGrid,
-        kind: "Work",
-      }));
-
-    const agents = (overview.data?.agents ?? []).map((agent) => ({
+    const agents = (data?.agents ?? []).map((agent) => ({
       key: `agent:${agent.agentId}`,
       label: `${agent.name} — ${profileOf(agent).label}`,
-      path: "/agents",
+      path: `/agents?agent=${agent.agentId}`,
       icon: Users,
       kind: "Agent",
     }));
 
-    return [...surfaces, ...work, ...agents].filter(
-      (entry) => !needle || entry.label.toLowerCase().includes(needle),
-    );
+    return [
+      ...actions,
+      ...decisions,
+      ...active,
+      ...surfaces,
+      ...agents,
+      ...recent,
+    ].filter((entry) => !needle || entry.label.toLowerCase().includes(needle));
   }, [paletteQuery, overview.data]);
 
   const { group, title } = locate(location.pathname);
@@ -506,7 +545,7 @@ export default function App() {
                     navigate(target.path);
                   }
                 }}
-                placeholder="Go to a surface, an objective or an agent…"
+                placeholder="Open a mission, find one, or go to a surface…"
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-[#f2f4f7] outline-none placeholder:text-[#535b68]"
               />
 

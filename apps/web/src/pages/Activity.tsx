@@ -218,7 +218,7 @@ export default function Activity() {
               return event.workId ? (
                 <Link
                   key={event.id}
-                  to={`/work/${event.workId}`}
+                  to={`/missions/${event.workId}`}
                   className="log-entry"
                 >
                   {body}

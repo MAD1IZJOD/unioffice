@@ -1,7 +1,7 @@
 import { Wrench } from "lucide-react";
 
-import { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
   fetchOverview,
@@ -43,7 +43,16 @@ export default function Agents() {
     { pollMs: 15_000 },
   );
 
-  const [selectedId, setSelectedId] = useState<string>();
+  // A mission links here with the agent it wants opened, so arriving from
+  // "who worked on this" lands on that agent rather than on whoever happens
+  // to be first on the roster. The URL is the selection, which also makes the
+  // choice shareable and survivable across a reload.
+  const [params, setParams] = useSearchParams();
+  const selectedId = params.get("agent") ?? undefined;
+
+  const setSelectedId = (agentId: string) => {
+    setParams({ agent: agentId }, { replace: true });
+  };
 
   const agents = useMemo(() => overview.data?.agents ?? [], [overview.data]);
   const selected =
@@ -330,7 +339,7 @@ export default function Agents() {
                     <div className="detail-label">Doing now</div>
 
                     <Link
-                      to={`/work/${selected.activeTask.workId}`}
+                      to={`/missions/${selected.activeTask.workId}`}
                       className="agent-active-task mt-2 !flex"
                     >
                       <span className="truncate text-[11px] text-[#a7b0bd]">
@@ -348,7 +357,7 @@ export default function Agents() {
                       {recentWorkFor.map((entry) => (
                         <Link
                           key={entry.id}
-                          to={`/work/${entry.id}`}
+                          to={`/missions/${entry.id}`}
                           className="presence-row"
                         >
                           <span className="min-w-0 flex-1">

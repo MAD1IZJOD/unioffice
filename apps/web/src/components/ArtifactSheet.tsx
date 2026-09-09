@@ -91,11 +91,11 @@ export function ArtifactSheet({
 
           {artifact.workId && (
             <Link
-              to={`/work/${artifact.workId}`}
+              to={`/missions/${artifact.workId}`}
               className="button-quiet ml-auto"
               onClick={onClose}
             >
-              Open the work that produced this
+              Open the mission that produced this
             </Link>
           )}
         </footer>

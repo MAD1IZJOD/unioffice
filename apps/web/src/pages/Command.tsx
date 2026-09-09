@@ -11,11 +11,9 @@ import { Link, useNavigate } from "react-router-dom";
 
 import {
   createWork,
-  executeWork,
   fetchMemory,
   fetchOverview,
   formatRelativeTime,
-  planWork,
   type CompanyOverview,
   type MemoryItem,
   type WorkItem,
@@ -46,35 +44,13 @@ import { SignalField } from "../components/SignalField";
 import { AgentMark } from "../components/AgentMark";
 
 /**
- * The launch pipeline mirrors the real API calls, one stage per call. Nothing
- * here is timed or simulated - a stage advances only when the request behind
- * it actually returns, which is why planning visibly takes as long as the
- * model takes. Once execution is queued the page hands off to the work detail
- * view, which watches the same rows the worker is writing.
+ * The composer records an objective and hands straight off to its mission.
+ *
+ * Planning and queueing used to run here, which meant staring at a spinner on
+ * the wrong page while a local model took a minute to think. The mission
+ * surface starts itself instead, so the wait happens where the operation will
+ * keep happening and you watch the plan being written.
  */
-type LaunchStage = "idle" | "creating" | "planning" | "executing" | "done";
-
-/**
- * The planner runs as the organization's orchestrator, so the line naming it
- * reads the roster rather than hard-coding a name the seed could change.
- */
-function stageCopy(
-  stage: Exclude<LaunchStage, "idle">,
-  orchestrator: string | undefined,
-): string {
-  switch (stage) {
-    case "creating":
-      return "Recording the objective";
-    case "planning":
-      return orchestrator
-        ? `${orchestrator} is building the work plan`
-        : "Building the work plan";
-    case "executing":
-      return "Queueing the plan for a worker";
-    default:
-      return "Execution is under way";
-  }
-}
 
 const suggestions = [
   "Calculate our total monthly operating cost from salaries 48200, cloud 9350, lease 12500 and licences 3875, then explain what it means for runway.",
@@ -99,38 +75,23 @@ export default function Command() {
 
   const [objective, setObjective] = useState("");
   const [priority, setPriority] = useState<WorkItem["priority"]>("normal");
-  const [stage, setStage] = useState<LaunchStage>("idle");
-  const [launchedWorkId, setLaunchedWorkId] = useState<string>();
+  const [busy, setBusy] = useState(false);
   const [launchError, setLaunchError] = useState<string>();
-
-  const busy = stage !== "idle" && stage !== "done";
 
   async function launch() {
     const trimmed = objective.trim();
     if (!trimmed || busy) return;
 
     setLaunchError(undefined);
-    setLaunchedWorkId(undefined);
-    setStage("creating");
+    setBusy(true);
 
     try {
-      const work = await createWork(trimmed, priority);
-      setLaunchedWorkId(work.id);
+      const work = await createWork({ objective: trimmed, priority });
 
-      setStage("planning");
-      await planWork(work.id);
-
-      setStage("executing");
-      await executeWork(work.id);
-
-      setStage("done");
-      setObjective("");
-      overview.reload();
-
-      navigate(`/work/${work.id}`);
+      navigate(`/missions/${work.id}`, { state: { autostart: true } });
     } catch (error) {
       setLaunchError((error as Error).message);
-      setStage("idle");
+      setBusy(false);
       overview.reload();
     }
   }
@@ -145,9 +106,6 @@ export default function Command() {
   ).length;
   const toolCalls =
     data?.tools.reduce((total, tool) => total + tool.callCount, 0) ?? 0;
-  const orchestratorName = agents.find(
-    (agent) => agent.type === "orchestrator",
-  )?.name;
 
   const attention = useMemo(() => collectAttention(data), [data]);
 
@@ -274,18 +232,18 @@ export default function Command() {
             only thing here you act with rather than read. */}
         <div className="composer">
           <div className="composer-head">
-            <span className="t-eyebrow">New objective</span>
+            <span className="t-eyebrow">Open a mission</span>
             <span className="t-machine">{busy ? "RUNNING" : "READY"}</span>
           </div>
 
           <textarea
-            id="work-objective"
+            id="mission-objective"
             value={objective}
             onChange={(event) => setObjective(event.target.value)}
             disabled={busy}
             rows={3}
             className="command-textarea w-full bg-transparent text-[15.5px] leading-[1.6] text-[#f2f4f7] placeholder:text-[#535b68] disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder="What should the company accomplish?"
+            placeholder="What needs to happen?"
           />
 
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -322,6 +280,10 @@ export default function Command() {
               </select>
             </label>
 
+            <Link to="/missions/new" className="button-quiet">
+              Add context
+            </Link>
+
             <button
               type="button"
               onClick={launch}
@@ -333,36 +295,17 @@ export default function Command() {
               ) : (
                 <Zap size={13} />
               )}
-              {busy ? "Working…" : "Launch"}
+              {busy ? "Opening…" : "Open it"}
             </button>
           </div>
         </div>
 
-        {stage !== "idle" && (
-          <LaunchPipeline
-            stage={stage}
-            workId={launchedWorkId}
-            orchestrator={orchestratorName}
-          />
-        )}
-
-        {launchError && stage === "idle" && (
+        {launchError && (
           <div className="mt-3">
             <Failure
-              headline="The objective was not launched"
+              headline="The mission was not opened"
               detail={launchError}
-              consequence={
-                launchedWorkId
-                  ? "The objective was recorded, so it can be planned and run from its own page."
-                  : "Nothing was recorded. Try again."
-              }
-              action={
-                launchedWorkId ? (
-                  <Link to={`/work/${launchedWorkId}`} className="button-ghost">
-                    Open it
-                  </Link>
-                ) : undefined
-              }
+              consequence="Nothing was recorded and nothing is running."
             />
           </div>
         )}
@@ -371,8 +314,8 @@ export default function Command() {
           index="01"
           title="On the floor"
           action={
-            <Link to="/work" className="button-quiet">
-              All work
+            <Link to="/missions" className="button-quiet">
+              Every mission
               <ArrowRight size={11} />
             </Link>
           }
@@ -395,7 +338,7 @@ export default function Command() {
                   return (
                     <Link
                       key={work.id}
-                      to={`/work/${work.id}`}
+                      to={`/missions/${work.id}`}
                       className="ledger-row"
                     >
                       <span
@@ -526,7 +469,7 @@ export default function Command() {
         ) : (
           <div className="ledger">
             {finished.map((work) => (
-              <Link key={work.id} to={`/work/${work.id}`} className="ledger-row">
+              <Link key={work.id} to={`/missions/${work.id}`} className="ledger-row">
                 <span
                   className={`ledger-rail ${toneClass[workStatusTone(work.status)]}`}
                 />
@@ -680,69 +623,6 @@ function DispatchStat({
         {value}
       </div>
       <div className="dispatch-stat-label">{label}</div>
-    </div>
-  );
-}
-
-function LaunchPipeline({
-  stage,
-  workId,
-  orchestrator,
-}: {
-  stage: LaunchStage;
-  workId?: string;
-  orchestrator?: string;
-}) {
-  const order: Array<Exclude<LaunchStage, "idle">> = [
-    "creating",
-    "planning",
-    "executing",
-    "done",
-  ];
-  const currentIndex = order.indexOf(stage as Exclude<LaunchStage, "idle">);
-
-  return (
-    <div className="pipeline">
-      <div className="pipeline-track">
-        {order.map((entry, index) => {
-          const done = index < currentIndex || stage === "done";
-          const active = index === currentIndex && stage !== "done";
-
-          return (
-            <div
-              key={entry}
-              className={`pipeline-step${
-                done
-                  ? " pipeline-step-done"
-                  : active
-                    ? " pipeline-step-active"
-                    : ""
-              }`}
-            >
-              <span className="pipeline-dot" />
-              <span className="pipeline-label">{entry}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <span className="flex items-center gap-2 text-[10.5px] text-[#6f7887]">
-          {stage !== "done" && (
-            <LoaderCircle size={11} className="spin-slow text-[#84b4fb]" />
-          )}
-          {stage === "done"
-            ? "Handed to a worker. Opening the live view."
-            : stageCopy(stage as Exclude<LaunchStage, "idle">, orchestrator)}
-        </span>
-
-        {workId && (
-          <Link to={`/work/${workId}`} className="button-quiet">
-            Open
-            <ArrowRight size={11} />
-          </Link>
-        )}
-      </div>
     </div>
   );
 }

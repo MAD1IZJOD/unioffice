@@ -423,13 +423,25 @@ export async function fetchPendingApprovals(): Promise<ApprovalItem[]> {
   return data.approvals;
 }
 
-export async function createWork(
-  objective: string,
-  priority: WorkItem["priority"] = "normal",
-): Promise<WorkItem> {
+export interface NewMission {
+  objective: string;
+  priority?: WorkItem["priority"];
+  /**
+   * The requester's own context: constraints, figures, background. Stored on
+   * the work row and read by the planner, so it genuinely shapes the plan
+   * rather than sitting in a field nothing looks at.
+   */
+  briefing?: string;
+}
+
+export async function createWork(mission: NewMission): Promise<WorkItem> {
   const data = await post<{ work: WorkItem }>(
     "/work",
-    { objective, priority },
+    {
+      objective: mission.objective,
+      priority: mission.priority ?? "normal",
+      briefing: mission.briefing?.trim() || undefined,
+    },
     READ_TIMEOUT_MS,
   );
 

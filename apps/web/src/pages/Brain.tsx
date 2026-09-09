@@ -304,8 +304,8 @@ function MemoryEntry({
           <Chip tone="idle">{memory.scope}</Chip>
 
           {memory.workId && (
-            <Link to={`/work/${memory.workId}`} className="button-quiet">
-              The work that produced this
+            <Link to={`/missions/${memory.workId}`} className="button-quiet">
+              The mission that produced this
             </Link>
           )}
         </div>

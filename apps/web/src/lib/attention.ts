@@ -40,8 +40,10 @@ export function collectAttention(
     tone: "warning",
     label: approval.action,
     detail: approval.reason,
-    consequence: "The work is stopped until you decide.",
-    to: "/approvals",
+    consequence: "The mission is stopped until you decide.",
+    // The decision is taken on the mission, where what it is holding up is
+    // visible, rather than on a list of decisions with no context attached.
+    to: `/missions/${approval.workId}`,
     when: approval.createdAt,
   }));
 
@@ -67,7 +69,7 @@ export function collectAttention(
         label: "Interrupted mid-run",
         detail: work.objective,
         consequence: "Completed tasks were kept. It can be resumed.",
-        to: `/work/${work.id}`,
+        to: `/missions/${work.id}`,
         when: work.updatedAt,
       });
       continue;
@@ -77,13 +79,13 @@ export function collectAttention(
       id: work.id,
       kind: "failure",
       tone: "error",
-      label: "Work failed",
+      label: "Mission stopped",
       detail:
         typeof work.metadata.executionError === "string"
           ? work.metadata.executionError
           : work.objective,
       consequence: "It can be retried from where it stopped.",
-      to: `/work/${work.id}`,
+      to: `/missions/${work.id}`,
       when: work.completedAt ?? work.updatedAt,
     });
   }

@@ -122,9 +122,9 @@ export default function Approvals() {
       ) : pending.length === 0 ? (
         <Quiet
           line="Nothing needs your decision."
-          detail="Work runs unattended until the planner flags a task as consequential. When it does, the task stops here and the whole product turns red until you answer."
+          detail="A mission runs unattended until the planner flags a task as consequential. When it does, the task stops here and the whole product turns red until you answer."
           action={
-            <Link to="/work" className="button-ghost">
+            <Link to="/missions" className="button-ghost">
               See what is running
             </Link>
           }
@@ -179,8 +179,8 @@ export default function Approvals() {
                   requested {formatRelativeTime(approval.createdAt)}
                 </span>
 
-                <Link to={`/work/${approval.workId}`} className="button-quiet">
-                  Open the work
+                <Link to={`/missions/${approval.workId}`} className="button-quiet">
+                  Open the mission
                 </Link>
 
                 <span className="flex-1" />

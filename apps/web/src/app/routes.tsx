@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, redirect } from "react-router-dom";
 
 import App from "../App";
 import Activity from "../pages/Activity";
@@ -7,11 +7,20 @@ import Approvals from "../pages/Approvals";
 import Artifacts from "../pages/Artifacts";
 import Brain from "../pages/Brain";
 import Command from "../pages/Command";
+import Mission from "../pages/Mission";
+import MissionStart from "../pages/MissionStart";
+import Missions from "../pages/Missions";
 import NotBuilt from "../pages/NotBuilt";
 import Tools from "../pages/Tools";
-import Work from "../pages/Work";
-import WorkDetail from "../pages/WorkDetail";
 
+/**
+ * Work became Mission.
+ *
+ * The two were always the same row; calling it work made it a record you look
+ * at, and calling it a mission makes it an operation you watch. The old paths
+ * stay as redirects because links to them exist in browser history and in
+ * anything anyone pasted somewhere.
+ */
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -19,8 +28,14 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Command /> },
       { path: "command", element: <Command /> },
-      { path: "work", element: <Work /> },
-      { path: "work/:workId", element: <WorkDetail /> },
+      { path: "missions", element: <Missions /> },
+      { path: "missions/new", element: <MissionStart /> },
+      { path: "missions/:missionId", element: <Mission /> },
+      { path: "work", loader: () => redirect("/missions") },
+      {
+        path: "work/:workId",
+        loader: ({ params }) => redirect(`/missions/${params.workId ?? ""}`),
+      },
       { path: "agents", element: <Agents /> },
       { path: "tools", element: <Tools /> },
       { path: "brain", element: <Brain /> },
@@ -34,7 +49,7 @@ export const router = createBrowserRouter([
             title="Organization"
             description="Workspaces, departments and how the workforce is structured."
             planned={[
-              "Workspaces, and scoping agents and work to them",
+              "Workspaces, and scoping agents and missions to them",
               "Departments grouping agents by responsibility",
               "Creating and configuring agents from the UI rather than a seed script",
               "Organization membership and roles",

@@ -1,0 +1,914 @@
+/* ==========================================================================
+   Mission
+
+   The deep operational surface. One objective, told as the operation the
+   company actually ran: what was asked, what was decided, who took it, what
+   happened, what needed a person, and what came out.
+
+   The composition is deliberately asymmetric. The left column is the mission
+   read as a document - result first, then the acts. The right column is the
+   record as it happens, pinned, so the thing that moves is always in view
+   while the thing that explains it is being read. On a phone the two become
+   one column and the record moves to the end, because on a phone what you
+   came for is the state and the answer.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   The opening
+   -------------------------------------------------------------------------- */
+
+.mission-open {
+  position: relative;
+  overflow: hidden;
+  margin: -28px -28px 0;
+  padding: 46px 28px 30px;
+  border-bottom: 1px solid var(--line-subtle);
+  background:
+    radial-gradient(
+      120% 150% at 8% 0%,
+      var(--mission-wash, rgba(59, 130, 246, 0.11)) 0%,
+      rgba(6, 7, 10, 0) 62%
+    ),
+    var(--surface-0);
+}
+
+/* The one rule that carries the mission's temperature across the whole
+   header, so the state is legible from the edge of the screen. */
+.mission-open::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--tone) 0%,
+    color-mix(in srgb, var(--tone) 24%, transparent) 48%,
+    transparent 100%
+  );
+  content: "";
+}
+
+.mission-open-waiting {
+  --mission-wash: rgba(229, 72, 77, 0.13);
+}
+
+.mission-open-live {
+  --mission-wash: rgba(59, 130, 246, 0.14);
+}
+
+.mission-open-done {
+  --mission-wash: rgba(47, 158, 107, 0.09);
+}
+
+.mission-open-stopped {
+  --mission-wash: rgba(229, 72, 77, 0.1);
+}
+
+.mission-open-inner {
+  position: relative;
+  max-width: 1340px;
+  margin: 0 auto;
+}
+
+.mission-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.mission-eyebrow-mark {
+  color: var(--tone);
+}
+
+/* The objective is the largest thing on the page and it is the user's own
+   sentence, never a label the product wrote. */
+.mission-objective {
+  max-width: 22ch;
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: clamp(28px, 4.6vw, 54px);
+  font-weight: 640;
+  letter-spacing: -0.036em;
+  line-height: 1.06;
+  text-wrap: balance;
+}
+
+.mission-state {
+  max-width: 62ch;
+  margin-top: 22px;
+  color: var(--tone);
+  font-size: clamp(13px, 1.5vw, 15.5px);
+  font-weight: 500;
+  letter-spacing: -0.008em;
+  line-height: 1.55;
+}
+
+.mission-state-note {
+  max-width: 62ch;
+  margin-top: 7px;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+/* The requester's own briefing, set as something they said rather than as a
+   field the form collected. */
+.mission-brief {
+  max-width: 66ch;
+  margin-top: 24px;
+  padding: 2px 0 2px 16px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  line-height: 1.72;
+  white-space: pre-wrap;
+}
+
+.mission-brief-label {
+  margin-bottom: 6px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   The phase strip
+
+   Queue reality, not decoration: every step here is a state the durable queue
+   and the work rows genuinely report.
+   -------------------------------------------------------------------------- */
+
+.mission-phases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 28px;
+}
+
+.mission-phase {
+  display: flex;
+  flex: 1 1 92px;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px 11px;
+  border-top: 2px solid var(--line);
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition:
+    border-color 200ms ease,
+    color 200ms ease;
+}
+
+.mission-phase-passed {
+  border-top-color: var(--line-strong);
+  color: var(--ink-muted);
+}
+
+.mission-phase-now {
+  border-top-color: var(--tone);
+  color: var(--tone);
+}
+
+.mission-phase-detail {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+
+/* --------------------------------------------------------------------------
+   Decision band
+
+   The only place in the mission that is allowed to shout.
+   -------------------------------------------------------------------------- */
+
+.mission-decision {
+  margin-top: 26px;
+  padding: 20px 22px;
+  border: 1px solid var(--red-line);
+  border-left: 3px solid var(--red);
+  border-radius: var(--radius);
+  background: var(--red-soft);
+}
+
+.mission-decision-label {
+  color: var(--red-ink);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.mission-decision-action {
+  margin-top: 11px;
+  color: var(--ink-primary);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.016em;
+  line-height: 1.35;
+}
+
+.mission-decision-why {
+  max-width: 68ch;
+  margin-top: 9px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.mission-decision-next {
+  margin-top: 9px;
+  color: #c9868a;
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+
+.mission-decision-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.mission-decision-settled {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+/* --------------------------------------------------------------------------
+   Layout
+   -------------------------------------------------------------------------- */
+
+.mission-layout {
+  display: grid;
+  gap: 0 44px;
+  max-width: 1340px;
+  margin: 0 auto;
+  padding-top: 32px;
+}
+
+@media (min-width: 1100px) {
+  .mission-layout {
+    grid-template-columns: minmax(0, 1.62fr) minmax(300px, 1fr);
+  }
+}
+
+.mission-main {
+  min-width: 0;
+}
+
+.mission-record {
+  min-width: 0;
+  padding-top: 34px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+@media (min-width: 1100px) {
+  .mission-record {
+    position: sticky;
+    top: 20px;
+    align-self: start;
+    max-height: calc(100vh - 44px);
+    padding-top: 0;
+    padding-left: 34px;
+    border-top: 0;
+    border-left: 1px solid var(--line-subtle);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Acts
+   -------------------------------------------------------------------------- */
+
+.mission-act {
+  padding: 30px 0;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.mission-act:first-child {
+  border-top: 0;
+}
+
+.mission-act-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.mission-act-index {
+  color: var(--tone);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.14em;
+}
+
+.mission-act-title {
+  color: var(--ink-primary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.mission-act-question {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  letter-spacing: -0.004em;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .mission-act-question {
+    display: none;
+  }
+}
+
+.mission-act-lead {
+  max-width: 68ch;
+  margin: 0 0 18px;
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  line-height: 1.72;
+}
+
+.mission-act-headline {
+  margin: 0 0 8px;
+  color: var(--ink-primary);
+  font-size: clamp(17px, 2.1vw, 21px);
+  font-weight: 620;
+  letter-spacing: -0.022em;
+  line-height: 1.24;
+}
+
+/* --------------------------------------------------------------------------
+   The workforce on this mission
+   -------------------------------------------------------------------------- */
+
+.mission-cast {
+  display: grid;
+  gap: 1px;
+  background: var(--line-subtle);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+@media (min-width: 720px) {
+  .mission-cast {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.mission-member {
+  display: block;
+  padding: 17px 18px;
+  background: var(--surface-1);
+  color: inherit;
+  text-decoration: none;
+  transition: background 150ms ease;
+}
+
+.mission-member:hover {
+  background: var(--surface-2);
+}
+
+.mission-member-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.mission-member-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--tone-line);
+  border-radius: var(--radius-sm);
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+
+.mission-member-name {
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+}
+
+.mission-member-role {
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.mission-member-doing {
+  margin-top: 12px;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.mission-member-why {
+  margin-top: 6px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+
+.mission-member-stretch {
+  margin-top: 8px;
+  color: #c9a06a;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.mission-member-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  margin-top: 12px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+/* --------------------------------------------------------------------------
+   The task board
+   -------------------------------------------------------------------------- */
+
+.mission-board {
+  border-top: 1px solid var(--line-subtle);
+}
+
+.mission-step {
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.mission-step-head {
+  display: grid;
+  grid-template-columns: 3px 28px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 14px;
+  width: 100%;
+  padding: 15px 2px;
+  background: none;
+  border: 0;
+  text-align: left;
+}
+
+.mission-step-rail {
+  align-self: stretch;
+  min-height: 30px;
+  border-radius: 2px;
+  background: var(--tone);
+  opacity: 0.75;
+}
+
+.mission-step-index {
+  padding-top: 2px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mission-step-title {
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  font-weight: 560;
+  letter-spacing: -0.008em;
+  line-height: 1.45;
+}
+
+.mission-step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 13px;
+  margin-top: 7px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.mission-step-body {
+  padding: 0 2px 20px 45px;
+}
+
+@media (max-width: 640px) {
+  .mission-step-head {
+    grid-template-columns: 3px minmax(0, 1fr);
+  }
+
+  .mission-step-index {
+    display: none;
+  }
+
+  .mission-step-body {
+    padding-left: 17px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The record
+
+   The narrated event log. A spine with a node per moment, the sentence at
+   reading size and the machine detail beneath it. This is the part of the
+   page that moves, so it is the part that is pinned.
+   -------------------------------------------------------------------------- */
+
+.mission-record-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.mission-record-title {
+  color: var(--ink-primary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.mission-thread {
+  overflow-y: auto;
+  padding: 18px 0 4px;
+}
+
+@media (min-width: 1100px) {
+  .mission-thread {
+    max-height: calc(100vh - 140px);
+    padding-right: 6px;
+  }
+}
+
+.mission-moment {
+  position: relative;
+  padding: 0 0 18px 24px;
+}
+
+.mission-moment::before {
+  position: absolute;
+  top: 12px;
+  bottom: -2px;
+  left: 4px;
+  width: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.mission-moment:last-child::before {
+  display: none;
+}
+
+.mission-moment-node {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--tone);
+  border-radius: 50%;
+  background: var(--surface-0);
+}
+
+.mission-moment-latest .mission-moment-node {
+  background: var(--tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+}
+
+.mission-moment-line {
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  letter-spacing: -0.004em;
+  line-height: 1.6;
+}
+
+.mission-moment-latest .mission-moment-line {
+  color: var(--ink-primary);
+  font-weight: 550;
+}
+
+.mission-moment-note {
+  margin-top: 4px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 1.62;
+  overflow-wrap: anywhere;
+}
+
+.mission-moment-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mission-moment-actor {
+  color: var(--tone);
+}
+
+/* --------------------------------------------------------------------------
+   The mission list
+
+   A stack of operations rather than a table of rows. Each entry leads with
+   the objective and says, underneath, what the company is doing about it.
+   -------------------------------------------------------------------------- */
+
+.mission-stack {
+  border-top: 1px solid var(--line-subtle);
+}
+
+.mission-entry {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 18px;
+  padding: 22px 4px 22px 0;
+  border-bottom: 1px solid var(--line-subtle);
+  color: inherit;
+  text-decoration: none;
+  transition: background 140ms ease;
+}
+
+.mission-entry:hover {
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.mission-entry-rail {
+  align-self: stretch;
+  border-radius: 0 2px 2px 0;
+  background: var(--tone);
+  opacity: 0.85;
+}
+
+.mission-entry-objective {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-primary);
+  font-size: clamp(14.5px, 1.7vw, 17px);
+  font-weight: 560;
+  letter-spacing: -0.018em;
+  line-height: 1.36;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mission-entry:hover .mission-entry-objective {
+  -webkit-line-clamp: 5;
+}
+
+.mission-entry-state {
+  margin-top: 8px;
+  color: var(--tone);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.mission-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 14px;
+  margin-top: 9px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.mission-entry-cast {
+  color: var(--ink-muted);
+}
+
+@media (max-width: 640px) {
+  .mission-entry {
+    grid-template-columns: 3px minmax(0, 1fr);
+    gap: 0 13px;
+  }
+
+  .mission-entry-status {
+    grid-column: 2;
+    margin-top: 11px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Opening a mission
+
+   The creation surface. One question, set as large as the answer deserves,
+   and nothing else in view until the person asks for it.
+   -------------------------------------------------------------------------- */
+
+.mission-brief-sheet {
+  max-width: 860px;
+  margin: 0 auto;
+  padding-top: clamp(24px, 6vh, 64px);
+}
+
+.mission-ask {
+  color: var(--ink-primary);
+  font-size: clamp(26px, 4.4vw, 46px);
+  font-weight: 640;
+  letter-spacing: -0.036em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.mission-ask-quiet {
+  display: block;
+  color: var(--blue-ink);
+}
+
+.mission-ask-detail {
+  max-width: 58ch;
+  margin-top: 16px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  line-height: 1.72;
+}
+
+.mission-field {
+  margin-top: 34px;
+  padding: 4px 0 0;
+  border-top: 1px solid var(--line);
+  transition: border-color 180ms ease;
+}
+
+.mission-field:focus-within {
+  border-top-color: var(--blue);
+}
+
+.mission-field-label {
+  display: block;
+  padding-top: 14px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.mission-input {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 0 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-primary);
+  font-size: clamp(16px, 2.2vw, 22px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+}
+
+.mission-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.mission-input-small {
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: -0.004em;
+  line-height: 1.7;
+}
+
+.mission-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mission-hint {
+  margin-top: 8px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+
+.mission-weights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.mission-weight {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.mission-weight:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--ink-secondary);
+}
+
+.mission-weight-on {
+  border-color: var(--blue-line);
+  background: var(--blue-soft);
+  color: var(--blue-ink);
+}
+
+.mission-weight:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.mission-launch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 34px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.mission-launch-note {
+  flex: 1 1 200px;
+  min-width: 0;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 1.62;
+}
+
+.mission-starters {
+  margin-top: 40px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.mission-starter {
+  display: block;
+  width: 100%;
+  padding: 13px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-subtle);
+  background: none;
+  color: var(--ink-muted);
+  font-size: 12px;
+  letter-spacing: -0.006em;
+  line-height: 1.6;
+  text-align: left;
+  transition: color 140ms ease;
+}
+
+.mission-starter:hover:not(:disabled) {
+  color: var(--ink-primary);
+}
+
+.mission-starter:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
