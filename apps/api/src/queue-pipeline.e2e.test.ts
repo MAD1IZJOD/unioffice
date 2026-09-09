@@ -142,6 +142,11 @@ function harness(
   const taskRepository: TaskRepository = {
     async create(task) { tasks.set(task.id, task); return task; },
     async findById(id) { return tasks.get(id) ?? null; },
+    async findByAgent(agentId) {
+      return [...tasks.values()].filter(
+        (value) => value.assignedAgentId === agentId,
+      );
+    },
     async findByWork(workId) {
       return [...tasks.values()].filter((task) => task.workId === workId);
     },

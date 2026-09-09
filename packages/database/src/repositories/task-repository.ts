@@ -1,4 +1,5 @@
 import type {
+  AgentId,
   Task,
   TaskId,
   WorkId,
@@ -10,6 +11,13 @@ export interface TaskRepository {
   findById(id: TaskId): Promise<Task | null>;
 
   findByWork(workId: WorkId): Promise<Task[]>;
+
+  /**
+   * Everything one agent has been given, newest first. The agent detail view
+   * needs an agent's whole record, and reading every work item in the
+   * organization to find it does not scale past a demo.
+   */
+  findByAgent(agentId: AgentId, limit?: number): Promise<Task[]>;
 
   /**
    * Atomically transition a ready task to running. A null result means another

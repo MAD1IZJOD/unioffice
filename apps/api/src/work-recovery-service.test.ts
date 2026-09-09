@@ -85,6 +85,11 @@ function harness(work: Work, tasks: Task[]) {
   const taskRepository: TaskRepository = {
     async create(value) { taskStore.set(value.id, value); return value; },
     async findById(id) { return taskStore.get(id) ?? null; },
+    async findByAgent(agentId) {
+      return [...taskStore.values()].filter(
+        (value) => value.assignedAgentId === agentId,
+      );
+    },
     async findByWork() { return [...taskStore.values()]; },
     async claimReadyForExecution() { return null; },
     async update(value) { taskStore.set(value.id, value); return value; },

@@ -74,6 +74,12 @@ class MemoryTaskRepository implements TaskRepository {
     return this.tasks.get(id) ?? null;
   }
 
+  async findByAgent(agentId: Task["assignedAgentId"]): Promise<Task[]> {
+    return [...this.tasks.values()].filter(
+      (task) => task.assignedAgentId === agentId,
+    );
+  }
+
   async findByWork(id: WorkId): Promise<Task[]> {
     return [...this.tasks.values()].filter(
       (task) => task.workId === id,

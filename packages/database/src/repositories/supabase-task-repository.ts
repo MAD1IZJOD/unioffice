@@ -1,4 +1,5 @@
 import type {
+  AgentId,
   Task,
   TaskId,
   WorkId,
@@ -117,6 +118,31 @@ export class SupabaseTaskRepository
     if (error) {
       throw new Error(
         `Failed to find work tasks: ${error.message}`,
+      );
+    }
+
+    return (data ?? []).map(
+      (row) => this.mapRow(row),
+    );
+  }
+
+  async findByAgent(
+    agentId: AgentId,
+    limit = 50,
+  ): Promise<Task[]> {
+    const { data, error } =
+      await this.client
+        .from("tasks")
+        .select("*")
+        .eq("assigned_agent_id", agentId)
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(limit);
+
+    if (error) {
+      throw new Error(
+        `Failed to find agent tasks: ${error.message}`,
       );
     }
 

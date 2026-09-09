@@ -40,6 +40,7 @@ const workRepository: WorkRepository = {
 const taskRepository: TaskRepository = {
   async create(task) { return task; },
   async findById() { return null; },
+  async findByAgent() { return []; },
   async findByWork() { return []; },
   async claimReadyForExecution() { return null; },
   async update(task) { return task; },
