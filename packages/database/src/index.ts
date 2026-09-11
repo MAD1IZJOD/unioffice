@@ -6,6 +6,7 @@ export * from "./repositories/agent-repository.js";
 export * from "./repositories/organization-repository.js";
 export * from "./repositories/workspace-repository.js";
 export * from "./repositories/event-repository.js";
+export * from "./repositories/event-tail-repository.js";
 export * from "./repositories/approval-repository.js";
 export * from "./repositories/artifact-repository.js";
 export * from "./repositories/memory-repository.js";

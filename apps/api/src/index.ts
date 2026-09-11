@@ -10,6 +10,7 @@ export type { ExecutionRuntime } from "./runtime.js";
 export { loadApiConfig } from "./config.js";
 export type { ApiConfig } from "./config.js";
 export { ExecutionWorker } from "./execution-worker.js";
+export { ExecutionStream } from "./execution-stream.js";
 export type { ExecutionWorkerOptions } from "./execution-worker.js";
 
 export async function createApiServer() {
@@ -51,6 +52,7 @@ export async function createApiServer() {
     workQueryService: runtime.workQueryService,
     workRecoveryService: runtime.workRecoveryService,
     executionQueueService: runtime.executionQueueService,
+    executionStream: runtime.executionStream,
     companyBrainService: runtime.companyBrainService,
     companyOverviewService: runtime.companyOverviewService,
     workspaceService: runtime.workspaceService,

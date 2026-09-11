@@ -13,8 +13,12 @@ import type {
   EventRepository,
 } from "./event-repository.js";
 
+import type {
+  EventTailRepository,
+} from "./event-tail-repository.js";
+
 export class SupabaseEventRepository
-  implements EventRepository
+  implements EventRepository, EventTailRepository
 {
   constructor(
     private readonly client: SupabaseClient,
@@ -83,6 +87,31 @@ export class SupabaseEventRepository
     if (error) {
       throw new Error(
         `Failed to find organization activity: ${error.message}`,
+      );
+    }
+
+    return (data ?? []).map(
+      (row) => this.mapRow(row),
+    );
+  }
+
+  async findSince(
+    organizationId: OrganizationId,
+    since: Date,
+    limit = 200,
+  ): Promise<Event[]> {
+    const { data, error } =
+      await this.client
+        .from("events")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .gte("timestamp", since.toISOString())
+        .order("timestamp", { ascending: true })
+        .limit(limit);
+
+    if (error) {
+      throw new Error(
+        `Failed to tail organization events: ${error.message}`,
       );
     }
 

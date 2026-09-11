@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { request as httpRequest } from "node:http";
 import test from "node:test";
 
 import type { OrganizationId, Work, WorkId } from "@unioffice/core";
@@ -25,6 +26,7 @@ function baseServices(overrides: Partial<ApiServices> = {}): ApiServices {
     agentDirectoryService: {} as ApiServices["agentDirectoryService"],
     workRecoveryService: {} as ApiServices["workRecoveryService"],
     executionQueueService: {} as ApiServices["executionQueueService"],
+    executionStream: {} as ApiServices["executionStream"],
     toolRegistry: {} as ApiServices["toolRegistry"],
     healthCheck: async () => ({}),
     corsOrigins: ["http://localhost:5173"],
@@ -374,3 +376,277 @@ test("names the field that was left blank, not just that it was blank", async ()
   assert.equal(response.statusCode, 400);
   assert.match(response.json().error.message, /objective is required/);
 });
+
+/* --------------------------------------------------------------------------
+   The live channel.
+
+   Exercised against a real listening socket rather than through inject: the
+   route hands the connection to Node once it hijacks the reply, and a test
+   that never opened a socket would not be testing the thing that does the
+   work.
+   -------------------------------------------------------------------------- */
+
+/** Reads server-sent frames off a live response until `wanted` have arrived. */
+async function readFrames(
+  response: Response,
+  wanted: number,
+  timeoutMs = 4_000,
+): Promise<string[]> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  const frames: string[] = [];
+  const deadline = Date.now() + timeoutMs;
+
+  let buffer = "";
+
+  try {
+    while (frames.length < wanted && Date.now() < deadline) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundary = buffer.indexOf("\n\n");
+
+      while (boundary !== -1) {
+        frames.push(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 2);
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+
+  return frames;
+}
+
+test("the live channel opens and carries events through as frames", async () => {
+  const listeners = new Set<(events: unknown[]) => void>();
+
+  const executionStream = {
+    subscribe: (_organizationId: OrganizationId, listener: (events: unknown[]) => void) => {
+      listeners.add(listener);
+      return { close: () => listeners.delete(listener) };
+    },
+  } as unknown as ApiServices["executionStream"];
+
+  const app = buildApiServer(baseServices({
+    executionStream,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const address = await app.listen({ port: 0, host: "127.0.0.1" });
+
+  try {
+    const response = await fetch(`${address}/stream`);
+
+    assert.equal(response.status, 200);
+    assert.match(
+      response.headers.get("content-type") ?? "",
+      /text\/event-stream/,
+    );
+
+    // The subscription is live before anything is pushed through it.
+    await waitFor(() => listeners.size === 1);
+
+    listeners.forEach((listener) =>
+      listener([
+        {
+          id: "e1",
+          organizationId: "org-1",
+          workId: "w1",
+          actorType: "system",
+          type: "task.started",
+          timestamp: new Date("2026-01-01T00:00:00.000Z"),
+          payload: { title: "Research the market" },
+          metadata: {},
+        },
+      ]),
+    );
+
+    const frames = await readFrames(response, 2);
+
+    assert.match(frames[0] ?? "", /^event: open/);
+    assert.match(frames[1] ?? "", /^event: activity/);
+
+    const activity = JSON.parse(
+      (frames[1] ?? "").split("\n")[1]!.replace("data: ", ""),
+    );
+
+    assert.equal(activity.events[0].id, "e1");
+    assert.equal(activity.events[0].type, "task.started");
+    assert.equal(activity.events[0].payload.title, "Research the market");
+  } finally {
+    await app.close();
+  }
+});
+
+test("a client that goes away takes its subscription with it", async () => {
+  let closed = 0;
+  const listeners = new Set<(events: unknown[]) => void>();
+
+  const executionStream = {
+    subscribe: (_organizationId: OrganizationId, listener: (events: unknown[]) => void) => {
+      listeners.add(listener);
+
+      return {
+        close: () => {
+          listeners.delete(listener);
+          closed += 1;
+        },
+      };
+    },
+  } as unknown as ApiServices["executionStream"];
+
+  const app = buildApiServer(baseServices({
+    executionStream,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const port = (app.server.address() as { port: number }).port;
+
+  try {
+    // A raw socket rather than fetch: undici pools connections and can hold
+    // one open after the response body is released, so a test driven through
+    // fetch would be asserting the pool's behaviour, not the server's.
+    const request = httpGet({ host: "127.0.0.1", port, path: "/stream" });
+
+    await waitFor(() => listeners.size === 1);
+
+    request.destroy();
+
+    await waitFor(() => closed === 1);
+    assert.equal(listeners.size, 0);
+  } finally {
+    await app.close();
+  }
+});
+
+test("the live channel sends only the mission that was asked for", async () => {
+  const listeners = new Set<(events: unknown[]) => void>();
+
+  const executionStream = {
+    subscribe: (_organizationId: OrganizationId, listener: (events: unknown[]) => void) => {
+      listeners.add(listener);
+      return { close: () => listeners.delete(listener) };
+    },
+  } as unknown as ApiServices["executionStream"];
+
+  const app = buildApiServer(baseServices({
+    executionStream,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const address = await app.listen({ port: 0, host: "127.0.0.1" });
+
+  try {
+    const response = await fetch(`${address}/stream?workId=mine`);
+    await waitFor(() => listeners.size === 1);
+
+    const event = (id: string, workId: string) => ({
+      id,
+      organizationId: "org-1",
+      workId,
+      actorType: "system",
+      type: "task.started",
+      timestamp: new Date(),
+      payload: {},
+      metadata: {},
+    });
+
+    listeners.forEach((listener) =>
+      listener([event("theirs", "other"), event("ours", "mine")]),
+    );
+
+    const frames = await readFrames(response, 2);
+    const activity = JSON.parse(
+      (frames[1] ?? "").split("\n")[1]!.replace("data: ", ""),
+    );
+
+    assert.deepEqual(
+      activity.events.map((entry: { id: string }) => entry.id),
+      ["ours"],
+    );
+  } finally {
+    await app.close();
+  }
+});
+
+test("an oversized payload is dropped rather than pushed to every open tab", async () => {
+  const listeners = new Set<(events: unknown[]) => void>();
+
+  const executionStream = {
+    subscribe: (_organizationId: OrganizationId, listener: (events: unknown[]) => void) => {
+      listeners.add(listener);
+      return { close: () => listeners.delete(listener) };
+    },
+  } as unknown as ApiServices["executionStream"];
+
+  const app = buildApiServer(baseServices({
+    executionStream,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const address = await app.listen({ port: 0, host: "127.0.0.1" });
+
+  try {
+    const response = await fetch(`${address}/stream`);
+    await waitFor(() => listeners.size === 1);
+
+    listeners.forEach((listener) =>
+      listener([
+        {
+          id: "big",
+          organizationId: "org-1",
+          actorType: "agent",
+          type: "tool.completed",
+          timestamp: new Date(),
+          payload: { output: "x".repeat(5_000) },
+          metadata: {},
+        },
+      ]),
+    );
+
+    const frames = await readFrames(response, 2);
+    const activity = JSON.parse(
+      (frames[1] ?? "").split("\n")[1]!.replace("data: ", ""),
+    );
+
+    assert.deepEqual(activity.events[0].payload, { truncated: true });
+  } finally {
+    await app.close();
+  }
+});
+
+function httpGet(options: {
+  host: string;
+  port: number;
+  path: string;
+}): ReturnType<typeof httpRequest> {
+  const request = httpRequest({ ...options, method: "GET" });
+
+  request.on("error", () => {
+    // Destroying the request mid-stream is the point of the test; the error
+    // it raises on this side is expected and carries no information.
+  });
+
+  request.end();
+
+  return request;
+}
+
+async function waitFor(
+  condition: () => boolean,
+  timeoutMs = 3_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error("Condition was never met.");
+}

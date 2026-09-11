@@ -38,6 +38,13 @@ export interface ApiConfig {
 
   /** How many jobs one worker executes at once. */
   workerConcurrency: number;
+
+  /**
+   * How often the API reads the event log forward on behalf of everyone
+   * watching. One read per organization per interval, and none when nobody is
+   * connected - so this is the whole cost of the product feeling live.
+   */
+  streamTailIntervalMs: number;
 }
 
 export function loadApiConfig(
@@ -84,6 +91,11 @@ export function loadApiConfig(
       env.WORKER_CONCURRENCY,
       2,
       "WORKER_CONCURRENCY",
+    ),
+    streamTailIntervalMs: positiveInteger(
+      env.STREAM_TAIL_INTERVAL_MS,
+      1_000,
+      "STREAM_TAIL_INTERVAL_MS",
     ),
   };
 }

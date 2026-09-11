@@ -34,6 +34,7 @@ import { CompanyOverviewService } from "./company-overview-service.js";
 import { EventRecorder } from "./event-recorder.js";
 import { ExecutionJobRunner } from "./execution-job-runner.js";
 import { ExecutionQueueService } from "./execution-queue-service.js";
+import { ExecutionStream } from "./execution-stream.js";
 import { StaleRunReconciler } from "./stale-run-reconciler.js";
 import { TaskExecutionService } from "./task-execution-service.js";
 import { WorkApprovalService } from "./work-approval-service.js";
@@ -154,6 +155,15 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRecorder,
   );
 
+  // Reads the event log forward for everyone connected to the live channel.
+  // It is built here rather than in the API entry point because the worker
+  // shares this wiring, and a runtime that could only produce half a system
+  // depending on who asked is the thing this file exists to prevent.
+  const executionStream = new ExecutionStream(eventRepository, {
+    tailIntervalMs: config.streamTailIntervalMs,
+    log: (message) => console.warn(message),
+  });
+
   const executionJobRunner = new ExecutionJobRunner(
     workExecutionService,
     executionJobRepository,
@@ -228,6 +238,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workExecutionService,
     workQueryService,
     executionQueueService,
+    executionStream,
     executionJobRunner,
     workRecoveryService,
     companyBrainService,

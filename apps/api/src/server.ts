@@ -6,6 +6,7 @@ import type {
   AgentId,
   AgentStatus,
   AgentType,
+  Event,
   OrganizationId,
   ApprovalId,
   UserId,
@@ -48,6 +49,10 @@ import type {
 } from "./execution-queue-service.js";
 
 import type {
+  ExecutionStream,
+} from "./execution-stream.js";
+
+import type {
   CompanyBrainService,
 } from "./company-brain-service.js";
 
@@ -88,6 +93,7 @@ export interface ApiServices {
   workQueryService: WorkQueryService;
   workRecoveryService: WorkRecoveryService;
   executionQueueService: ExecutionQueueService;
+  executionStream: ExecutionStream;
   companyBrainService: CompanyBrainService;
   companyOverviewService: CompanyOverviewService;
   workspaceService: WorkspaceService;
@@ -169,6 +175,98 @@ export function buildApiServer(
   
     instance.get("/health", healthHandler(services));
     instance.post("/health", healthHandler(services));
+
+    // ---------------------------------------------------------------------
+    // The live channel.
+    //
+    // One long-lived connection replaces a page's worth of independent polls.
+    // It carries events, not state: the client learns that something was
+    // written and re-reads the surface it is showing, so there is exactly one
+    // description of what a mission is - the one the services compute - and
+    // the browser never becomes a second place where that is decided.
+    // ---------------------------------------------------------------------
+    instance.get("/stream", (request, reply) => {
+      // Validated before the reply is hijacked. Afterwards the shared error
+      // handler no longer owns this response, so a rejected request has to be
+      // rejected while it can still be answered normally.
+      const query = objectBody(request.query);
+      const organizationId = requiredOrganizationId(
+        services,
+        query.organizationId,
+      );
+      const workId = optionalText(query.workId);
+
+      reply.hijack();
+
+      const raw = reply.raw;
+      const origin = request.headers.origin;
+      const headers: Record<string, string> = {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+        // Proxies that buffer a response would hold every frame until the
+        // connection ended, which for a stream is never.
+        "x-accel-buffering": "no",
+      };
+
+      if (origin && services.corsOrigins.includes(origin)) {
+        headers["access-control-allow-origin"] = origin;
+        headers.vary = "Origin";
+      }
+
+      raw.writeHead(200, headers);
+
+      const send = (event: string, data: unknown): void => {
+        if (raw.writableEnded) return;
+
+        raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      send("open", {
+        organizationId,
+        workId: workId ?? null,
+        at: new Date().toISOString(),
+      });
+
+      const subscription = services.executionStream.subscribe(
+        organizationId,
+        (events) => {
+          const relevant = workId
+            ? events.filter((event) => event.workId === workId)
+            : events;
+
+          if (relevant.length === 0) return;
+
+          send("activity", { events: relevant.map(streamFrame) });
+        },
+      );
+
+      // An idle connection is indistinguishable from a dead one, and every
+      // layer between here and the browser will eventually reclaim it. The
+      // comment frame is the protocol's own keep-alive and costs one line.
+      const heartbeat = setInterval(() => {
+        if (raw.writableEnded) return;
+        raw.write(`: keep-alive ${Date.now()}\n\n`);
+      }, 20_000);
+
+      heartbeat.unref?.();
+
+      // A dropped connection raises both close and error, and a reload
+      // raises close alone. Tearing down once covers every case; doing it
+      // twice was how the heartbeat outlived one of the two.
+      let released = false;
+
+      const close = (): void => {
+        if (released) return;
+        released = true;
+
+        clearInterval(heartbeat);
+        subscription.close();
+      };
+
+      request.raw.on("close", close);
+      request.raw.on("error", close);
+    });
   
     instance.post("/work", async (request, reply) => {
       const body = objectBody(request.body);
@@ -521,6 +619,45 @@ export function buildApiServer(
   });
 
   return app;
+}
+
+/**
+ * What one event looks like on the wire.
+ *
+ * The payload is capped. A tool call's output can be a page of text, and the
+ * stream exists to say that something happened - the surface re-reads the
+ * authoritative row for anything it renders in full, so shipping the whole
+ * payload down a channel that fires on every write buys nothing and costs
+ * bandwidth on every connected tab.
+ */
+function streamFrame(event: Event): Record<string, unknown> {
+  const serialized = safeLength(event.payload);
+
+  return {
+    id: event.id,
+    type: event.type,
+    timestamp: event.timestamp.toISOString(),
+    organizationId: event.organizationId,
+    workId: event.workId ?? undefined,
+    taskId: event.taskId ?? undefined,
+    agentId: event.agentId ?? undefined,
+    actorType: event.actorType,
+    payload:
+      serialized <= MAX_STREAM_PAYLOAD_BYTES
+        ? event.payload
+        : { truncated: true },
+  };
+}
+
+const MAX_STREAM_PAYLOAD_BYTES = 2_000;
+
+function safeLength(payload: Record<string, unknown>): number {
+  try {
+    return JSON.stringify(payload)?.length ?? 0;
+  } catch {
+    // A payload that will not serialize cannot be sent either way.
+    return Number.POSITIVE_INFINITY;
+  }
 }
 
 /**
