@@ -51,6 +51,7 @@ export async function createApiServer() {
     workApprovalService: runtime.workApprovalService,
     workQueryService: runtime.workQueryService,
     workRecoveryService: runtime.workRecoveryService,
+    attentionService: runtime.attentionService,
     executionQueueService: runtime.executionQueueService,
     executionRoomService: runtime.executionRoomService,
     executionStream: runtime.executionStream,

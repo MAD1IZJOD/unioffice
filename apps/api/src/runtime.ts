@@ -28,6 +28,7 @@ import {
 import { createDefaultToolRegistry } from "@unioffice/tools";
 
 import { AgentDirectoryService } from "./agent-directory-service.js";
+import { AttentionService } from "./attention-service.js";
 import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
@@ -195,6 +196,14 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRecorder,
   );
 
+  // What needs a person, read across the whole company rather than across
+  // whichever slice a dashboard read happened to carry.
+  const attentionService = new AttentionService(
+    approvalRepository,
+    workRepository,
+    executionJobRepository,
+  );
+
   const companyOverviewService = new CompanyOverviewService(
     workRepository,
     taskRepository,
@@ -254,6 +263,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workApprovalService,
     workExecutionService,
     workQueryService,
+    attentionService,
     executionQueueService,
     executionRoomService,
     executionStream,

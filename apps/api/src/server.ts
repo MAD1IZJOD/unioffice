@@ -45,6 +45,10 @@ import type {
 } from "./work-recovery-service.js";
 
 import type {
+  AttentionService,
+} from "./attention-service.js";
+
+import type {
   ExecutionQueueService,
 } from "./execution-queue-service.js";
 
@@ -96,6 +100,7 @@ export interface ApiServices {
   workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
   workRecoveryService: WorkRecoveryService;
+  attentionService: AttentionService;
   executionQueueService: ExecutionQueueService;
   executionRoomService: ExecutionRoomService;
   executionStream: ExecutionStream;
@@ -319,6 +324,18 @@ export function buildApiServer(
       return services.companyOverviewService.getOverview(
         requiredOrganizationId(services, query.organizationId),
         { activityLimit: parseOptionalLimit(query.activityLimit) },
+      );
+    });
+
+    // What needs a person, in one ranked answer every surface reads. The rail
+    // badge, the drawer and the Command Center opening used to each count
+    // this for themselves and could disagree on one screen.
+    instance.get("/attention", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.attentionService.getQueue(
+        requiredOrganizationId(services, query.organizationId),
+        { limit: parseOptionalLimit(query.limit) },
       );
     });
 
