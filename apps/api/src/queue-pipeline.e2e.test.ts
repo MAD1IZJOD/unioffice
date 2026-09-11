@@ -150,6 +150,10 @@ function harness(
     async findByWork(workId) {
       return [...tasks.values()].filter((task) => task.workId === workId);
     },
+    async findByWorkIds(workIds) {
+      const wanted = new Set(workIds);
+      return [...tasks.values()].filter((task) => wanted.has(task.workId));
+    },
     async claimReadyForExecution(id, startedAt) {
       const task = tasks.get(id);
       if (!task || task.status !== "ready") return null;

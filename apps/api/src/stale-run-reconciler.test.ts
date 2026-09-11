@@ -89,6 +89,10 @@ function harness(works: Work[], tasks: Task[]) {
         (value) => value.assignedAgentId === agentId,
       );
     },
+    async findByWorkIds(workIds) {
+      const wanted = new Set(workIds);
+      return [...taskStore.values()].filter((task) => wanted.has(task.workId));
+    },
     async findByWork(workId) {
       return [...taskStore.values()].filter((task) => task.workId === workId);
     },

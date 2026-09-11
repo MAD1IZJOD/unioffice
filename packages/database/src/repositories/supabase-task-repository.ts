@@ -126,6 +126,35 @@ export class SupabaseTaskRepository
     );
   }
 
+  async findByWorkIds(
+    workIds: WorkId[],
+  ): Promise<Task[]> {
+    // Postgres would happily take an empty IN list, but the round trip to
+    // find that out is the whole cost this method exists to avoid.
+    if (workIds.length === 0) {
+      return [];
+    }
+
+    const { data, error } =
+      await this.client
+        .from("tasks")
+        .select("*")
+        .in("work_id", [...new Set(workIds)])
+        .order("created_at", {
+          ascending: true,
+        });
+
+    if (error) {
+      throw new Error(
+        `Failed to find tasks for work items: ${error.message}`,
+      );
+    }
+
+    return (data ?? []).map(
+      (row) => this.mapRow(row),
+    );
+  }
+
   async findByAgent(
     agentId: AgentId,
     limit = 50,

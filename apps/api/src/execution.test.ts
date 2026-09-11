@@ -86,6 +86,14 @@ class MemoryTaskRepository implements TaskRepository {
     );
   }
 
+  async findByWorkIds(ids: WorkId[]): Promise<Task[]> {
+    const wanted = new Set(ids);
+
+    return [...this.tasks.values()].filter((task) =>
+      wanted.has(task.workId),
+    );
+  }
+
   async claimReadyForExecution(
     id: TaskId,
     startedAt: Date,

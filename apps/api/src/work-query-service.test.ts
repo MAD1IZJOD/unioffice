@@ -42,6 +42,7 @@ const taskRepository: TaskRepository = {
   async findById() { return null; },
   async findByAgent() { return []; },
   async findByWork() { return []; },
+  async findByWorkIds() { return []; },
   async claimReadyForExecution() { return null; },
   async update(task) { return task; },
   async delete() {},

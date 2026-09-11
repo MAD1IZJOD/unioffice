@@ -45,6 +45,24 @@ export interface AgentPresence {
   lastActiveAt?: Date;
 }
 
+/**
+ * How far through its plan one work item is.
+ *
+ * The Command Center showed a status pill and nothing else, so an objective
+ * one step from finishing and one that had just started both read as
+ * "executing". The task rows are already fetched here to derive agent
+ * presence, so counting them per work item costs nothing extra.
+ */
+export interface WorkPace {
+  workId: WorkId;
+  total: number;
+  completed: number;
+  running: number;
+  failed: number;
+  /** Completed as a percentage of the plan. */
+  progress: number;
+}
+
 export interface CompanyOverview {
   organizationId: OrganizationId;
   generatedAt: Date;
@@ -53,6 +71,8 @@ export interface CompanyOverview {
     byStatus: Record<WorkStatus, number>;
     active: Work[];
     recentlyCompleted: Work[];
+    /** Keyed by work id, for the items in `active` and `recentlyCompleted`. */
+    pace: Record<string, WorkPace>;
   };
   tasks: {
     total: number;
@@ -160,6 +180,7 @@ export class CompanyOverviewService {
         byStatus,
         active,
         recentlyCompleted,
+        pace: paceOf([...active, ...recentlyCompleted], tasksOfInterest),
       },
       tasks: {
         total: tasksOfInterest.length,
@@ -179,12 +200,12 @@ export class CompanyOverviewService {
   }
 
   private async tasksForWork(work: Work[]): Promise<Task[]> {
-    const uniqueWorkIds = [...new Set(work.map((item) => item.id))];
-    const taskLists = await Promise.all(
-      uniqueWorkIds.map((workId) => this.taskRepository.findByWork(workId)),
-    );
-
-    return taskLists.flat();
+    // One query, not one per mission. This used to fan out into a round trip
+    // per work item, which on a company with a couple of weeks of history
+    // made this read take the better part of a minute - and the live channel
+    // made that worse rather than better, because it asks for it again
+    // whenever anything happens.
+    return this.taskRepository.findByWorkIds(work.map((item) => item.id));
   }
 
   private presenceFor(
@@ -247,6 +268,29 @@ export class CompanyOverviewService {
       ).length,
     }));
   }
+}
+
+function paceOf(work: Work[], tasks: Task[]): Record<string, WorkPace> {
+  const pace: Record<string, WorkPace> = {};
+
+  for (const item of work) {
+    if (pace[item.id]) continue;
+
+    const owned = tasks.filter((task) => task.workId === item.id);
+    const completed = countStatus(owned, "completed");
+
+    pace[item.id] = {
+      workId: item.id,
+      total: owned.length,
+      completed,
+      running: countStatus(owned, "running"),
+      failed: countStatus(owned, "failed"),
+      progress:
+        owned.length === 0 ? 0 : Math.round((completed / owned.length) * 100),
+    };
+  }
+
+  return pace;
 }
 
 function resolvePresence(

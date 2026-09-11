@@ -91,6 +91,7 @@ function harness(work: Work, tasks: Task[]) {
       );
     },
     async findByWork() { return [...taskStore.values()]; },
+    async findByWorkIds() { return [...taskStore.values()]; },
     async claimReadyForExecution() { return null; },
     async update(value) { taskStore.set(value.id, value); return value; },
     async delete() {},
