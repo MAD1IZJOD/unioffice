@@ -274,6 +274,87 @@ export interface WorkDetail {
   executionJob?: ExecutionJobSummary | null;
 }
 
+/* --------------------------------------------------------------------------
+   The execution room: one operation, read in one request.
+   -------------------------------------------------------------------------- */
+
+export type TaskReadiness =
+  | "blocked"
+  | "ready"
+  | "running"
+  | "waiting"
+  | "done"
+  | "failed"
+  | "cancelled";
+
+export interface ExecutionNode {
+  taskId: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  readiness: TaskReadiness;
+  assignedAgentId?: string;
+  depth: number;
+  dependsOn: string[];
+  blocks: string[];
+  blockedBy: string[];
+  toolCallCount: number;
+  requiredTools: string[];
+  requiredCapabilities: string[];
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  awaitingApproval: boolean;
+}
+
+export interface ExecutionLane {
+  depth: number;
+  taskIds: string[];
+}
+
+export interface ExecutionPlan {
+  nodes: ExecutionNode[];
+  lanes: ExecutionLane[];
+  terminalTaskIds: string[];
+  totalCount: number;
+  completedCount: number;
+  failedCount: number;
+  progress: number;
+  runningCount: number;
+  widestLane: number;
+  hasCycle: boolean;
+}
+
+export interface RoomMember {
+  agent: AgentSummary;
+  taskIds: string[];
+  currentTaskId?: string;
+  waitingOnTaskId?: string;
+  running: number;
+  completed: number;
+  failed: number;
+  toolCalls: number;
+  artifactCount: number;
+  selectionReason?: string;
+  stretched: boolean;
+}
+
+export interface ExecutionRoom {
+  work: WorkItem;
+  workspace?: WorkspaceItem;
+  tasks: TaskItem[];
+  events: ActivityEvent[];
+  artifacts: ArtifactItem[];
+  approvals: ApprovalItem[];
+  memories: MemoryItem[];
+  executionJob?: ExecutionJobSummary | null;
+  agents: AgentSummary[];
+  orchestrator?: AgentSummary;
+  cast: RoomMember[];
+  plan: ExecutionPlan;
+  tools: Array<{ id: string; name: string; description: string }>;
+}
+
 export interface AgentPresenceSummary extends AgentSummary {
   agentId: string;
   presence: AgentPresence;
@@ -287,6 +368,40 @@ export interface AgentPresenceSummary extends AgentSummary {
   completedTaskCount: number;
   failedTaskCount: number;
   lastActiveAt?: string;
+}
+
+export type AttentionKind =
+  | "decision"
+  | "failure"
+  | "interrupted"
+  | "recovering";
+
+/**
+ * `action` is stopped until a person does something. `watch` is the system
+ * recovering on its own. The backend draws this line; nothing here re-decides
+ * it.
+ */
+export type AttentionSeverity = "action" | "watch";
+
+export interface AttentionItem {
+  id: string;
+  kind: AttentionKind;
+  severity: AttentionSeverity;
+  label: string;
+  detail: string;
+  consequence: string;
+  workId: string;
+  objective: string;
+  taskId?: string;
+  agentId?: string;
+  at: string;
+}
+
+export interface AttentionQueue {
+  items: AttentionItem[];
+  actionCount: number;
+  watchCount: number;
+  total: number;
 }
 
 export interface CompanyOverview {
@@ -341,6 +456,22 @@ function apiBaseUrl(): string {
     (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
     "http://127.0.0.1:4000"
   );
+}
+
+/**
+ * The live channel's URL.
+ *
+ * EventSource takes a URL and nothing else - no headers, no body - so the
+ * organization travels in the query string like it does on every read, and
+ * the work id narrows the stream server-side so a mission's tab is not sent
+ * the whole company's log.
+ */
+export function streamUrl(options: { workId?: string } = {}): string {
+  const search = new URLSearchParams({ organizationId: organizationId() });
+
+  if (options.workId) search.set("workId", options.workId);
+
+  return `${apiBaseUrl()}/stream?${search.toString()}`;
 }
 
 export function organizationId(): string {
@@ -438,6 +569,10 @@ export async function fetchOverview(activityLimit = 40): Promise<CompanyOverview
   return get<CompanyOverview>(scoped("/overview", { activityLimit }), 60_000);
 }
 
+export async function fetchAttention(limit = 25): Promise<AttentionQueue> {
+  return get<AttentionQueue>(scoped("/attention", { limit }));
+}
+
 export async function fetchActivity(limit = 40): Promise<ActivityEvent[]> {
   const data = await get<{ events: ActivityEvent[] }>(
     scoped("/activity", { limit }),
@@ -479,6 +614,11 @@ export async function fetchWorkList(options: {
 
 export async function fetchWorkDetail(workId: string): Promise<WorkDetail> {
   return get<WorkDetail>(`/work/${workId}/detail`);
+}
+
+/** Everything the execution room renders, in one round trip. */
+export async function fetchExecutionRoom(workId: string): Promise<ExecutionRoom> {
+  return get<ExecutionRoom>(`/work/${workId}/room`, 60_000);
 }
 
 export async function fetchArtifacts(limit = 50): Promise<ArtifactItem[]> {
