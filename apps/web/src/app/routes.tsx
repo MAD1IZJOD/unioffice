@@ -8,10 +8,10 @@ import Approvals from "../pages/Approvals";
 import Artifacts from "../pages/Artifacts";
 import Brain from "../pages/Brain";
 import Command from "../pages/Command";
-import Mission from "../pages/Mission";
 import MissionStart from "../pages/MissionStart";
 import Missions from "../pages/Missions";
 import NotBuilt from "../pages/NotBuilt";
+import Room from "../pages/Room";
 import Organization from "../pages/Organization";
 import Tools from "../pages/Tools";
 import Workspace from "../pages/Workspace";
@@ -33,7 +33,7 @@ export const router = createBrowserRouter([
       { path: "command", element: <Command /> },
       { path: "missions", element: <Missions /> },
       { path: "missions/new", element: <MissionStart /> },
-      { path: "missions/:missionId", element: <Mission /> },
+      { path: "missions/:missionId", element: <Room /> },
       { path: "work", loader: () => redirect("/missions") },
       {
         path: "work/:workId",

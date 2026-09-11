@@ -1,0 +1,911 @@
+/* ==========================================================================
+   The execution room
+
+   The largest thing on the page is the objective, because that is what the
+   company is doing. Everything else is sized against it.
+
+   Colour keeps the meaning it has everywhere else in the product: black is
+   the room, blue is the system working, red is a person being needed. The
+   room does not glow - light comes only from the parts that are alive, which
+   is what makes a live operation readable at a glance against a finished one.
+   ========================================================================== */
+
+.room {
+  /* Exactly the .page-surface padding, so a full-bleed band reaches the edge
+     of the surface and no further. These two numbers move together; there is
+     no clever way to derive one from the other in CSS. */
+  --room-gutter: 22px;
+  --room-top: 24px;
+}
+
+/* --------------------------------------------------------------------------
+   The opening
+   -------------------------------------------------------------------------- */
+
+.operation {
+  position: relative;
+  margin: calc(var(--room-top) * -1) calc(var(--room-gutter) * -1) 0;
+  padding: 40px var(--room-gutter) 42px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(
+      120% 90% at 8% -10%,
+      rgba(255, 255, 255, 0.035),
+      transparent 62%
+    ),
+    var(--surface-0);
+}
+
+/* The wash is the operation's state, not decoration. A live operation is lit
+   from the left in blue; one waiting on a person is lit in red; a finished
+   one is not lit at all. */
+.operation::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  content: "";
+  background: linear-gradient(
+    to bottom,
+    var(--tone, transparent),
+    transparent 72%
+  );
+  opacity: 0.6;
+}
+
+.operation-live::after,
+.operation-waiting::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: radial-gradient(
+    70% 120% at 0% 0%,
+    var(--tone-soft, transparent),
+    transparent 58%
+  );
+}
+
+.operation-live::after {
+  animation: room-breathe 7s ease-in-out infinite;
+}
+
+@keyframes room-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.operation-inner {
+  position: relative;
+  max-width: 1340px;
+  margin: 0 auto;
+}
+
+.operation-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.operation-mark {
+  color: var(--ink-secondary);
+}
+
+.operation-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+  transition: color 0.15s ease;
+}
+
+.operation-place:hover {
+  color: var(--blue-ink);
+}
+
+/* The live indicator. Reports the channel, never invents it. */
+.pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-secondary);
+}
+
+.pulse-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.pulse-live .pulse-dot {
+  background: var(--blue-ink);
+  box-shadow: 0 0 0 0 rgba(132, 180, 251, 0.5);
+  animation: pulse-ring 2.4s ease-out infinite;
+}
+
+.pulse-live {
+  color: var(--blue-ink);
+}
+
+.pulse-connecting .pulse-dot {
+  background: var(--warning);
+  animation: pulse-fade 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(132, 180, 251, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(132, 180, 251, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(132, 180, 251, 0);
+  }
+}
+
+@keyframes pulse-fade {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The objective. The largest type in the product, because it is the one
+   sentence the whole system exists to act on. */
+.operation-objective {
+  max-width: 20ch;
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: clamp(27px, 3.7vw, 50px);
+  font-weight: 600;
+  letter-spacing: -0.033em;
+  line-height: 1.07;
+  text-wrap: balance;
+}
+
+.operation-objective-long {
+  max-width: 30ch;
+  font-size: clamp(22px, 2.5vw, 33px);
+  line-height: 1.2;
+}
+
+.operation-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+.operation-line {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.operation-note {
+  max-width: 72ch;
+  margin: 8px 0 0;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.operation-brief {
+  max-width: 78ch;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+  background: var(--surface-1);
+}
+
+.operation-brief-label {
+  margin-bottom: 6px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   Stations
+
+   Every one is a state the durable queue or the work row genuinely reports.
+   -------------------------------------------------------------------------- */
+
+.stations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin-top: 34px;
+  background: var(--line-subtle);
+}
+
+.station {
+  flex: 1 1 118px;
+  padding: 11px 13px;
+  background: var(--surface-0);
+}
+
+.station-label {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.station-detail {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  opacity: 0.75;
+}
+
+.station-passed .station-label {
+  color: var(--ink-secondary);
+}
+
+.station-now {
+  background: var(--surface-2);
+  box-shadow: inset 0 2px 0 0 var(--tone, var(--blue));
+}
+
+.station-now .station-label {
+  color: var(--ink-primary);
+}
+
+.station-now .station-detail {
+  color: var(--tone, var(--blue-ink));
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Readout
+   -------------------------------------------------------------------------- */
+
+.operation-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 34px;
+  margin-top: 30px;
+}
+
+.fact-value {
+  color: var(--ink-primary);
+  font-size: 19px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.fact-label {
+  margin-top: 6px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.operation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin-top: 30px;
+}
+
+/* --------------------------------------------------------------------------
+   The decision band
+
+   The room changing state rather than growing a panel.
+   -------------------------------------------------------------------------- */
+
+.decision-band {
+  position: relative;
+  margin: 0 calc(var(--room-gutter) * -1);
+  padding: 30px var(--room-gutter) 32px;
+  border-bottom: 1px solid var(--red-line);
+  background:
+    radial-gradient(
+      80% 140% at 0% 0%,
+      rgba(229, 72, 77, 0.13),
+      transparent 60%
+    ),
+    #0c0709;
+}
+
+.decision-band-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--red);
+}
+
+.decision-band-inner {
+  max-width: 1340px;
+  margin: 0 auto;
+}
+
+.decision-band-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 18px;
+  color: var(--red-ink);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.decision-band-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: pulse-fade 1.8s ease-in-out infinite;
+}
+
+.decision + .decision {
+  margin-top: 26px;
+  padding-top: 26px;
+  border-top: 1px solid var(--red-line);
+}
+
+.decision-action {
+  max-width: 28ch;
+  margin: 0;
+  color: #ffe3e4;
+  font-size: clamp(19px, 2.1vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.decision-why {
+  max-width: 70ch;
+  margin: 14px 0 0;
+  color: #d9a9ac;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+/* Both outcomes, side by side and equally weighted. A decision where only the
+   agreeable option is spelled out is not a decision. */
+.decision-outcomes {
+  display: grid;
+  gap: 1px;
+  margin-top: 22px;
+  background: var(--red-line);
+}
+
+@media (min-width: 720px) {
+  .decision-outcomes {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.decision-outcome {
+  padding: 13px 15px;
+  background: #0c0709;
+  color: #c9898d;
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+.decision-outcome-label {
+  display: block;
+  margin-bottom: 5px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.decision-outcome-yes .decision-outcome-label {
+  color: var(--success-ink);
+}
+
+.decision-outcome-no .decision-outcome-label {
+  color: var(--red-ink);
+}
+
+.decision-provenance {
+  margin-top: 16px;
+  color: #8e6165;
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+.decision-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+/* --------------------------------------------------------------------------
+   Layout
+   -------------------------------------------------------------------------- */
+
+.room-layout {
+  display: grid;
+  gap: 0 46px;
+  max-width: 1340px;
+  margin: 0 auto;
+  padding-top: 34px;
+}
+
+@media (min-width: 1180px) {
+  .room-layout {
+    grid-template-columns: minmax(0, 1fr) 330px;
+  }
+}
+
+.room-main {
+  min-width: 0;
+}
+
+.room-record {
+  min-width: 0;
+}
+
+@media (min-width: 1180px) {
+  .room-record {
+    position: sticky;
+    top: calc(var(--header-height) + 20px);
+    align-self: start;
+    max-height: calc(100vh - var(--header-height) - 40px);
+    padding-left: 26px;
+    border-left: 1px solid var(--line-subtle);
+  }
+}
+
+.room-headline {
+  margin: 0 0 6px;
+  color: var(--ink-primary);
+  font-size: 16px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+
+.room-lead {
+  max-width: 74ch;
+  margin: 0 0 18px;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+/* --------------------------------------------------------------------------
+   The floor
+
+   One lane per dependency depth. Two steps side by side is the backend
+   saying those two do not wait on each other - it is data, not layout.
+   -------------------------------------------------------------------------- */
+
+.floor {
+  margin-top: 4px;
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 0 16px;
+}
+
+.lane-spine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lane-index {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.9;
+  opacity: 0.55;
+}
+
+/* The thread between lanes is the dependency itself: the plan flows down it. */
+.lane-thread {
+  width: 1px;
+  flex: 1;
+  margin: 6px 0 0;
+  background: linear-gradient(
+    to bottom,
+    var(--line-strong),
+    var(--line-subtle) 80%
+  );
+}
+
+.lane-body {
+  min-width: 0;
+  padding-bottom: 22px;
+}
+
+.lane-meaning {
+  margin-bottom: 9px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.lane-steps {
+  display: grid;
+  gap: 8px;
+}
+
+/* Parallel branches genuinely sit beside each other on a wide screen, and
+   stack on a narrow one where side-by-side would be unreadable rather than
+   informative. */
+@media (min-width: 900px) {
+  .lane-steps-parallel {
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  }
+}
+
+.step {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--tone-line, var(--line));
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.step:hover {
+  border-color: var(--line-strong);
+  border-left-color: var(--tone, var(--line-strong));
+  background: var(--surface-2);
+}
+
+.step-open {
+  border-color: var(--line-strong);
+  border-left-color: var(--tone, var(--line-strong));
+  background: var(--surface-2);
+}
+
+.step-running {
+  border-left-color: var(--blue);
+  background: linear-gradient(
+    to right,
+    rgba(59, 130, 246, 0.06),
+    transparent 38%
+  );
+}
+
+.step-holding {
+  border-left-color: var(--red);
+  background: linear-gradient(
+    to right,
+    rgba(229, 72, 77, 0.07),
+    transparent 38%
+  );
+}
+
+.step-head {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 14px;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+.step-mark {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding-top: 1px;
+}
+
+.step-mark-empty {
+  width: 26px;
+  height: 26px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 50%;
+}
+
+.step-title {
+  display: block;
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.008em;
+  line-height: 1.4;
+}
+
+.step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 11px;
+  margin-top: 5px;
+  color: var(--ink-faint);
+  font-size: 10px;
+}
+
+.step-agent {
+  color: var(--ink-secondary);
+  font-weight: 600;
+}
+
+/* Who is holding whom, by name. The one line a stalled plan owes a reader. */
+.step-blocked {
+  display: block;
+  margin-top: 6px;
+  color: var(--warning);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.step-state {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.step-chevron {
+  color: var(--ink-faint);
+  transition: transform 0.18s ease;
+}
+
+.step-chevron-open {
+  transform: rotate(180deg);
+}
+
+.step-body {
+  padding: 0 14px 15px 52px;
+  animation: step-open 0.18s ease-out;
+}
+
+@keyframes step-open {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.step-description {
+  max-width: 76ch;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+.step-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.step-downstream {
+  margin: 10px 0 0;
+  color: var(--ink-muted);
+  font-size: 10.5px;
+}
+
+.step-nothing {
+  margin: 14px 0 0;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+}
+
+/* --------------------------------------------------------------------------
+   The cast
+   -------------------------------------------------------------------------- */
+
+.cast {
+  display: grid;
+  gap: 8px;
+}
+
+@media (min-width: 900px) {
+  .cast {
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  }
+}
+
+.cast-member {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.cast-member:hover {
+  border-color: var(--tone-line, var(--line-strong));
+  background: var(--surface-2);
+}
+
+.cast-mark {
+  flex-shrink: 0;
+}
+
+.cast-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cast-name {
+  color: var(--ink-primary);
+  font-size: 13.5px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+}
+
+.cast-role {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.cast-doing {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--ink-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cast-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 7px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.cast-reason {
+  display: block;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-subtle);
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+/* --------------------------------------------------------------------------
+   Settled decisions
+   -------------------------------------------------------------------------- */
+
+.settled-decision {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+/* --------------------------------------------------------------------------
+   Mobile
+
+   Not a shrunk desktop. The objective, the state, the decision and the
+   result are what a phone is for; the machinery below stays reachable but
+   stops competing for the first screen.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 767px) {
+  .room {
+    --room-gutter: 14px;
+    --room-top: 18px;
+  }
+
+  .operation {
+    padding-top: 24px;
+  }
+
+  .operation-readout {
+    gap: 20px 26px;
+  }
+
+  .stations {
+    gap: 1px;
+  }
+
+  .station {
+    flex-basis: calc(50% - 1px);
+  }
+
+  .lane {
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 0 10px;
+  }
+
+  .step-body {
+    padding-left: 14px;
+  }
+
+  .room-record {
+    margin-top: 26px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line-subtle);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .operation-live::after,
+  .pulse-live .pulse-dot,
+  .pulse-connecting .pulse-dot,
+  .decision-band-pulse,
+  .step-body {
+    animation: none;
+  }
+}

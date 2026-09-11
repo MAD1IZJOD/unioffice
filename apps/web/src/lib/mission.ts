@@ -5,8 +5,6 @@ import {
   type ApprovalItem,
   type ExecutionJobSummary,
   type TaskItem,
-  type ToolDescriptor,
-  type WorkDetail,
   type WorkItem,
 } from "./api";
 
@@ -228,76 +226,6 @@ export function messageOf(work: WorkItem): string | undefined {
   return undefined;
 }
 
-/* --------------------------------------------------------------------------
-   The cast
-
-   Who is on this mission and what they are actually holding. Read off the
-   tasks, so an agent appears here because it was delegated work rather than
-   because it exists on the roster.
-   -------------------------------------------------------------------------- */
-
-export interface MissionMember {
-  agent: AgentSummary;
-  tasks: TaskItem[];
-  running: number;
-  completed: number;
-  failed: number;
-  waiting: number;
-  toolCalls: number;
-  /** The task they are on right now, when they are on one. */
-  current?: TaskItem;
-  /** Why the delegator picked them, when it recorded a reason. */
-  reason?: string;
-  /** True when the delegator settled for the closest available match. */
-  stretched: boolean;
-}
-
-export function missionCast(data: MissionData): MissionMember[] {
-  const byAgent = new Map<string, TaskItem[]>();
-
-  for (const task of data.tasks) {
-    if (!task.assignedAgentId) continue;
-    const current = byAgent.get(task.assignedAgentId) ?? [];
-    current.push(task);
-    byAgent.set(task.assignedAgentId, current);
-  }
-
-  const members: MissionMember[] = [];
-
-  for (const [agentId, tasks] of byAgent) {
-    const agent = data.agents.find((candidate) => candidate.id === agentId);
-    if (!agent) continue;
-
-    const delegation = tasks.find((task) => task.metadata.delegation)?.metadata
-      .delegation;
-
-    members.push({
-      agent,
-      tasks,
-      running: tasks.filter((task) => task.status === "running").length,
-      completed: tasks.filter((task) => task.status === "completed").length,
-      failed: tasks.filter((task) => task.status === "failed").length,
-      waiting: tasks.filter((task) => task.status === "waiting").length,
-      toolCalls: tasks.reduce(
-        (total, task) =>
-          total + (task.metadata.execution?.toolCalls?.length ?? 0),
-        0,
-      ),
-      current: tasks.find((task) => task.status === "running"),
-      reason: delegation?.selectionReason,
-      stretched: tasks.some(
-        (task) => task.metadata.delegation?.capabilityFit === "partial",
-      ),
-    });
-  }
-
-  // Whoever is working comes first, then whoever holds the most of the plan.
-  return members.sort((left, right) => {
-    if (left.running !== right.running) return right.running - left.running;
-    return right.tasks.length - left.tasks.length;
-  });
-}
-
 /**
  * The orchestrator, which is who plans and delegates. Read off the roster
  * rather than hard-coded, so renaming the workforce does not put a stale name
@@ -340,7 +268,12 @@ export interface MissionMoment {
 export interface NarrationSources {
   tasks: TaskItem[];
   agents: AgentSummary[];
-  tools?: ToolDescriptor[];
+  /**
+   * Only enough of a tool to name it. The narration says "Harvey reached for
+   * Calculator" and never renders a schema, so asking callers for the full
+   * descriptor would force a second request for fields nothing here reads.
+   */
+  tools?: Array<{ id: string; name: string }>;
 }
 
 /**
@@ -750,51 +683,4 @@ function shorten(value: unknown, maxChars = 130): string | undefined {
   return collapsed.length > maxChars
     ? `${collapsed.slice(0, maxChars)}…`
     : collapsed;
-}
-
-/* --------------------------------------------------------------------------
-   The deliverable
-   -------------------------------------------------------------------------- */
-
-/**
- * What the mission produced: the last task that finished with a result. The
- * plan is a dependency graph, so the task that completed last is the one the
- * rest fed into.
- */
-export function missionResult(tasks: TaskItem[]): TaskItem | undefined {
-  return [...tasks]
-    .filter((task) => task.status === "completed" && task.result !== undefined)
-    .sort(
-      (left, right) =>
-        new Date(left.completedAt ?? left.updatedAt).getTime() -
-        new Date(right.completedAt ?? right.updatedAt).getTime(),
-    )
-    .at(-1);
-}
-
-/** Every tool call the mission actually made, with the task that made it. */
-export function missionToolCalls(tasks: TaskItem[]) {
-  return tasks.flatMap((task) =>
-    (task.metadata.execution?.toolCalls ?? []).map((call) => ({ call, task })),
-  );
-}
-
-/** How far through the plan the mission is, as a percentage. */
-export function missionProgress(tasks: TaskItem[]): number {
-  if (tasks.length === 0) return 0;
-
-  const done = tasks.filter((task) => task.status === "completed").length;
-  return Math.round((done / tasks.length) * 100);
-}
-
-/** The detail payload, narrowed to what the mission reader needs. */
-export function missionDataOf(detail: WorkDetail): MissionData {
-  return {
-    work: detail.work,
-    tasks: detail.tasks,
-    events: detail.events,
-    approvals: detail.approvals,
-    agents: detail.agents,
-    executionJob: detail.executionJob,
-  };
 }
