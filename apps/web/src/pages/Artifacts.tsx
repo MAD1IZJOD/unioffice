@@ -72,7 +72,7 @@ export default function Artifacts() {
   return (
     <div className="mx-auto max-w-[1180px] fade-up">
       <PageOpening
-        eyebrow="Output"
+        eyebrow="Outputs"
         title="WHAT THE COMPANY"
         lead="HAS PRODUCED."
         detail="Everything a completed task stored, kept after the run that made it has finished. Open one and you get the output itself, not its database row."

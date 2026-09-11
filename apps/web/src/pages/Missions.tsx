@@ -136,7 +136,7 @@ export default function Missions() {
   return (
     <div className="fade-up">
       <PageOpening
-        eyebrow="Operate"
+        eyebrow="Work"
         title="EVERY MISSION"
         lead="THE COMPANY HAS RUN."
         detail="From the objective you gave it to the result it delivered, newest first."

@@ -100,7 +100,7 @@ export default function Activity() {
   return (
     <div className="mx-auto max-w-[1000px] fade-up">
       <PageOpening
-        eyebrow="Intelligence"
+        eyebrow="Brain"
         title="WHAT THE COMPANY"
         lead="ACTUALLY DID."
         detail="Every plan, delegation, tool call, approval and artifact, in the order it happened. This is the record the rest of the product is derived from."

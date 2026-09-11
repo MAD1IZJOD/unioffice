@@ -50,7 +50,7 @@ export default function Tools() {
   return (
     <div className="mx-auto max-w-[1080px] fade-up">
       <PageOpening
-        eyebrow="System"
+        eyebrow="Workforce"
         title="THE MACHINERY"
         lead="AGENTS CAN REACH."
         detail="This is the whole of it. An agent can only affect the world through something on this page, and only if it is named below as authorized."

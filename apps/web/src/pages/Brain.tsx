@@ -71,7 +71,7 @@ export default function Brain() {
   return (
     <div className="mx-auto max-w-[1180px] fade-up">
       <PageOpening
-        eyebrow="Intelligence"
+        eyebrow="Brain"
         title="THE COMPANY"
         lead="REMEMBERS."
         detail="Every completed and failed task writes here, and an agent retrieves from it before starting related work. Retrieval is keyword and importance based — there are no embeddings behind this yet."

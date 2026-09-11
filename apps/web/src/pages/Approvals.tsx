@@ -67,7 +67,7 @@ export default function Approvals() {
           good outcome, so it is stated calmly rather than dressed as an
           all-clear siren. */}
       <PageOpening
-        eyebrow="Operate"
+        eyebrow="Work"
         title={pending.length === 0 ? "NOTHING IS" : "THE COMPANY"}
         lead={
           pending.length === 0

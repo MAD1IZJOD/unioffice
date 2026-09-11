@@ -581,10 +581,16 @@
 
 /* Parallel branches genuinely sit beside each other on a wide screen, and
    stack on a narrow one where side-by-side would be unreadable rather than
-   informative. */
+   informative.
+
+   The minimum is 238px rather than something rounder because the lane sits
+   in the main column with the record pinned beside it, which leaves about
+   554px on a 1280px screen. At 290px two cards did not fit, auto-fit
+   collapsed to one, and a plan the backend had correctly identified as
+   parallel was drawn as a queue - the one thing this view exists to show. */
 @media (min-width: 900px) {
   .lane-steps-parallel {
-    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(238px, 1fr));
   }
 }
 
