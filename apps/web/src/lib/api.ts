@@ -261,21 +261,14 @@ export interface ExecutionJobSummary {
   createdAt: string;
 }
 
-export interface WorkDetail {
-  work: WorkItem;
-  tasks: TaskItem[];
-  events: ActivityEvent[];
-  artifacts: ArtifactItem[];
-  approvals: ApprovalItem[];
-  agents: AgentSummary[];
-  /** What this run wrote into the company's memory. Often empty. */
-  memories: MemoryItem[];
-  /** Present only while a job for this work is queued or running. */
-  executionJob?: ExecutionJobSummary | null;
-}
-
 /* --------------------------------------------------------------------------
-   The execution room: one operation, read in one request.
+   The execution room: one mission, read in one request.
+
+   This replaced a client-side WorkDetail read that assembled the same page
+   out of four requests. The /work/:id/detail endpoint it used is still
+   served - it is a cheaper read than this one and worth keeping - but the
+   web app has one description of a mission now rather than two that could
+   drift apart.
    -------------------------------------------------------------------------- */
 
 export type TaskReadiness =
@@ -622,10 +615,6 @@ export async function fetchWorkList(options: {
   );
 
   return data.work;
-}
-
-export async function fetchWorkDetail(workId: string): Promise<WorkDetail> {
-  return get<WorkDetail>(`/work/${workId}/detail`);
 }
 
 /** Everything the execution room renders, in one round trip. */
