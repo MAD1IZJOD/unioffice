@@ -26,15 +26,21 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { fetchOverview, type CompanyOverview } from "./lib/api";
+import {
+  fetchAttention,
+  fetchOverview,
+  type AttentionItem,
+  type AttentionQueue,
+  type CompanyOverview,
+} from "./lib/api";
 
-import { useResource } from "./lib/useResource";
+import { useLiveResource } from "./lib/live";
 
 import {
+  attentionPath,
   attentionTime,
-  collectAttention,
+  attentionTone,
   summarizeAttention,
-  type AttentionItem,
 } from "./lib/attention";
 
 import { toneClass } from "./lib/tone";
@@ -45,33 +51,53 @@ interface NavEntry {
   path: string;
   icon: LucideIcon;
   /** Where the number beside this surface comes from, if it has one. */
-  badge?: (overview: CompanyOverview) => number;
+  badge?: (context: ShellContext) => number;
+}
+
+interface ShellContext {
+  overview?: CompanyOverview;
+  attention?: AttentionQueue;
 }
 
 /**
- * Navigation grouped by intent rather than by table.
+ * Five groups, named for what you are doing rather than for which table the
+ * surface reads.
  *
- * Artifacts moved out of "System" and into an Output group of its own. It was
- * filed next to Tools and Governance, which reads as machinery you configure;
- * it is in fact the pile of things the company made, which is the opposite
- * end of the product and deserves to be found on its own terms.
+ * The old rail had Approvals under "Operate", Artifacts under "Output" and
+ * Tools under "System", which meant three of the five headings described the
+ * product's internals. These describe the company: you command it, it does
+ * work, it has a workforce, it knows things, and it produces things.
+ *
+ * Nothing was dropped to make the list shorter. Tools and Governance moved
+ * next to the workforce they constrain rather than into a drawer marked
+ * System, which is where capabilities go to be forgotten.
  */
 const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
   {
-    label: "Operate",
+    label: "Command",
     entries: [
       { label: "Command Center", path: "/command", icon: CommandIcon },
+    ],
+  },
+  {
+    label: "Work",
+    entries: [
       {
         label: "Missions",
         path: "/missions",
         icon: LayoutGrid,
-        badge: (overview) => overview.work.active.length,
+        badge: ({ overview }) => overview?.work.active.length ?? 0,
       },
       {
         label: "Approvals",
         path: "/approvals",
         icon: ShieldAlert,
-        badge: (overview) => overview.approvals.length,
+        // The rail counts what needs a person, which is the same number the
+        // drawer and the Command Center show, because all three now read it
+        // from the same place.
+        badge: ({ attention }) =>
+          attention?.items.filter((item) => item.kind === "decision").length ??
+          0,
       },
     ],
   },
@@ -79,26 +105,21 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
     label: "Workforce",
     entries: [
       { label: "Agents", path: "/agents", icon: Users },
+      { label: "Tools", path: "/tools", icon: Wrench },
       { label: "Organization", path: "/organization", icon: Network },
+      { label: "Governance", path: "/governance", icon: Scale },
     ],
   },
   {
-    label: "Intelligence",
+    label: "Brain",
     entries: [
-      { label: "Company Brain", path: "/brain", icon: Brain },
+      { label: "What it knows", path: "/brain", icon: Brain },
       { label: "Activity", path: "/activity", icon: Activity },
     ],
   },
   {
-    label: "Output",
+    label: "Outputs",
     entries: [{ label: "Artifacts", path: "/artifacts", icon: FileOutput }],
-  },
-  {
-    label: "System",
-    entries: [
-      { label: "Tools", path: "/tools", icon: Wrench },
-      { label: "Governance", path: "/governance", icon: Scale },
-    ],
   },
 ];
 
@@ -107,17 +128,18 @@ const ALL_ENTRIES = NAV_GROUPS.flatMap((group) => group.entries);
 const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   decision: ShieldAlert,
   failure: CircleAlert,
+  interrupted: RotateCcw,
   recovering: RotateCcw,
 };
 
 /** The group a route belongs to, shown as context in the header. */
 function locate(pathname: string): { group: string; title: string } {
   if (pathname === "/missions/new") {
-    return { group: "Operate", title: "Open a mission" };
+    return { group: "Work", title: "Open a mission" };
   }
 
   if (pathname.startsWith("/missions/")) {
-    return { group: "Operate", title: "Mission" };
+    return { group: "Work", title: "Execution room" };
   }
 
   if (pathname.startsWith("/workspaces/")) {
@@ -136,14 +158,14 @@ function locate(pathname: string): { group: string; title: string } {
     }
   }
 
-  return { group: "Operate", title: "Command Center" };
+  return { group: "Command", title: "Command Center" };
 }
 
 function Navigation({
-  overview,
+  context,
   onNavigate,
 }: {
-  overview?: CompanyOverview;
+  context: ShellContext;
   onNavigate?: () => void;
 }) {
   return (
@@ -154,7 +176,7 @@ function Navigation({
 
           <div className="space-y-0.5">
             {group.entries.map((entry) => {
-              const count = overview ? entry.badge?.(overview) ?? 0 : 0;
+              const count = entry.badge?.(context) ?? 0;
 
               return (
                 <NavLink
@@ -218,15 +240,26 @@ export default function App() {
   const [paletteIndex, setPaletteIndex] = useState(0);
 
   // The shell reads the same overview every page reads, so the counts in the
-  // rail can never disagree with the surface they point at.
-  const overview = useResource<CompanyOverview>(
+  // rail can never disagree with the surface they point at. Both reads are
+  // kept current by the live channel, so a decision raised by a worker
+  // appears in the rail without anyone touching the page.
+  const overview = useLiveResource<CompanyOverview>(
     useCallback(() => fetchOverview(12), []),
-    { pollMs: 20_000 },
+    { fallbackPollMs: 20_000 },
   );
 
-  const attention = useMemo(
-    () => collectAttention(overview.data),
-    [overview.data],
+  // Ranked by the backend across the whole company, rather than recomputed
+  // here from whichever slice the overview happened to carry.
+  const attention = useLiveResource<AttentionQueue>(
+    useCallback(() => fetchAttention(25), []),
+    { fallbackPollMs: 20_000 },
+  );
+
+  const queue = attention.data;
+  const attentionItems = useMemo(() => queue?.items ?? [], [queue]);
+  const context = useMemo<ShellContext>(
+    () => ({ overview: overview.data, attention: queue }),
+    [overview.data, queue],
   );
 
   useEffect(() => {
@@ -305,13 +338,15 @@ export default function App() {
       }),
     );
 
-    const decisions = (data?.approvals ?? []).map((approval) => ({
-      key: `approval:${approval.id}`,
-      label: approval.action,
-      path: `/missions/${approval.workId}`,
-      icon: ShieldAlert,
-      kind: "Waiting on you",
-    }));
+    const decisions = attentionItems
+      .filter((item) => item.severity === "action")
+      .map((item) => ({
+        key: `attention:${item.id}`,
+        label: item.label,
+        path: `/missions/${item.workId}`,
+        icon: ShieldAlert,
+        kind: "Needs you",
+      }));
 
     const surfaces = ALL_ENTRIES.map((entry) => ({
       key: `surface:${entry.path}`,
@@ -337,10 +372,10 @@ export default function App() {
       ...agents,
       ...recent,
     ].filter((entry) => !needle || entry.label.toLowerCase().includes(needle));
-  }, [paletteQuery, overview.data]);
+  }, [paletteQuery, overview.data, attentionItems]);
 
   const { group, title } = locate(location.pathname);
-  const attentionCount = attention.length;
+  const attentionCount = queue?.actionCount ?? 0;
 
   return (
     <div className="app-shell">
@@ -350,7 +385,7 @@ export default function App() {
         </div>
 
         <div className="sidebar-content">
-          <Navigation overview={overview.data} />
+          <Navigation context={context} />
         </div>
 
         <div className="sidebar-footer">
@@ -394,7 +429,7 @@ export default function App() {
 
         <div className="sidebar-content">
           <Navigation
-            overview={overview.data}
+            context={context}
             onNavigate={() => setMobileOpen(false)}
           />
         </div>
@@ -471,14 +506,16 @@ export default function App() {
               >
                 <ShieldAlert size={13} />
                 <span className="attention-button-label">
-                  {attentionCount > 0 ? summarizeAttention(attention) : "Clear"}
+                  {attentionCount > 0
+                  ? summarizeAttention(attentionItems)
+                  : "Clear"}
                 </span>
                 <kbd>Alt A</kbd>
               </button>
 
               {attentionOpen && (
                 <AttentionPanel
-                  items={attention}
+                  items={attentionItems}
                   onClose={() => setAttentionOpen(false)}
                 />
               )}
@@ -640,9 +677,9 @@ function AttentionPanel({
             return (
               <NavLink
                 key={`${item.kind}:${item.id}`}
-                to={item.to}
+                to={attentionPath(item)}
                 onClick={onClose}
-                className={`attention-item ${toneClass[item.tone]}`}
+                className={`attention-item ${toneClass[attentionTone(item)]}`}
               >
                 <Icon size={13} className="attention-item-icon" />
 
@@ -650,6 +687,9 @@ function AttentionPanel({
                   <span className="attention-item-label">{item.label}</span>
                   <span className="attention-item-detail">{item.detail}</span>
                   <span className="attention-item-consequence">
+                    {item.severity === "watch" && (
+                      <span className="attention-item-tag">no action</span>
+                    )}
                     {item.consequence}
                   </span>
                 </span>

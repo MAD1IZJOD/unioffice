@@ -51,7 +51,7 @@ import { RoomCast } from "../components/room/RoomCast";
 /**
  * The execution room.
  *
- * One operation, watched rather than reviewed. Everything on this page comes
+ * One mission, watched rather than reviewed. Everything on this page comes
  * from a single read the API assembles, kept current by the live channel - so
  * the objective, the plan's shape, who is holding what, the decision that
  * stopped it and the thing it produced are all describing the same instant.
@@ -107,11 +107,11 @@ export default function Room() {
     [reload],
   );
 
-  // An operation opened from the composer starts itself: planned, then
-  // queued, here - so the wait happens where the operation will keep
-  // happening and you watch the plan being written. The ref makes it
-  // once-only under StrictMode; the history entry is rewritten so a refresh
-  // does not replay it.
+  // A mission opened from the composer starts itself: planned, then queued,
+  // here - so the wait happens where the mission will keep happening and you
+  // watch the plan being written. The ref makes it once-only under
+  // StrictMode; the history entry is rewritten so a refresh does not replay
+  // it.
   const started = useRef(false);
   const autostart = Boolean(
     (location.state as { autostart?: boolean } | null)?.autostart,
@@ -141,11 +141,11 @@ export default function Room() {
     return (
       <div className="mx-auto max-w-[1080px] pt-4">
         <Failure
-          headline="This operation could not be opened"
+          headline="This mission could not be opened"
           detail={room.error?.message ?? "The API returned nothing for this id."}
           consequence={
             room.error?.isOffline
-              ? "The operation itself is unaffected — a worker runs it from the queue, not from this page."
+              ? "The mission itself is unaffected — a worker runs it from the queue, not from this page."
               : undefined
           }
           action={
@@ -154,7 +154,7 @@ export default function Room() {
                 Try again
               </button>
               <Link to="/missions" className="button-quiet">
-                Every operation
+                Every mission
               </Link>
             </>
           }
@@ -204,7 +204,7 @@ export default function Room() {
         <div className="operation-inner">
           <Link to="/missions" className="button-quiet mb-7 inline-flex">
             <ArrowLeft size={12} />
-            Every operation
+            Every mission
           </Link>
 
           <div className="operation-eyebrow">
@@ -378,7 +378,7 @@ export default function Room() {
               <Failure
                 headline="That did not go through"
                 detail={actionError}
-                consequence="Nothing was changed. The operation is where it was."
+                consequence="Nothing was changed. The mission is where it was."
               />
             </div>
           )}
@@ -406,7 +406,7 @@ export default function Room() {
                   <div className="detail-label mb-1.5">Interrupted</div>
                   {failure}
                   <div className="mt-2 text-[10.5px] text-[#c9a06a]">
-                    The process stopped, not the operation. Finished steps were
+                    The process stopped, not the mission. Finished steps were
                     kept and it resumes from the first one that did not finish.
                   </div>
                 </div>
@@ -415,7 +415,7 @@ export default function Room() {
                   headline={
                     plan.totalCount === 0
                       ? "The plan was never written"
-                      : "The operation stopped"
+                      : "The mission stopped"
                   }
                   detail={failure}
                   consequence={
@@ -592,12 +592,12 @@ export default function Room() {
               {memories.length > 0 && (
                 <div className={artifacts.length > 0 ? "mt-10" : ""}>
                   <p className="room-headline">
-                    This operation taught the company {memories.length}{" "}
+                    This mission taught the company {memories.length}{" "}
                     {memories.length === 1 ? "thing" : "things"}
                   </p>
                   <p className="room-lead">
                     Agents retrieve from here before starting related work, so
-                    the next operation begins from what this one learned.
+                    the next mission begins from what this one learned.
                   </p>
 
                   <div className="space-y-2">
@@ -650,7 +650,7 @@ function Pulse({
   status: "connecting" | "live" | "offline";
   live: boolean;
 }) {
-  if (!live) return <span className="operation-mark">Operation</span>;
+  if (!live) return <span className="operation-mark">Mission</span>;
 
   return (
     <span className={`pulse pulse-${status}`}>
@@ -664,7 +664,7 @@ function Pulse({
   );
 }
 
-/** Which wash the header carries, from the operation's own state. */
+/** Which wash the header carries, from the mission's own state. */
 function moodOf(state: MissionState): string {
   if (state.phase === "waiting") return "operation-waiting";
   if (state.phase === "delivered") return "operation-done";
@@ -673,7 +673,7 @@ function moodOf(state: MissionState): string {
 }
 
 /**
- * The stations an operation passes through.
+ * The stations a mission passes through.
  *
  * Every one is a state the work rows and the durable queue genuinely report.
  * Nothing here is a step invented to make a progress bar look fuller.

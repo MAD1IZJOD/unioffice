@@ -7,14 +7,14 @@ import { useResource, type Resource } from "./useResource";
 /**
  * Watching the company rather than asking it again.
  *
- * The API keeps one connection open per tab and pushes the events it writes.
- * A surface learns that something happened and re-reads itself; it never
- * rebuilds its own state from the feed, because then there would be two
- * descriptions of what a mission is and they would drift apart on the first
- * event this file had not learned to interpret.
+ * The API keeps the connection open and pushes the events it writes. A
+ * surface learns that something happened and re-reads itself; it never
+ * rebuilds state from the feed, because then there would be two descriptions
+ * of what a mission is and they would drift apart on the first event this
+ * file had not learned to interpret.
  *
  * Polling does not go away - it becomes the safety net. Connected, a surface
- * checks itself every half minute in case a write happened while the socket
+ * checks itself every thirty seconds in case a write landed while the socket
  * was being re-established. Disconnected, it falls back to the interval it
  * used before any of this existed, so a browser or proxy that will not hold
  * an EventSource open degrades to exactly the old behaviour.
@@ -29,52 +29,63 @@ const CONNECTED_POLL_MS = 30_000;
 /** Enough recent events to narrate from; not a second copy of the log. */
 const MAX_BUFFERED_EVENTS = 60;
 
+/**
+ * How long a channel with no subscribers is kept before it is closed.
+ *
+ * StrictMode mounts, unmounts and remounts every component in development, and
+ * navigation unmounts one surface a beat before the next one mounts. Without
+ * this, both would tear down a working connection and immediately open
+ * another - so the grace period is not an optimisation, it is what stops the
+ * channel flapping on every route change.
+ */
+const LINGER_MS = 400;
+
 export type LiveStatus = "connecting" | "live" | "offline";
 
-export interface LiveFeed {
-  status: LiveStatus;
-  /** Increments once per delivered batch. A cheap thing to depend on. */
-  revision: number;
-  /** The most recent events, newest first. Bounded. */
-  events: ActivityEvent[];
-  lastEventAt?: string;
+interface Channel {
+  source: EventSource;
+  events: Set<(events: ActivityEvent[]) => void>;
+  status: Set<(status: LiveStatus) => void>;
+  current: LiveStatus;
+  closing?: ReturnType<typeof setTimeout>;
 }
 
 /**
- * Opens the live channel and reports what arrives.
+ * One connection per thing being watched, shared by everything watching it.
  *
- * `workId` narrows it server-side, so a mission's tab is not sent the whole
- * company's log only to throw most of it away.
+ * The shell watches the whole company and so does the Command Center, which
+ * is one channel between them rather than two identical streams delivering
+ * the same bytes twice to the same tab.
  */
-export function useLiveFeed(
-  options: { workId?: string; enabled?: boolean } = {},
-): LiveFeed {
-  const { workId, enabled = true } = options;
+const channels = new Map<string, Channel>();
 
-  const [connection, setConnection] = useState<LiveStatus>("connecting");
-  const [revision, setRevision] = useState(0);
-  const [events, setEvents] = useState<ActivityEvent[]>([]);
+function join(
+  workId: string | undefined,
+  onEvents: (events: ActivityEvent[]) => void,
+  onStatus: (status: LiveStatus) => void,
+): () => void {
+  const key = workId ?? "";
+  let channel = channels.get(key);
 
-  // Pointing the channel somewhere else starts it over. Adjusted during
-  // render - React's documented alternative to an effect for state derived
-  // from something the component already has - so the first paint after the
-  // change does not show the previous mission's events as if they were this
-  // one's.
-  const [watching, setWatching] = useState(workId);
-
-  if (watching !== workId) {
-    setWatching(workId);
-    setConnection("connecting");
-    setRevision(0);
-    setEvents([]);
-  }
-
-  useEffect(() => {
-    if (!enabled || typeof EventSource === "undefined") return;
-
+  if (channel) {
+    clearTimeout(channel.closing);
+    channel.closing = undefined;
+  } else {
     const source = new EventSource(streamUrl({ workId }));
 
-    source.addEventListener("open", () => setConnection("live"));
+    const created: Channel = {
+      source,
+      events: new Set(),
+      status: new Set(),
+      current: "connecting",
+    };
+
+    const announce = (status: LiveStatus) => {
+      created.current = status;
+      created.status.forEach((listener) => listener(status));
+    };
+
+    source.addEventListener("open", () => announce("live"));
 
     source.addEventListener("activity", (message) => {
       let batch: unknown;
@@ -93,27 +104,105 @@ export function useLiveFeed(
 
       if (!Array.isArray(batch) || batch.length === 0) return;
 
-      setEvents((current) =>
-        [...(batch as ActivityEvent[])]
-          .reverse()
-          .concat(current)
-          .slice(0, MAX_BUFFERED_EVENTS),
+      announce("live");
+      created.events.forEach((listener) =>
+        listener(batch as ActivityEvent[]),
       );
-
-      setRevision((current) => current + 1);
-      setConnection("live");
     });
 
     // EventSource reconnects on its own. This only records that the channel
     // is not carrying anything right now, which is what decides whether the
     // surfaces behind it fall back to polling quickly.
     source.onerror = () => {
-      setConnection(
+      announce(
         source.readyState === EventSource.CLOSED ? "offline" : "connecting",
       );
     };
 
-    return () => source.close();
+    channel = created;
+    channels.set(key, created);
+  }
+
+  const active = channel;
+
+  active.events.add(onEvents);
+  active.status.add(onStatus);
+  onStatus(active.current);
+
+  let left = false;
+
+  return () => {
+    if (left) return;
+    left = true;
+
+    active.events.delete(onEvents);
+    active.status.delete(onStatus);
+
+    if (active.events.size > 0) return;
+
+    active.closing = setTimeout(() => {
+      if (active.events.size > 0) return;
+
+      active.source.close();
+
+      if (channels.get(key) === active) {
+        channels.delete(key);
+      }
+    }, LINGER_MS);
+  };
+}
+
+export interface LiveFeed {
+  status: LiveStatus;
+  /** Increments once per delivered batch. A cheap thing to depend on. */
+  revision: number;
+  /** The most recent events, newest first. Bounded. */
+  events: ActivityEvent[];
+  lastEventAt?: string;
+}
+
+/**
+ * Subscribes to the live channel and reports what arrives.
+ *
+ * `workId` narrows it server-side, so a mission's tab is not sent the whole
+ * company's log only to throw most of it away.
+ */
+export function useLiveFeed(
+  options: { workId?: string; enabled?: boolean } = {},
+): LiveFeed {
+  const { workId, enabled = true } = options;
+
+  const [connection, setConnection] = useState<LiveStatus>("connecting");
+  const [revision, setRevision] = useState(0);
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+
+  // Pointing the feed somewhere else starts it over. Adjusted during render -
+  // React's documented alternative to an effect for state derived from
+  // something the component already has - so the first paint after the change
+  // does not show the previous mission's events as if they were this one's.
+  const [watching, setWatching] = useState(workId);
+
+  if (watching !== workId) {
+    setWatching(workId);
+    setConnection("connecting");
+    setRevision(0);
+    setEvents([]);
+  }
+
+  useEffect(() => {
+    if (!enabled || typeof EventSource === "undefined") return;
+
+    return join(
+      workId,
+      (batch) => {
+        setEvents((current) =>
+          [...batch].reverse().concat(current).slice(0, MAX_BUFFERED_EVENTS),
+        );
+
+        setRevision((current) => current + 1);
+      },
+      setConnection,
+    );
   }, [enabled, workId]);
 
   return {

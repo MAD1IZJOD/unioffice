@@ -404,6 +404,16 @@ export interface AttentionQueue {
   total: number;
 }
 
+/** How far through its plan one mission is. */
+export interface WorkPace {
+  workId: string;
+  total: number;
+  completed: number;
+  running: number;
+  failed: number;
+  progress: number;
+}
+
 export interface CompanyOverview {
   organizationId: string;
   generatedAt: string;
@@ -412,6 +422,8 @@ export interface CompanyOverview {
     byStatus: Record<WorkStatus, number>;
     active: WorkItem[];
     recentlyCompleted: WorkItem[];
+    /** Keyed by mission id, covering `active` and `recentlyCompleted`. */
+    pace: Record<string, WorkPace>;
   };
   tasks: {
     total: number;

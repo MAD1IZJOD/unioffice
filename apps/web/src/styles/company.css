@@ -659,3 +659,168 @@
   display: inline-flex;
   color: var(--blue-ink);
 }
+
+/* ==========================================================================
+   The attention band
+
+   Two groups, drawn apart. Above the rule is stopped until somebody acts;
+   below it is UNI-OFFICE saying what it is doing about something and needing
+   nothing. Listing them together is how an attention queue turns into a wall
+   of red that gets ignored.
+   ========================================================================== */
+
+.attention-band {
+  margin-bottom: 18px;
+}
+
+.attention-band-group {
+  overflow: hidden;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(
+      60% 140% at 0% 0%,
+      rgba(229, 72, 77, 0.09),
+      transparent 62%
+    ),
+    var(--surface-1);
+}
+
+/* Information, not an alarm: blue rather than red, and visually quieter than
+   the group above it. */
+.attention-band-watching {
+  margin-top: 8px;
+  border-color: var(--blue-line);
+  background:
+    radial-gradient(
+      60% 140% at 0% 0%,
+      rgba(59, 130, 246, 0.07),
+      transparent 62%
+    ),
+    var(--surface-1);
+}
+
+.attention-band-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 8px;
+}
+
+.attention-band-eyebrow {
+  color: var(--red-ink);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.attention-band-watching .attention-band-eyebrow {
+  color: var(--blue-ink);
+}
+
+.attention-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 11px 14px;
+  border-top: 1px solid var(--line-subtle);
+  transition: background 0.15s ease;
+}
+
+.attention-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.attention-row-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--tone);
+}
+
+.attention-row-label {
+  display: block;
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.008em;
+  line-height: 1.4;
+}
+
+.attention-row-detail {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ink-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What happens next. An entry without this is a notification; with it, it is
+   something a person can decide about. */
+.attention-row-consequence {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.attention-row-when {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  padding-top: 2px;
+}
+
+.attention-row-go {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--tone);
+  opacity: 0.55;
+}
+
+.attention-row:hover .attention-row-go {
+  opacity: 1;
+}
+
+/* Marks a drawer entry the system is handling itself. */
+.attention-item-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--radius-sm);
+  color: var(--blue-ink);
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* How the page is being kept current. Reported, never decorative. */
+.command-channel {
+  margin-bottom: 16px;
+}
+
+/* How far through its plan a mission is. A thread rather than a progress
+   bar: it belongs to the row, not to a widget. */
+.ledger-pace {
+  display: block;
+  height: 1px;
+  margin-top: 8px;
+  background: var(--line);
+}
+
+.ledger-pace-fill {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  transition: width 0.4s ease;
+}

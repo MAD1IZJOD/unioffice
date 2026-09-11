@@ -10,7 +10,7 @@ import { AgentMark } from "../AgentMark";
 import { StatusPill } from "../primitives";
 
 /**
- * Who is on this operation.
+ * Who is on this mission.
  *
  * An agent is here because the delegator gave it work, never because it
  * exists on the roster - the roster is a different question and has its own
