@@ -34,6 +34,7 @@ import { CompanyOverviewService } from "./company-overview-service.js";
 import { EventRecorder } from "./event-recorder.js";
 import { ExecutionJobRunner } from "./execution-job-runner.js";
 import { ExecutionQueueService } from "./execution-queue-service.js";
+import { ExecutionRoomService } from "./execution-room-service.js";
 import { ExecutionStream } from "./execution-stream.js";
 import { StaleRunReconciler } from "./stale-run-reconciler.js";
 import { TaskExecutionService } from "./task-execution-service.js";
@@ -172,6 +173,22 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRecorder,
   );
 
+  // One read for one operation. Everything the execution room renders comes
+  // from here, so the browser never assembles a mission out of four requests
+  // whose answers were taken at four different moments.
+  const executionRoomService = new ExecutionRoomService(
+    workRepository,
+    taskRepository,
+    eventRepository,
+    artifactRepository,
+    approvalRepository,
+    agentRepository,
+    memoryRepository,
+    workspaceRepository,
+    executionJobRepository,
+    toolRegistry,
+  );
+
   const workRecoveryService = new WorkRecoveryService(
     workRepository,
     taskRepository,
@@ -238,6 +255,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workExecutionService,
     workQueryService,
     executionQueueService,
+    executionRoomService,
     executionStream,
     executionJobRunner,
     workRecoveryService,

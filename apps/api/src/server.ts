@@ -49,6 +49,10 @@ import type {
 } from "./execution-queue-service.js";
 
 import type {
+  ExecutionRoomService,
+} from "./execution-room-service.js";
+
+import type {
   ExecutionStream,
 } from "./execution-stream.js";
 
@@ -93,6 +97,7 @@ export interface ApiServices {
   workQueryService: WorkQueryService;
   workRecoveryService: WorkRecoveryService;
   executionQueueService: ExecutionQueueService;
+  executionRoomService: ExecutionRoomService;
   executionStream: ExecutionStream;
   companyBrainService: CompanyBrainService;
   companyOverviewService: CompanyOverviewService;
@@ -340,6 +345,13 @@ export function buildApiServer(
         );
 
       return { artifacts };
+    });
+
+    // The execution room reads here and nowhere else. Kept separate from
+    // /work/:id/detail, which several surfaces still use for the narrower
+    // answer it gives.
+    instance.get("/work/:id/room", async (request) => {
+      return services.executionRoomService.getRoom(parameterId(request.params));
     });
 
     instance.get("/work/:id/detail", async (request) => {

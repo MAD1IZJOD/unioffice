@@ -26,6 +26,7 @@ function baseServices(overrides: Partial<ApiServices> = {}): ApiServices {
     agentDirectoryService: {} as ApiServices["agentDirectoryService"],
     workRecoveryService: {} as ApiServices["workRecoveryService"],
     executionQueueService: {} as ApiServices["executionQueueService"],
+    executionRoomService: {} as ApiServices["executionRoomService"],
     executionStream: {} as ApiServices["executionStream"],
     toolRegistry: {} as ApiServices["toolRegistry"],
     healthCheck: async () => ({}),
