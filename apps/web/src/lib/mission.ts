@@ -424,6 +424,21 @@ function tell(
       };
 
     case "task.ready":
+      // A reclaimed task is not a step becoming unblocked - it is the system
+      // taking work back from a worker that stopped, which is the one moment
+      // where recovery is visible from the outside. Saying "became
+      // unblocked" here would hide the most reassuring thing the product
+      // does.
+      if (payload.reclaimed === true) {
+        return {
+          act: "execution",
+          tone: "tone-warning",
+          actor,
+          line: `The worker running “${task ?? "a task"}” stopped, so UNI-OFFICE took the step back.`,
+          note: "Nothing finished was lost. Another worker picks it up from here.",
+        };
+      }
+
       return {
         act: "execution",
         tone: "tone-idle",
