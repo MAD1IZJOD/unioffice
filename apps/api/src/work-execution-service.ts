@@ -301,10 +301,16 @@ export class WorkExecutionService {
       // compel one. Neither overrides the other: a model's judgement that a
       // step is consequential is not something a rule should be able to wave
       // away, and a rule is not something a model should be able to skip.
-      const needsApproval =
-        requiresApproval(task) || governed?.outcome === "require_approval";
+      //
+      // Both are satisfied by the same granted approval. Governance is a
+      // rule about whether a person must decide, not a rule that a person
+      // must decide again every time the step is looked at - without this,
+      // an approved step was re-gated by the still-active policy on the very
+      // next pass and the mission sat in waiting_approval forever.
+      const wantsApproval =
+        approvalRequested(task) || governed?.outcome === "require_approval";
 
-      if (needsApproval) {
+      if (wantsApproval && !approvalGranted(task)) {
         if (!this.approvalCoordinator) {
           throw new Error(
             "Task requires approval but no approval coordinator is configured.",
@@ -500,13 +506,25 @@ function withGovernanceReason(
   };
 }
 
-function requiresApproval(task: Task): boolean {
+/** Someone or something has asked for a person to decide this step. */
+function approvalRequested(task: Task): boolean {
+  return approvalField(task).required === true;
+}
+
+/** A person has already decided it, so the requirement is met. */
+function approvalGranted(task: Task): boolean {
+  return approvalField(task).status === "approved";
+}
+
+function approvalField(task: Task): {
+  required?: unknown;
+  status?: unknown;
+} {
   const approval = task.metadata.approval;
 
-  return typeof approval === "object" &&
-    approval !== null &&
-    (approval as Record<string, unknown>).required === true &&
-    (approval as Record<string, unknown>).status !== "approved";
+  return typeof approval === "object" && approval !== null
+    ? (approval as { required?: unknown; status?: unknown })
+    : {};
 }
 
 function errorMessage(error: unknown): string {
