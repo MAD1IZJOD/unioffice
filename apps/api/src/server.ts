@@ -8,6 +8,11 @@ import type {
   AgentType,
   Event,
   OrganizationId,
+  PolicyEffect,
+  PolicyId,
+  PolicyStatus,
+  PolicySubject,
+  RiskLevel,
   ApprovalId,
   UserId,
   WorkId,
@@ -51,6 +56,19 @@ import type {
 import type {
   ExecutionQueueService,
 } from "./execution-queue-service.js";
+
+import type {
+  GovernanceService,
+} from "./governance-service.js";
+
+import {
+  PolicyNotFoundError,
+  PolicyValidationError,
+} from "./governance-service.js";
+
+import type {
+  GovernanceOverviewService,
+} from "./governance-overview-service.js";
 
 import type {
   ExecutionRoomService,
@@ -106,6 +124,8 @@ export interface ApiServices {
   executionStream: ExecutionStream;
   companyBrainService: CompanyBrainService;
   companyOverviewService: CompanyOverviewService;
+  governanceService: GovernanceService;
+  governanceOverviewService: GovernanceOverviewService;
   workspaceService: WorkspaceService;
   agentDirectoryService: AgentDirectoryService;
   toolRegistry: ToolRegistry;
@@ -491,6 +511,93 @@ export function buildApiServer(
     });
   
     // ---------------------------------------------------------------------
+    // Governance.
+    //
+    // Reads and authoring only. Enforcement is not reachable from here - it
+    // happens inside execution, which is the point: a control plane a caller
+    // can talk their way past is not one.
+    // ---------------------------------------------------------------------
+
+    instance.get("/governance", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.governanceOverviewService.getOverview(
+        requiredOrganizationId(services, query.organizationId),
+        { activityLimit: parseOptionalLimit(query.activityLimit) },
+      );
+    });
+
+    instance.get("/policies", async (request) => {
+      const query = objectBody(request.query);
+
+      const policies = await services.governanceService.listPolicies(
+        requiredOrganizationId(services, query.organizationId),
+        { includeArchived: query.includeArchived === "true" },
+      );
+
+      return { policies };
+    });
+
+    instance.get("/policies/:id", async (request) => {
+      const query = objectBody(request.query);
+
+      const policy = await services.governanceService.getPolicy(
+        requiredOrganizationId(services, query.organizationId),
+        parameterId(request.params) as unknown as PolicyId,
+      );
+
+      return { policy };
+    });
+
+    instance.post("/policies", async (request, reply) => {
+      const body = objectBody(request.body);
+
+      const policy = await services.governanceService.createPolicy({
+        organizationId: requiredOrganizationId(services, body.organizationId),
+        name: requiredText(body.name, "name"),
+        description: optionalText(body.description) ?? "",
+        subject: parsePolicySubject(body.subject),
+        effect: parsePolicyEffect(body.effect),
+        risk: parseRiskLevel(body.risk),
+        status: parsePolicyStatus(body.status),
+        scope: parsePolicyScope(body.scope),
+        approvalPrompt: optionalText(body.approvalPrompt),
+        createdBy: optionalText(body.createdBy),
+      });
+
+      return reply.status(201).send({ policy });
+    });
+
+    instance.post("/policies/:id", async (request) => {
+      const body = objectBody(request.body);
+
+      const policy = await services.governanceService.updatePolicy({
+        organizationId: requiredOrganizationId(services, body.organizationId),
+        policyId: parameterId(request.params) as unknown as PolicyId,
+        name: optionalText(body.name),
+        description:
+          body.description === undefined
+            ? undefined
+            : (optionalText(body.description) ?? ""),
+        effect:
+          body.effect === undefined ? undefined : parsePolicyEffect(body.effect),
+        risk: body.risk === undefined ? undefined : parseRiskLevel(body.risk),
+        status: parsePolicyStatus(body.status),
+        scope:
+          body.scope === undefined ? undefined : parsePolicyScope(body.scope),
+        // null clears the prompt; undefined leaves it as it was.
+        approvalPrompt:
+          body.approvalPrompt === undefined
+            ? undefined
+            : body.approvalPrompt === null
+              ? null
+              : (optionalText(body.approvalPrompt) ?? null),
+      });
+
+      return { policy };
+    });
+
+    // ---------------------------------------------------------------------
     // Organization, workspaces and the workforce.
     //
     // Every one of these resolves the organization first and refuses to act
@@ -749,6 +856,86 @@ function withBriefing(
   return { ...metadata, briefing };
 }
 
+function parsePolicySubject(value: unknown): PolicySubject {
+  if (value === "tool" || value === "task") return value;
+
+  throw new ApiError(400, "subject must be tool or task.");
+}
+
+function parsePolicyEffect(value: unknown): PolicyEffect {
+  if (value === "allow" || value === "require_approval" || value === "deny") {
+    return value;
+  }
+
+  throw new ApiError(400, "effect must be allow, require_approval or deny.");
+}
+
+function parseRiskLevel(value: unknown): RiskLevel {
+  if (
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "critical"
+  ) {
+    return value;
+  }
+
+  throw new ApiError(400, "risk must be low, medium, high or critical.");
+}
+
+function parsePolicyStatus(value: unknown): PolicyStatus | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  if (
+    value === "draft" ||
+    value === "active" ||
+    value === "paused" ||
+    value === "archived"
+  ) {
+    return value;
+  }
+
+  throw new ApiError(400, "status must be draft, active, paused or archived.");
+}
+
+/**
+ * A policy scope. Every list is optional, and an omitted one means "not
+ * narrowed that way" - the same reading the engine uses, so an unfilled form
+ * is company-wide rather than inert.
+ */
+function parsePolicyScope(value: unknown): {
+  agentIds: AgentId[];
+  toolIds: string[];
+  workspaceIds: WorkspaceId[];
+  capabilities: string[];
+} {
+  if (value === undefined || value === null) {
+    return { agentIds: [], toolIds: [], workspaceIds: [], capabilities: [] };
+  }
+
+  if (typeof value !== "object") {
+    throw new ApiError(400, "scope must be an object.");
+  }
+
+  const scope = value as Record<string, unknown>;
+
+  return {
+    agentIds: optionalStringArray(scope.agentIds, "scope.agentIds") as AgentId[],
+    toolIds: optionalStringArray(scope.toolIds, "scope.toolIds"),
+    workspaceIds: optionalStringArray(
+      scope.workspaceIds,
+      "scope.workspaceIds",
+    ) as WorkspaceId[],
+    capabilities: optionalStringArray(scope.capabilities, "scope.capabilities"),
+  };
+}
+
+function optionalStringArray(value: unknown, field: string): string[] {
+  if (value === undefined || value === null) return [];
+
+  return stringArray(value, field);
+}
+
 function parseWorkspaceStatus(
   value: unknown,
 ): WorkspaceStatus | undefined {
@@ -963,9 +1150,20 @@ function statusForError(error: Error): number {
 
   if (
     error instanceof WorkspaceValidationError ||
-    error instanceof AgentValidationError
+    error instanceof AgentValidationError ||
+    error instanceof PolicyValidationError
   ) {
     return 400;
+  }
+
+  if (error instanceof PolicyNotFoundError) {
+    return 404;
+  }
+
+  // A duplicate policy name is the author mistyping rather than a server
+  // fault, and the repository already phrases it for them.
+  if (error.message.includes("already exists in this organization")) {
+    return 409;
   }
 
   if (error.message.startsWith("Work not found:")) {
