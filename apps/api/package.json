@@ -15,6 +15,7 @@
     "@unioffice/agents": "workspace:*",
     "@unioffice/core": "workspace:*",
     "@unioffice/database": "workspace:*",
+    "@unioffice/governance": "workspace:*",
     "@unioffice/memory": "workspace:*",
     "@unioffice/orchestrator": "workspace:*",
     "@unioffice/tools": "workspace:*",

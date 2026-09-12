@@ -237,6 +237,9 @@ importers:
       '@unioffice/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@unioffice/governance':
+        specifier: workspace:*
+        version: link:../../packages/governance
       '@unioffice/memory':
         specifier: workspace:*
         version: link:../../packages/memory
