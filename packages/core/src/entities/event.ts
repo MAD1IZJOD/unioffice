@@ -40,7 +40,18 @@ export type EventType =
   | "artifact.updated"
   | "tool.called"
   | "tool.completed"
-  | "tool.failed";
+  | "tool.failed"
+  // Governance. The audit trail is this log rather than a table of its own -
+  // a decision about an action belongs beside the action it was about, and a
+  // separate store would be a second history to keep in step with this one.
+  | "policy.created"
+  | "policy.updated"
+  | "policy.activated"
+  | "policy.paused"
+  | "policy.archived"
+  | "governance.allowed"
+  | "governance.approval_required"
+  | "governance.denied";
 
 export type EventActorType =
   | "user"
