@@ -180,6 +180,15 @@ export function buildApiServer(
         "GET,POST,OPTIONS",
       );
       reply.header("access-control-allow-headers", "content-type");
+
+      // Defence in depth for a JSON API. It should never be framed, its
+      // content type should never be sniffed into something executable, and
+      // it should leak no referrer. CSP frame-ancestors is the modern
+      // clickjacking control; X-Frame-Options covers older clients.
+      reply.header("x-content-type-options", "nosniff");
+      reply.header("x-frame-options", "DENY");
+      reply.header("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+      reply.header("referrer-policy", "no-referrer");
     });
 
     instance.options("/*", async (_request, reply) => {
