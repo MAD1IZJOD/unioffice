@@ -1,0 +1,1013 @@
+/* ==========================================================================
+   The Governance Center
+
+   The control layer of an AI company, not an admin panel. The opening states
+   the one idea the whole subsystem exists for - the company acts, you decide
+   what it may do unattended - and everything below is arranged as the answer
+   to that.
+
+   Colour keeps the meaning it has everywhere else. Red is a rule stopping
+   something or a person being needed. Blue is governance actively applying.
+   Black is the room. Risk on its own is never red: a high-risk action a rule
+   permits is not an alarm, and colouring it as one teaches people to stop
+   reading the colour.
+   ========================================================================== */
+
+.control {
+  --control-gutter: 22px;
+  --control-top: 24px;
+}
+
+/* --------------------------------------------------------------------------
+   The opening
+   -------------------------------------------------------------------------- */
+
+.control-open {
+  position: relative;
+  margin: calc(var(--control-top) * -1) calc(var(--control-gutter) * -1) 0;
+  padding: 44px var(--control-gutter) 42px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(
+      110% 85% at 6% -15%,
+      rgba(255, 255, 255, 0.03),
+      transparent 60%
+    ),
+    var(--surface-0);
+}
+
+/* A vertical rule down the left edge: the boundary, drawn once. Blue only
+   when something is genuinely being enforced. */
+.control-open::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  content: "";
+  background: linear-gradient(
+    to bottom,
+    var(--line-strong),
+    transparent 70%
+  );
+}
+
+.control-open-live::before {
+  background: linear-gradient(to bottom, var(--blue), transparent 70%);
+}
+
+.control-open-live::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: radial-gradient(
+    65% 110% at 0% 0%,
+    rgba(59, 130, 246, 0.08),
+    transparent 58%
+  );
+  animation: control-breathe 8s ease-in-out infinite;
+}
+
+@keyframes control-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.control-open-inner {
+  position: relative;
+  max-width: 1340px;
+  margin: 0 auto;
+}
+
+.control-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* The statement. Two halves of one idea, the second half carrying the weight:
+   the company is autonomous, and a person draws the line. */
+.control-statement {
+  max-width: 16ch;
+  margin: 0;
+  font-size: clamp(30px, 4.4vw, 58px);
+  font-weight: 600;
+  letter-spacing: -0.036em;
+  line-height: 1.02;
+}
+
+.control-statement-line {
+  display: block;
+  color: var(--ink-primary);
+}
+
+.control-statement-line:nth-child(3),
+.control-statement-line:nth-child(4) {
+  color: var(--ink-muted);
+}
+
+.control-statement-accent {
+  color: var(--blue-ink);
+}
+
+.control-lead {
+  max-width: 62ch;
+  margin: 26px 0 0;
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+
+.control-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin-top: 34px;
+}
+
+.control-reading-value {
+  color: var(--ink-primary);
+  font-size: 22px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.control-reading-error .control-reading-live {
+  color: var(--red-ink);
+}
+
+.control-reading-warning .control-reading-live {
+  color: var(--warning);
+}
+
+.control-reading-idle .control-reading-live {
+  color: var(--blue-ink);
+}
+
+.control-reading-label {
+  margin-top: 7px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.control-attention {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 28px;
+  padding: 9px 14px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius);
+  color: var(--red-ink);
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(229, 72, 77, 0.07);
+  transition: background 0.16s ease;
+}
+
+.control-attention:hover {
+  background: rgba(229, 72, 77, 0.13);
+}
+
+/* --------------------------------------------------------------------------
+   Policies
+   -------------------------------------------------------------------------- */
+
+.policy-list {
+  display: grid;
+  gap: 8px;
+}
+
+.policy {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.policy:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+
+/* A rule that is actually being applied is lit; a draft is not. This is the
+   single most important distinction on the page. */
+.policy-live {
+  border-color: var(--tone-line, var(--line-strong));
+}
+
+.policy-head {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 15px 16px;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+.policy-rail {
+  width: 2px;
+  align-self: stretch;
+  flex-shrink: 0;
+  border-radius: 1px;
+  background: var(--tone-line, var(--line));
+}
+
+.policy-live .policy-rail {
+  background: var(--tone, var(--blue));
+}
+
+.policy-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.policy-name {
+  color: var(--ink-primary);
+  font-size: 13.5px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+}
+
+/* The whole rule in one line. Built from the same fields the engine matches
+   on, so what is read here is what the backend will do. */
+.policy-sentence {
+  display: block;
+  max-width: 78ch;
+  margin-top: 6px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.policy-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 10px;
+}
+
+.policy-chevron {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--ink-faint);
+  transition: transform 0.18s ease;
+}
+
+.policy-chevron-open {
+  transform: rotate(180deg);
+}
+
+.policy-body {
+  padding: 0 16px 16px 31px;
+  animation: policy-open 0.18s ease-out;
+}
+
+@keyframes policy-open {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.policy-description {
+  max-width: 76ch;
+  margin: 0 0 14px;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+.policy-detail {
+  display: grid;
+  gap: 1px;
+  margin: 0 0 14px;
+  background: var(--line-subtle);
+}
+
+.policy-detail-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--surface-1);
+}
+
+.policy-detail-label {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.policy-detail-value {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.policy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.policy-live-note {
+  margin: 12px 0 0;
+  color: var(--blue-ink);
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+
+/* --------------------------------------------------------------------------
+   Writing a rule
+   -------------------------------------------------------------------------- */
+
+.composer-sheet {
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(
+      70% 120% at 0% 0%,
+      rgba(59, 130, 246, 0.06),
+      transparent 60%
+    ),
+    var(--surface-2);
+}
+
+.composer-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 0;
+}
+
+.composer-sheet-title {
+  max-width: 24ch;
+  margin: 8px 0 0;
+  color: var(--ink-primary);
+  font-size: clamp(18px, 2.2vw, 25px);
+  font-weight: 620;
+  letter-spacing: -0.028em;
+  line-height: 1.15;
+}
+
+.composer-sheet-body {
+  padding: 22px 18px 4px;
+}
+
+.composer-sheet-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-1);
+}
+
+.policy-field {
+  padding-bottom: 22px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.policy-field:last-child {
+  border-bottom: 0;
+}
+
+.policy-field-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.policy-field-index {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+.policy-field-question {
+  color: var(--ink-primary);
+  font-size: 13.5px;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+}
+
+.policy-field-hint {
+  max-width: 72ch;
+  margin: 6px 0 0 27px;
+  color: var(--ink-muted);
+  font-size: 10.5px;
+  line-height: 1.65;
+}
+
+.policy-field-body {
+  margin: 14px 0 0 27px;
+}
+
+.choice-row {
+  display: grid;
+  gap: 8px;
+}
+
+@media (min-width: 720px) {
+  .choice-row {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+.choice {
+  padding: 12px 13px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.choice:hover {
+  border-color: var(--line-strong);
+}
+
+.choice-active {
+  border-color: var(--tone, var(--blue));
+  background: var(--tone-soft, var(--blue-soft));
+}
+
+.choice-label {
+  display: block;
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.choice-active .choice-label {
+  color: var(--tone, var(--blue-ink));
+}
+
+.choice-detail {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.picker + .picker {
+  margin-top: 14px;
+}
+
+.picker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+}
+
+.picker-label {
+  color: var(--ink-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* "Every agent" rather than a blank: an empty scope means company-wide, and
+   a reader who assumes it means "nothing" has the rule backwards. */
+.picker-state {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.picker-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.picker-option {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  font-size: 10.5px;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.picker-option:hover {
+  border-color: var(--line-strong);
+  color: var(--ink-secondary);
+}
+
+.picker-option-active {
+  border-color: var(--blue-line);
+  color: var(--blue-ink);
+  background: var(--blue-soft);
+}
+
+.policy-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: var(--surface-0);
+  resize: vertical;
+}
+
+.policy-input:focus {
+  border-color: var(--blue-line);
+  outline: none;
+}
+
+.policy-input::placeholder {
+  color: var(--ink-faint);
+}
+
+/* --------------------------------------------------------------------------
+   Who they constrain
+   -------------------------------------------------------------------------- */
+
+.governed-grid {
+  display: grid;
+  gap: 8px;
+}
+
+@media (min-width: 900px) {
+  .governed-grid {
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  }
+}
+
+.governed-agent {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.governed-agent-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.governed-agent-mark {
+  flex-shrink: 0;
+}
+
+.governed-agent-name {
+  display: block;
+  color: var(--ink-primary);
+  font-size: 13.5px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+}
+
+.governed-agent-name:hover {
+  color: var(--blue-ink);
+}
+
+.governed-agent-role {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.governed-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.governed-capability {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  font-size: 9.5px;
+}
+
+.governed-tools {
+  display: grid;
+  gap: 1px;
+  margin: 13px 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--line-subtle);
+}
+
+.governed-tool {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  padding: 9px 10px;
+  background: var(--surface-1);
+  border-left: 2px solid var(--tone-line, var(--line));
+}
+
+.governed-tool-name {
+  color: var(--ink-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.governed-tool-access {
+  color: var(--tone, var(--ink-muted));
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+/* Why, in the backend's own words. A blocked tool that does not name the rule
+   that blocked it is an argument waiting to happen. */
+.governed-tool-why {
+  grid-column: 1 / -1;
+  color: var(--ink-faint);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.governed-empty {
+  margin: 13px 0 0;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+}
+
+.governed-agent-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line-subtle);
+  color: var(--ink-muted);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.governed-count-denied {
+  color: var(--red-ink);
+}
+
+/* --------------------------------------------------------------------------
+   What they can reach
+   -------------------------------------------------------------------------- */
+
+.tool-grid {
+  display: grid;
+  gap: 8px;
+}
+
+@media (min-width: 800px) {
+  .tool-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+.governed-tool-card {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--tone-line, var(--line));
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.governed-tool-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.governed-tool-card-name {
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+}
+
+.governed-tool-card-description {
+  max-width: 60ch;
+  margin: 9px 0 0;
+  color: var(--ink-muted);
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+
+.governed-tool-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 14px;
+}
+
+.governed-fact-value {
+  display: block;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one number that means something was taken away. */
+.governed-fact-warn .governed-fact-value {
+  color: var(--red-ink);
+}
+
+.governed-fact-label {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.governed-tool-card-foot {
+  margin-top: 13px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line-subtle);
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   The audit trail
+   -------------------------------------------------------------------------- */
+
+.audit {
+  display: grid;
+  gap: 1px;
+  background: var(--line-subtle);
+}
+
+.audit-entry {
+  background: var(--surface-1);
+  border-left: 2px solid var(--tone-line, var(--line));
+}
+
+.audit-head {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+.audit-node {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--tone, var(--ink-faint));
+}
+
+/* The sentence. Everything a reader needs without opening anything. */
+.audit-line {
+  display: block;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.audit-actor {
+  color: var(--ink-primary);
+  font-weight: 640;
+}
+
+.audit-outcome {
+  color: var(--tone, var(--ink-primary));
+  font-weight: 640;
+}
+
+.audit-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+
+.audit-link {
+  color: var(--blue-ink);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.audit-link:hover {
+  text-decoration: underline;
+}
+
+.audit-chevron {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--ink-faint);
+  transition: transform 0.18s ease;
+}
+
+.audit-chevron-open {
+  transform: rotate(180deg);
+}
+
+.audit-body {
+  padding: 0 14px 14px 31px;
+  animation: policy-open 0.18s ease-out;
+}
+
+.audit-detail {
+  display: grid;
+  gap: 1px;
+  margin: 0 0 12px;
+  background: var(--line-subtle);
+}
+
+.audit-detail-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 10px;
+  background: var(--surface-2);
+}
+
+.audit-detail-label {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.audit-detail-value {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.audit-reasons {
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+}
+
+.audit-reason {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.audit-reason:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.audit-reason-name {
+  color: var(--ink-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.audit-reason-effect {
+  color: var(--tone, var(--ink-muted));
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-align: right;
+}
+
+.audit-reason-why {
+  grid-column: 1 / -1;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   Narrow screens
+
+   Not a shrunk control room. Risk, the decision and the rule are what a phone
+   is for; the scope pickers and the per-agent tool matrices stack and stay
+   reachable rather than competing for the first screen.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 767px) {
+  .control {
+    --control-gutter: 14px;
+    --control-top: 18px;
+  }
+
+  .control-open {
+    padding-top: 26px;
+  }
+
+  .control-readout {
+    gap: 18px 24px;
+  }
+
+  .policy-field-hint,
+  .policy-field-body {
+    margin-left: 0;
+  }
+
+  .policy-body,
+  .audit-body {
+    padding-left: 14px;
+  }
+
+  .policy-detail-row,
+  .audit-detail-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+
+  .governed-tool {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .governed-tool-access {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-open-live::after,
+  .policy-body,
+  .audit-body {
+    animation: none;
+  }
+}
