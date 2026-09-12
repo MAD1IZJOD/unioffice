@@ -45,3 +45,7 @@ export type MemoryId = string & {
 export type ExecutionJobId = string & {
   readonly __brand: "ExecutionJobId";
 };
+
+export type PolicyId = string & {
+  readonly __brand: "PolicyId";
+};
