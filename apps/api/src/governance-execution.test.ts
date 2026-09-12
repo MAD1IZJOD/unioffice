@@ -397,3 +397,76 @@ test("with no gate configured, execution behaves exactly as it did before", asyn
   assert.equal(result.work.status, "waiting_approval");
   assert.equal(fixture.evaluated.length, 0);
 });
+
+test("an approved step is not gated again by the policy that required it", async () => {
+  // The policy is still active and still says require_approval - that is the
+  // normal state of affairs after someone approves something. Re-gating here
+  // sent the mission back to waiting_approval on every pass and it never
+  // finished. Found by approving a real mission and watching it loop.
+  const fixture = harness({
+    tasks: [
+      task("t1", {
+        metadata: {
+          approval: {
+            required: true,
+            status: "approved",
+            reason: "Confirm the figures before this step runs.",
+          },
+        },
+      }),
+    ],
+    governance: outcome({
+      outcome: "require_approval",
+      summary: "Needs a person under Calculator is supervised.",
+      policyName: "Calculator is supervised",
+    }),
+  });
+
+  const result = await fixture.service.executeWork(workId);
+
+  assert.equal(result.work.status, "completed");
+  assert.equal(
+    fixture.approvalsRequested.length,
+    0,
+    "the granted approval satisfies the policy",
+  );
+});
+
+test("a still-pending approval is not asked for twice", async () => {
+  const fixture = harness({
+    tasks: [
+      task("t1", {
+        metadata: {
+          approval: { required: true, status: "pending", requestId: "ap-1" },
+        },
+      }),
+    ],
+    governance: outcome({ outcome: "require_approval", summary: "Needs a person." }),
+  });
+
+  const result = await fixture.service.executeWork(workId);
+
+  assert.equal(result.work.status, "waiting_approval");
+  assert.equal(fixture.approvalsRequested.length, 1);
+});
+
+test("a denial still stops a step even after it was approved", async () => {
+  // Approval answers "may a person allow this". It does not answer "is this
+  // permitted at all", so a later deny must still bite.
+  const fixture = harness({
+    tasks: [
+      task("t1", {
+        metadata: { approval: { required: true, status: "approved" } },
+      }),
+    ],
+    governance: outcome({
+      outcome: "deny",
+      summary: "No longer permitted.",
+      policyName: "Hard stop",
+    }),
+  });
+
+  const result = await fixture.service.executeWork(workId);
+
+  assert.equal(result.work.status, "failed");
+});
