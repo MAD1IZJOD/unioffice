@@ -45,6 +45,10 @@ import { ResultBody } from "../components/ResultBody";
 import { WorkspaceMark } from "../components/WorkspaceMark";
 
 import { DecisionBand } from "../components/room/DecisionBand";
+import {
+  MissionGovernance,
+  summarizeGovernance,
+} from "../components/room/MissionGovernance";
 import { ExecutionFloor } from "../components/room/ExecutionFloor";
 import { RoomCast } from "../components/room/RoomCast";
 
@@ -190,6 +194,9 @@ export default function Room() {
     const taskId = resource.startsWith("task:") ? resource.slice(5) : undefined;
     return plan.nodes.find((node) => node.taskId === taskId)?.title ?? resource;
   };
+
+  // What the company's rules did to this mission, counted from its own log.
+  const governance = summarizeGovernance(data.events);
 
   const busy = Boolean(action);
   const opening = action === "open";
@@ -399,6 +406,8 @@ export default function Room() {
 
       <div className="room-layout">
         <div className="room-main">
+          <MissionGovernance summary={governance} />
+
           {failure && (
             <div className="mb-8">
               {work.metadata.interrupted ? (
