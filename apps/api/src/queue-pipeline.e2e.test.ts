@@ -482,7 +482,7 @@ test("approving a gated task enqueues durable execution rather than a background
   const pending = [...h.approvals.values()].find((a) => a.status === "pending");
   assert.ok(pending, "the gated task must have requested approval");
 
-  await h.workApprovalService.approve(pending.id, "resolver-1");
+  await h.workApprovalService.approve(pending.id, "resolver-1", organizationId);
   const resumed = await h.executionQueueService.enqueueWork(
     work.id,
     "approval_resumed",

@@ -490,6 +490,7 @@ export function buildApiServer(
       const approval = await services.workApprovalService.approve(
         parameterApprovalId(request.params),
         resolverId(request.body),
+        requiredOrganizationId(services, objectBody(request.body).organizationId),
       );
       // Resuming is a durable enqueue too, so an approval granted while no
       // worker happens to be up is still executed once one starts.
@@ -505,6 +506,7 @@ export function buildApiServer(
       const approval = await services.workApprovalService.reject(
         parameterApprovalId(request.params),
         resolverId(request.body),
+        requiredOrganizationId(services, objectBody(request.body).organizationId),
       );
       return { approval };
     });
@@ -1211,7 +1213,10 @@ function statusForError(error: Error): number {
     return 409;
   }
 
-  if (error.message.startsWith("Work not found:")) {
+  if (
+    error.message.startsWith("Work not found:") ||
+    error.message.startsWith("Approval not found:")
+  ) {
     return 404;
   }
 

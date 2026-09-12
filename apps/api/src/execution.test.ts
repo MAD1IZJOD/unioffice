@@ -880,7 +880,7 @@ test("pauses an approval-gated task and resumes it after approval", async () => 
   assert.equal(paused.tasks[0]?.status, "waiting");
   assert.equal(pending?.status, "pending");
 
-  await approvalService.approve(pending!.id, "user-1");
+  await approvalService.approve(pending!.id, "user-1", organizationId);
   const resumed = await executionService.executeWork(workId);
 
   assert.equal(resumed.work.status, "completed");
@@ -914,11 +914,50 @@ test("fails work when an approval is rejected", async () => {
   const pending = await approvalService.requestApproval(work, task);
   const approvalId = (pending.metadata.approval as { requestId: ApprovalId }).requestId;
 
-  const rejected = await approvalService.reject(approvalId, "user-1");
+  const rejected = await approvalService.reject(approvalId, "user-1", organizationId);
 
   assert.equal(rejected.status, "rejected");
   assert.equal((await taskRepository.findById(task.id))?.status, "failed");
   assert.equal((await workRepository.findById(work.id))?.status, "failed");
+});
+
+test("refuses to resolve an approval from another organization", async () => {
+  const workRepository = new MemoryWorkRepository();
+  const taskRepository = new MemoryTaskRepository();
+  const approvalRepository = new MemoryApprovalRepository();
+  const { recorder } = createRecorder();
+  const work = makeWork();
+  const task = makeTask("task-tenant" as TaskId, {
+    status: "waiting",
+    metadata: { approval: { required: true, reason: "Review", status: "pending" } },
+  });
+  await workRepository.create({ ...work, status: "waiting_approval" });
+  await taskRepository.create(task);
+  const approvalService = new WorkApprovalService(
+    approvalRepository,
+    taskRepository,
+    workRepository,
+    recorder,
+  );
+  const pending = await approvalService.requestApproval(work, task);
+  const approvalId = (pending.metadata.approval as { requestId: ApprovalId }).requestId;
+
+  const otherOrg = "some-other-organization" as OrganizationId;
+
+  // An attacker in another tenant must not be able to approve or reject this
+  // request - approving it would put this org's work onto the queue.
+  await assert.rejects(
+    () => approvalService.approve(approvalId, "attacker", otherOrg),
+    /Approval not found/,
+  );
+  await assert.rejects(
+    () => approvalService.reject(approvalId, "attacker", otherOrg),
+    /Approval not found/,
+  );
+
+  // The request is untouched and still pending for its real owner.
+  assert.equal((await taskRepository.findById(task.id))?.status, "waiting");
+  assert.equal((await workRepository.findById(work.id))?.status, "waiting_approval");
 });
 
 test("resolves a pending approval exactly once under concurrent decisions", async () => {
@@ -945,8 +984,8 @@ test("resolves a pending approval exactly once under concurrent decisions", asyn
   // Both deciders read the approval while it is still pending, so both clear
   // the pre-check. Only the conditional write may take effect.
   const [approveResult, rejectResult] = await Promise.allSettled([
-    approvalService.approve(approvalId, "user-1"),
-    approvalService.reject(approvalId, "user-2"),
+    approvalService.approve(approvalId, "user-1", organizationId),
+    approvalService.reject(approvalId, "user-2", organizationId),
   ]);
 
   const outcomes = [approveResult, rejectResult];

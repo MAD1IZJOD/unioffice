@@ -2,6 +2,7 @@ import {
   createEntityId,
   type ApprovalId,
   type ApprovalRequest,
+  type OrganizationId,
   type Task,
   type Work,
 } from "@unioffice/core";
@@ -117,8 +118,12 @@ export class WorkApprovalService implements ApprovalCoordinator {
   async approve(
     approvalId: ApprovalId,
     resolvedBy: string,
+    organizationId: OrganizationId,
   ): Promise<ApprovalRequest> {
-    const { approval, task, work } = await this.loadPendingApproval(approvalId);
+    const { approval, task, work } = await this.loadPendingApproval(
+      approvalId,
+      organizationId,
+    );
     const now = new Date();
     // Claim the transition first. If another decider already won, we must not
     // run any of the task/work/event side effects below.
@@ -173,8 +178,12 @@ export class WorkApprovalService implements ApprovalCoordinator {
   async reject(
     approvalId: ApprovalId,
     resolvedBy: string,
+    organizationId: OrganizationId,
   ): Promise<ApprovalRequest> {
-    const { approval, task, work } = await this.loadPendingApproval(approvalId);
+    const { approval, task, work } = await this.loadPendingApproval(
+      approvalId,
+      organizationId,
+    );
     const now = new Date();
     // Same claim-before-effects ordering as approve().
     const resolvedApproval = await this.approvalRepository.resolvePending({
@@ -234,12 +243,25 @@ export class WorkApprovalService implements ApprovalCoordinator {
     return resolvedApproval;
   }
 
-  private async loadPendingApproval(approvalId: ApprovalId): Promise<{
+  private async loadPendingApproval(
+    approvalId: ApprovalId,
+    organizationId: OrganizationId,
+  ): Promise<{
     approval: ApprovalRequest;
     task: Task;
     work: Work;
   }> {
     const approval = await this.getApproval(approvalId);
+
+    // A decision may only be made within the organization that owns the
+    // approval. Without this, anyone could approve or reject any tenant's
+    // pending request by id - and an approval, once granted, puts that
+    // tenant's work straight onto the execution queue. Reported as not-found
+    // so a foreign approval is indistinguishable from one that never existed.
+    if (approval.organizationId !== organizationId) {
+      throw new Error(`Approval not found: ${approvalId}`);
+    }
+
     // Cheap pre-check only. resolvePending is what actually enforces the
     // invariant, because this read cannot be atomic with the later write.
     if (approval.status !== "pending") {
