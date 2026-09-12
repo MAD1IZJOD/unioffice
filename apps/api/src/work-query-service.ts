@@ -64,6 +64,29 @@ export class WorkQueryService {
     return work;
   }
 
+  /**
+   * Confirms a work item belongs to the caller's organization before any
+   * route touches it.
+   *
+   * The per-work routes take a bare UUID, so without this a caller could read
+   * or drive any organization's work by guessing or leaking an id. A
+   * mismatch is reported as "not found", identical to a genuinely missing
+   * row, so the endpoint never confirms that some other organization's work
+   * exists. Every /work/:id handler runs this first.
+   */
+  async assertWorkInOrganization(
+    workId: WorkId,
+    organizationId: OrganizationId,
+  ): Promise<Work> {
+    const work = await this.workRepository.findById(workId);
+
+    if (!work || work.organizationId !== organizationId) {
+      throw new Error(`Work not found: ${workId}`);
+    }
+
+    return work;
+  }
+
   async getTasks(workId: WorkId): Promise<Task[]> {
     await this.getWork(workId);
 
