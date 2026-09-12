@@ -12,6 +12,7 @@ import {
   SupabaseExecutionJobRepository,
   SupabaseMemoryRepository,
   SupabaseOrganizationRepository,
+  SupabasePolicyRepository,
   SupabaseTaskRepository,
   SupabaseWorkRepository,
   SupabaseWorkspaceRepository,
@@ -28,6 +29,10 @@ import {
 import { createDefaultToolRegistry } from "@unioffice/tools";
 
 import { AgentDirectoryService } from "./agent-directory-service.js";
+import { GovernanceOverviewService } from "./governance-overview-service.js";
+import { GovernanceService } from "./governance-service.js";
+import { GovernanceToolGuard } from "./governance-tool-guard.js";
+import { PolicyTaskGovernanceGate } from "./task-governance-gate.js";
 import { AttentionService } from "./attention-service.js";
 import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
@@ -69,6 +74,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const eventRepository = new SupabaseEventRepository(supabase);
   const memoryRepository = new SupabaseMemoryRepository(supabase);
   const executionJobRepository = new SupabaseExecutionJobRepository(supabase);
+  const policyRepository = new SupabasePolicyRepository(supabase);
   const workspaceRepository = new SupabaseWorkspaceRepository(supabase);
 
   const eventRecorder = new EventRecorder(eventRepository);
@@ -78,17 +84,31 @@ export function createExecutionRuntime(config: ApiConfig) {
     memoryRetriever,
   );
 
+  const toolRegistry = createDefaultToolRegistry();
+
+  // Governance is built before the agent runtime because the runtime's tool
+  // executor takes the guard at construction. That ordering is the reason a
+  // tool call cannot be made without passing through governance: there is no
+  // configuration in which the executor exists without it.
+  const governanceService = new GovernanceService(
+    policyRepository,
+    toolRegistry,
+    eventRecorder,
+  );
+
+  const governanceToolGuard = new GovernanceToolGuard(governanceService);
+
   const modelProvider = new OllamaModelProvider({
     baseUrl: config.ollamaBaseUrl,
     defaultModel: config.ollamaModel,
   });
   const planner = new OllamaPlanner(modelProvider, config.ollamaModel);
   const delegator = new DefaultDelegator(agentRepository);
-  const toolRegistry = createDefaultToolRegistry();
   const agentRuntime = new DefaultAgentRuntime(modelProvider, {
     model: config.ollamaModel,
     think: false,
     toolRegistry,
+    toolGuard: governanceToolGuard,
     // A genuinely multi-step deterministic task (e.g. a month-by-month
     // projection) needs one tool call per step; 3 was too tight for real
     // work and only ever exercised in unit tests with a single call.
@@ -132,12 +152,18 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRecorder,
   );
 
+  const taskGovernanceGate = new PolicyTaskGovernanceGate(
+    governanceService,
+    agentRepository,
+  );
+
   const workExecutionService = new WorkExecutionService(
     workRepository,
     taskRepository,
     taskExecutionService,
     eventRecorder,
     workApprovalService,
+    taskGovernanceGate,
   );
 
   const workQueryService = new WorkQueryService(
@@ -214,6 +240,15 @@ export function createExecutionRuntime(config: ApiConfig) {
     toolRegistry,
   );
 
+  const governanceOverviewService = new GovernanceOverviewService(
+    policyRepository,
+    agentRepository,
+    approvalRepository,
+    eventRepository,
+    workspaceRepository,
+    toolRegistry,
+  );
+
   const workspaceService = new WorkspaceService(
     workspaceRepository,
     organizationRepository,
@@ -255,6 +290,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRepository,
     memoryRepository,
     executionJobRepository,
+    policyRepository,
     eventRecorder,
     toolRegistry,
     applicationService,
@@ -271,6 +307,9 @@ export function createExecutionRuntime(config: ApiConfig) {
     workRecoveryService,
     companyBrainService,
     companyOverviewService,
+    governanceService,
+    governanceOverviewService,
+    taskGovernanceGate,
     workspaceService,
     agentDirectoryService,
     staleRunReconciler,
