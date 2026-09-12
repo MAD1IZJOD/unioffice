@@ -376,6 +376,150 @@ export type AttentionKind =
  */
 export type AttentionSeverity = "action" | "watch";
 
+/* --------------------------------------------------------------------------
+   Governance.
+
+   What the company is allowed to do, who decided, and why. Every shape here
+   mirrors a backend response - the browser renders decisions, it never makes
+   one.
+   -------------------------------------------------------------------------- */
+
+export type PolicySubject = "tool" | "task";
+
+export type PolicyEffect = "allow" | "require_approval" | "deny";
+
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+
+export type PolicyStatus = "draft" | "active" | "paused" | "archived";
+
+export interface PolicyScope {
+  agentIds: string[];
+  toolIds: string[];
+  workspaceIds: string[];
+  capabilities: string[];
+}
+
+export interface PolicyItem {
+  id: string;
+  organizationId: string;
+  name: string;
+  description: string;
+  subject: PolicySubject;
+  scope: PolicyScope;
+  effect: PolicyEffect;
+  risk: RiskLevel;
+  status: PolicyStatus;
+  approvalPrompt?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  metadata: Record<string, unknown>;
+}
+
+export type ToolAccess =
+  | "allowed"
+  | "requires_approval"
+  | "denied"
+  | "not_granted";
+
+export interface GovernedAgent {
+  agentId: string;
+  name: string;
+  type: AgentSummary["type"];
+  status: AgentSummary["status"];
+  capabilities: string[];
+  tools: Array<{
+    toolId: string;
+    name: string;
+    access: ToolAccess;
+    risk: RiskLevel;
+    policyNames: string[];
+    explanation: string;
+  }>;
+  policyIds: string[];
+  deniedCount: number;
+  approvalRequiredCount: number;
+}
+
+export interface GovernedTool {
+  toolId: string;
+  name: string;
+  description: string;
+  risk: RiskLevel;
+  grantedAgentCount: number;
+  permittedAgentCount: number;
+  policyIds: string[];
+  policyNames: string[];
+  callCount: number;
+  blockedCount: number;
+}
+
+export interface GovernanceDecisionRecord {
+  eventId: string;
+  at: string;
+  outcome: "allowed" | "approval_required" | "denied";
+  action: string;
+  risk: RiskLevel;
+  summary: string;
+  policyId?: string;
+  policyName?: string;
+  agentId?: string;
+  agentName?: string;
+  workId?: string;
+  taskId?: string;
+  reasons: Array<{
+    policyId?: string;
+    policyName: string;
+    effect: string;
+    risk: string;
+    explanation: string;
+  }>;
+}
+
+export interface GovernanceOverview {
+  organizationId: string;
+  generatedAt: string;
+  policies: PolicyItem[];
+  counts: {
+    active: number;
+    draft: number;
+    paused: number;
+    denying: number;
+    gating: number;
+    agentsGoverned: number;
+    toolsGoverned: number;
+    pendingApprovals: number;
+    deniedRecently: number;
+  };
+  agents: GovernedAgent[];
+  tools: GovernedTool[];
+  decisions: GovernanceDecisionRecord[];
+  changes: ActivityEvent[];
+  pendingApprovals: ApprovalItem[];
+}
+
+export interface NewPolicy {
+  name: string;
+  description: string;
+  subject: PolicySubject;
+  effect: PolicyEffect;
+  risk: RiskLevel;
+  status?: PolicyStatus;
+  scope?: Partial<PolicyScope>;
+  approvalPrompt?: string;
+}
+
+export interface PolicyChanges {
+  name?: string;
+  description?: string;
+  effect?: PolicyEffect;
+  risk?: RiskLevel;
+  status?: PolicyStatus;
+  scope?: Partial<PolicyScope>;
+  /** null clears the prompt; undefined leaves it alone. */
+  approvalPrompt?: string | null;
+}
+
 export interface AttentionItem {
   id: string;
   kind: AttentionKind;
@@ -572,6 +716,50 @@ function scoped(path: string, params: Record<string, string | number | undefined
 
 export async function fetchOverview(activityLimit = 40): Promise<CompanyOverview> {
   return get<CompanyOverview>(scoped("/overview", { activityLimit }), 60_000);
+}
+
+export async function fetchGovernance(
+  activityLimit = 200,
+): Promise<GovernanceOverview> {
+  return get<GovernanceOverview>(
+    scoped("/governance", { activityLimit }),
+    60_000,
+  );
+}
+
+export async function fetchPolicies(
+  includeArchived = false,
+): Promise<PolicyItem[]> {
+  const data = await get<{ policies: PolicyItem[] }>(
+    scoped("/policies", {
+      includeArchived: includeArchived ? "true" : undefined,
+    }),
+  );
+
+  return data.policies;
+}
+
+export async function createPolicy(policy: NewPolicy): Promise<PolicyItem> {
+  const data = await post<{ policy: PolicyItem }>(
+    "/policies",
+    { organizationId: organizationId(), ...policy },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.policy;
+}
+
+export async function updatePolicy(
+  policyId: string,
+  changes: PolicyChanges,
+): Promise<PolicyItem> {
+  const data = await post<{ policy: PolicyItem }>(
+    `/policies/${policyId}`,
+    { organizationId: organizationId(), ...changes },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.policy;
 }
 
 export async function fetchAttention(limit = 25): Promise<AttentionQueue> {
