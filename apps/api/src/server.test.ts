@@ -40,15 +40,18 @@ function baseServices(overrides: Partial<ApiServices> = {}): ApiServices {
 
 test("returns a generic message for an unmapped internal error, never the raw error", async () => {
   const workQueryService = {
-    getWork: async () => {
+    assertWorkInOrganization: async () => {
       throw new Error("Sensitive internal detail: password=hunter2 host=db.internal");
     },
   } as unknown as WorkQueryService;
-  const app = buildApiServer(baseServices({ workQueryService }));
+  const app = buildApiServer(baseServices({
+    workQueryService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
 
   const response = await app.inject({
     method: "GET",
-    url: "/work/11111111-1111-1111-1111-111111111111",
+    url: "/work/11111111-1111-1111-1111-111111111111?organizationId=org-1",
   });
 
   assert.equal(response.statusCode, 500);
@@ -60,15 +63,18 @@ test("returns a generic message for an unmapped internal error, never the raw er
 
 test("still returns the specific message for an intentional not-found error", async () => {
   const workQueryService = {
-    getWork: async (id: WorkId) => {
+    assertWorkInOrganization: async (id: WorkId) => {
       throw new Error(`Work not found: ${id}`);
     },
   } as unknown as WorkQueryService;
-  const app = buildApiServer(baseServices({ workQueryService }));
+  const app = buildApiServer(baseServices({
+    workQueryService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
 
   const response = await app.inject({
     method: "GET",
-    url: "/work/22222222-2222-2222-2222-222222222222",
+    url: "/work/22222222-2222-2222-2222-222222222222?organizationId=org-1",
   });
 
   assert.equal(response.statusCode, 404);

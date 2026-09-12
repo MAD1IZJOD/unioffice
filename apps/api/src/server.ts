@@ -162,27 +162,27 @@ export function buildApiServer(
 
     instance.addHook("onRequest", async (request, reply) => {
       const origin = request.headers.origin;
-  
+
       if (origin && services.corsOrigins.includes(origin)) {
         reply.header("access-control-allow-origin", origin);
         reply.header("vary", "Origin");
       }
-  
+
       reply.header(
         "access-control-allow-methods",
         "GET,POST,OPTIONS",
       );
       reply.header("access-control-allow-headers", "content-type");
     });
-  
+
     instance.options("/*", async (_request, reply) => {
       return reply.status(204).send();
     });
-  
+
     instance.setErrorHandler((error, request, reply) => {
       const resolvedError = toError(error);
       const statusCode = statusForError(resolvedError);
-  
+
       // Only intentionally client-facing errors (ApiError, domain 404/409s)
       // carry a message safe to return as-is. An unmapped error could be
       // anything bubbling up from the database driver or model provider, so
@@ -190,11 +190,11 @@ export function buildApiServer(
       const message = statusCode === 500
         ? "An internal error occurred."
         : resolvedError.message;
-  
+
       if (statusCode === 500) {
         request.log.error(resolvedError);
       }
-  
+
       return reply.status(statusCode).send({
         error: {
           code: errorCode(statusCode),
@@ -202,7 +202,7 @@ export function buildApiServer(
         },
       });
     });
-  
+
     instance.get("/health", healthHandler(services));
     instance.post("/health", healthHandler(services));
 
@@ -297,7 +297,7 @@ export function buildApiServer(
       request.raw.on("close", close);
       request.raw.on("error", close);
     });
-  
+
     instance.post("/work", async (request, reply) => {
       const body = objectBody(request.body);
       const input: CreateWorkInput = {
@@ -318,13 +318,13 @@ export function buildApiServer(
           parseBriefing(body.briefing),
         ),
       };
-  
+
       const work =
         await services.applicationService.createWork(input);
-  
+
       return reply.status(201).send({ work });
     });
-  
+
     instance.get("/work", async (request) => {
       const query = objectBody(request.query);
       const work = await services.workQueryService.listWork(
@@ -388,11 +388,12 @@ export function buildApiServer(
     // /work/:id/detail, which several surfaces still use for the narrower
     // answer it gives.
     instance.get("/work/:id/room", async (request) => {
-      return services.executionRoomService.getRoom(parameterId(request.params));
+      const workId = await authorizedWorkId(services, request);
+      return services.executionRoomService.getRoom(workId);
     });
 
     instance.get("/work/:id/detail", async (request) => {
-      const workId = parameterId(request.params);
+      const workId = await authorizedWorkId(services, request);
       const [detail, job] = await Promise.all([
         services.workQueryService.getWorkDetail(workId),
         services.executionQueueService.getActiveJob(workId),
@@ -404,32 +405,30 @@ export function buildApiServer(
     });
 
     instance.get("/work/:id", async (request) => {
-      const work = await services.workQueryService.getWork(
+      const work = await services.workQueryService.assertWorkInOrganization(
         parameterId(request.params),
+        requiredOrganizationId(services, objectBody(request.query).organizationId),
       );
-  
+
       return { work };
     });
-  
+
     instance.post("/work/:id/plan", async (request) => {
-      return services.workService.planWork(
-        parameterId(request.params),
-      );
+      const workId = await authorizedWorkId(services, request);
+      return services.workService.planWork(workId);
     });
-  
+
     // Puts the work on the durable queue and returns immediately. A worker
     // executes it, so the run no longer depends on this process staying
     // alive. Callers watch progress through /work/:id/detail, which reads the
     // same rows the worker is writing.
     instance.post("/work/:id/execute", async (request) => {
-      return services.executionQueueService.enqueueWork(
-        parameterId(request.params),
-        "requested",
-      );
+      const workId = await authorizedWorkId(services, request);
+      return services.executionQueueService.enqueueWork(workId, "requested");
     });
-  
+
     instance.post("/work/:id/retry", async (request) => {
-      const workId = parameterId(request.params);
+      const workId = await authorizedWorkId(services, request);
       const retried = await services.workRecoveryService.retryWork(workId);
 
       // A retry that only reset rows would sit there until someone pressed
@@ -449,35 +448,35 @@ export function buildApiServer(
 
     instance.get("/work/:id/tasks", async (request) => {
       const tasks = await services.workQueryService.getTasks(
-        parameterId(request.params),
+        await authorizedWorkId(services, request),
       );
-  
+
       return { tasks };
     });
-  
+
     instance.get("/work/:id/events", async (request) => {
       const events = await services.workQueryService.getEvents(
-        parameterId(request.params),
+        await authorizedWorkId(services, request),
       );
-  
+
       return { events };
     });
-  
+
     instance.get("/work/:id/artifacts", async (request) => {
       const artifacts = await services.workQueryService.getArtifacts(
-        parameterId(request.params),
+        await authorizedWorkId(services, request),
       );
-  
+
       return { artifacts };
     });
-  
+
     instance.get("/work/:id/approvals", async (request) => {
       const approvals = await services.workApprovalService.getWorkApprovals(
-        parameterId(request.params),
+        await authorizedWorkId(services, request),
       );
       return { approvals };
     });
-  
+
     instance.get("/approvals", async (request) => {
       const query = objectBody(request.query);
       const approvals = await services.workApprovalService.getPendingApprovals(
@@ -486,7 +485,7 @@ export function buildApiServer(
 
       return { approvals };
     });
-  
+
     instance.post("/approvals/:id/approve", async (request) => {
       const approval = await services.workApprovalService.approve(
         parameterApprovalId(request.params),
@@ -501,7 +500,7 @@ export function buildApiServer(
 
       return { approval, ...execution };
     });
-  
+
     instance.post("/approvals/:id/reject", async (request) => {
       const approval = await services.workApprovalService.reject(
         parameterApprovalId(request.params),
@@ -509,7 +508,7 @@ export function buildApiServer(
       );
       return { approval };
     });
-  
+
     // ---------------------------------------------------------------------
     // Governance.
     //
@@ -721,7 +720,7 @@ export function buildApiServer(
 
       return { agents };
     });
-  
+
     instance.get("/activity", async (request) => {
       const query = objectBody(request.query);
       const events = await services.workQueryService.getOrganizationActivity(
@@ -731,7 +730,7 @@ export function buildApiServer(
 
       return { events };
     });
-  
+
     instance.get("/memory", async (request) => {
       const query = objectBody(request.query);
       const organizationId = requiredOrganizationId(
@@ -1052,6 +1051,32 @@ function objectBody(body: unknown): Record<string, unknown> {
   }
 
   return body as Record<string, unknown>;
+}
+
+/**
+ * The work id in the route, confirmed to belong to the caller's organization.
+ *
+ * Every /work/:id handler runs this before doing anything. It is the single
+ * choke point that turns a bare, guessable UUID into an authorized reference,
+ * so a new per-work route cannot silently ship without the check - it has no
+ * other way to get the id.
+ */
+async function authorizedWorkId(
+  services: ApiServices,
+  request: { params: unknown; query: unknown },
+): Promise<WorkId> {
+  const workId = parameterId(request.params);
+  const organizationId = requiredOrganizationId(
+    services,
+    objectBody(request.query).organizationId,
+  );
+
+  await services.workQueryService.assertWorkInOrganization(
+    workId,
+    organizationId,
+  );
+
+  return workId;
 }
 
 function parameterId(params: unknown): WorkId {
