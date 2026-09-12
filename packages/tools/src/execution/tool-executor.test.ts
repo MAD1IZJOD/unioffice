@@ -118,3 +118,105 @@ test("captures a validate() that throws instead of crashing the caller", async (
   assert.equal(result.error?.code, "TOOL_INPUT_INVALID");
   assert.match(result.error?.message ?? "", /cannot read property of undefined/);
 });
+
+/* --------------------------------------------------------------------------
+   Governance.
+
+   The guard narrows what an agent may do. It runs after the registry and the
+   agent's own grants, and it can only ever take permission away.
+   -------------------------------------------------------------------------- */
+
+function registryWithEcho(): DefaultToolRegistry {
+  const registry = new DefaultToolRegistry();
+  registry.register(echoTool);
+  return registry;
+}
+
+test("a guard that allows the call leaves execution untouched", async () => {
+  const executor = new ToolExecutor(registryWithEcho(), {
+    async check() {
+      return { outcome: "allow", reason: "No policy restricts this." };
+    },
+  });
+
+  const result = await executor.execute("echo", { text: "hi" }, context());
+
+  assert.equal(result.status, "completed");
+  assert.deepEqual(result.output, { text: "hi" });
+});
+
+test("a guard that denies the call stops it and names the policy", async () => {
+  const executor = new ToolExecutor(registryWithEcho(), {
+    async check() {
+      return {
+        outcome: "deny",
+        reason: "Echo is not permitted outside the engineering workspace.",
+        policyId: "policy-1",
+        policyName: "Workspace tool boundary",
+      };
+    },
+  });
+
+  const result = await executor.execute("echo", { text: "hi" }, context());
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error?.code, "TOOL_DENIED_BY_POLICY");
+  assert.equal(
+    result.error?.message,
+    "Echo is not permitted outside the engineering workspace.",
+  );
+  assert.equal(result.deniedBy?.policyName, "Workspace tool boundary");
+  assert.equal(result.output, undefined);
+});
+
+test("a guard is never asked about a tool the agent was not granted", async () => {
+  let asked = false;
+
+  const executor = new ToolExecutor(registryWithEcho(), {
+    async check() {
+      asked = true;
+      return { outcome: "allow", reason: "" };
+    },
+  });
+
+  const result = await executor.execute("echo", { text: "hi" }, context([]));
+
+  assert.equal(result.error?.code, "TOOL_NOT_AUTHORIZED");
+  assert.equal(asked, false, "the grant check must settle this first");
+});
+
+test("a guard cannot grant a tool the registry does not have", async () => {
+  const executor = new ToolExecutor(new DefaultToolRegistry(), {
+    async check() {
+      return { outcome: "allow", reason: "Governance says yes." };
+    },
+  });
+
+  const result = await executor.execute("echo", { text: "hi" }, context());
+
+  assert.equal(result.error?.code, "TOOL_NOT_FOUND");
+});
+
+test("a guard that throws refuses the call rather than waving it through", async () => {
+  const executor = new ToolExecutor(registryWithEcho(), {
+    async check() {
+      throw new Error("the policy store is unreachable");
+    },
+  });
+
+  const result = await executor.execute("echo", { text: "hi" }, context());
+
+  // The unsafe reading of "governance is unavailable" is that the call is
+  // fine. This asserts the safe one.
+  assert.equal(result.status, "failed");
+  assert.equal(result.error?.code, "TOOL_DENIED_BY_POLICY");
+  assert.match(result.error?.message ?? "", /could not be consulted/);
+});
+
+test("without a guard the executor behaves exactly as it did before", async () => {
+  const executor = new ToolExecutor(registryWithEcho());
+
+  const result = await executor.execute("echo", { text: "hi" }, context());
+
+  assert.equal(result.status, "completed");
+});
