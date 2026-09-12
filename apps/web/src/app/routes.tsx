@@ -8,9 +8,9 @@ import Approvals from "../pages/Approvals";
 import Artifacts from "../pages/Artifacts";
 import Brain from "../pages/Brain";
 import Command from "../pages/Command";
+import Governance from "../pages/Governance";
 import MissionStart from "../pages/MissionStart";
 import Missions from "../pages/Missions";
-import NotBuilt from "../pages/NotBuilt";
 import Room from "../pages/Room";
 import Organization from "../pages/Organization";
 import Tools from "../pages/Tools";
@@ -48,21 +48,7 @@ export const router = createBrowserRouter([
       { path: "activity", element: <Activity /> },
       { path: "organization", element: <Organization /> },
       { path: "workspaces/:workspaceId", element: <Workspace /> },
-      {
-        path: "governance",
-        element: (
-          <NotBuilt
-            title="Governance"
-            description="Policies, permissions and the audit trail that constrain what agents may do."
-            planned={[
-              "Policies that decide which actions require approval, instead of the planner deciding per task",
-              "Per-agent permission grants beyond tool authorization",
-              "A queryable audit trail over the existing event log",
-              "Spend and rate limits per agent and per workspace",
-            ]}
-          />
-        ),
-      },
+      { path: "governance", element: <Governance /> },
     ],
   },
 ]);
