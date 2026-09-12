@@ -76,6 +76,8 @@ export const datetimeTool: ToolDefinition<
   description:
     "Deterministic date facts. 'describe' returns the weekday, month and day-of-year for a date - use it for any 'what day of the week' question. Also reads the current time ('now'), shifts a timestamp ('add'), or measures the gap between two ('diff').",
   version: "1.0.0",
+  // Reads the clock and does date arithmetic. No reach beyond the process.
+  risk: "low",
   inputSchema: {
     type: "object",
     required: ["operation"],
