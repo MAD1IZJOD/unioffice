@@ -773,6 +773,7 @@ test("executes independent ready tasks concurrently", async () => {
     taskExecutionService,
     recorder,
     undefined,
+    undefined,
     2,
   );
 
@@ -816,6 +817,7 @@ test("limits independent task fan-out to the configured concurrency", async () =
     taskRepository,
     taskExecutionService,
     recorder,
+    undefined,
     undefined,
     2,
   );
