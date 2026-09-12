@@ -321,9 +321,11 @@ export function buildApiServer(
           services,
           body.organizationId,
         ),
-        requesterId:
-          (optionalText(body.requesterId) ??
-            developmentRequesterId) as UserId,
+        // The requester is the authenticated caller, not a field they get to
+        // fill in. There is no auth yet, so it is the seeded development
+        // requester; a caller-supplied requesterId used to be honoured, which
+        // is authorship spoofing waiting to matter the day identity lands.
+        requesterId: developmentRequesterId,
         objective: requiredText(body.objective, "objective", 4_000),
         priority: parsePriority(body.priority),
         workspaceId: optionalText(body.workspaceId) as
