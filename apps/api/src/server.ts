@@ -313,10 +313,13 @@ export function buildApiServer(
         workspaceId: optionalText(body.workspaceId) as
           | CreateWorkInput["workspaceId"]
           | undefined,
-        metadata: withBriefing(
-          objectMetadata(body.metadata),
-          parseBriefing(body.briefing),
-        ),
+        // The only context a caller may attach is the briefing, which is
+        // parsed and length-bounded on its own. A free-form metadata object
+        // used to be accepted verbatim here, which let a request seed the
+        // very fields the pipeline writes itself - interrupted, retry,
+        // executionError - and grow the row without bound. Everything else on
+        // work.metadata is set by the system, so nothing else is read in.
+        metadata: withBriefing(undefined, parseBriefing(body.briefing)),
       };
 
       const work =
@@ -1165,19 +1168,6 @@ function parsePriority(value: unknown): WorkPriority | undefined {
   throw new ApiError(400, "priority is invalid.");
 }
 
-function objectMetadata(
-  value: unknown,
-): Record<string, unknown> | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "object" || value === null) {
-    throw new ApiError(400, "metadata must be an object.");
-  }
-
-  return value as Record<string, unknown>;
-}
 
 function statusForError(error: Error): number {
   if (error instanceof ApiError) {
