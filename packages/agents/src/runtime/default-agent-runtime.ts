@@ -17,6 +17,7 @@ import type {
 import {
   ToolExecutor,
   type ToolDefinition,
+  type ToolGuard,
   type ToolRegistry,
 } from "@unioffice/tools";
 
@@ -31,6 +32,15 @@ export interface DefaultAgentRuntimeOptions {
 
   /** Tools available to agents that are granted access via toolIds. */
   toolRegistry?: ToolRegistry;
+
+  /**
+   * Consulted before every tool call, after the agent's own grants.
+   *
+   * Supplied by the host rather than built here: the rules live in a
+   * database this package has no business knowing about. Absent, the runtime
+   * behaves exactly as it did before governance existed.
+   */
+  toolGuard?: ToolGuard;
 
   /** Bounds the reason -> tool call -> result loop per task execution. */
   maxToolCalls?: number;
@@ -85,7 +95,7 @@ export class DefaultAgentRuntime
 
     this.toolRegistry = options.toolRegistry;
     this.toolExecutor = options.toolRegistry
-      ? new ToolExecutor(options.toolRegistry)
+      ? new ToolExecutor(options.toolRegistry, options.toolGuard)
       : undefined;
     this.maxToolCalls = options.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
   }
