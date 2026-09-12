@@ -29,6 +29,9 @@ export const calculatorTool: ToolDefinition<
   description:
     "Evaluates an arithmetic expression using +, -, *, /, %, ^ and parentheses.",
   version: "1.0.0",
+  // Pure arithmetic on the input it is handed. It reads nothing and reaches
+  // nothing, so a wrong answer is a wrong answer and never a side effect.
+  risk: "low",
   inputSchema: {
     type: "object",
     required: ["expression"],
