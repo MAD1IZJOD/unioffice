@@ -21,6 +21,10 @@ import type {
   TaskExecutionService,
 } from "./task-execution-service.js";
 
+import type {
+  TaskGovernanceGate,
+} from "./task-governance-gate.js";
+
 export interface ExecuteWorkResult {
   work: Work;
   tasks: Task[];
@@ -33,6 +37,7 @@ export class WorkExecutionService {
     private readonly taskExecutionService: TaskExecutionService,
     private readonly eventRecorder: EventRecorder,
     private readonly approvalCoordinator?: ApprovalCoordinator,
+    private readonly governanceGate?: TaskGovernanceGate,
     private readonly maxConcurrentTasks = 4,
   ) {
     if (
@@ -280,7 +285,26 @@ export class WorkExecutionService {
         continue;
       }
 
-      if (requiresApproval(task)) {
+      // Governance runs here, at the moment a step becomes eligible - before
+      // any model is invoked, so a refusal costs nothing and an approval is
+      // raised before work is spent on something a person may refuse.
+      const governed = this.governanceGate
+        ? await this.governanceGate.evaluate(work, task)
+        : undefined;
+
+      if (governed?.outcome === "deny") {
+        await this.denyTask(work, task, governed);
+        continue;
+      }
+
+      // The planner can ask for a human and the company's policies can
+      // compel one. Neither overrides the other: a model's judgement that a
+      // step is consequential is not something a rule should be able to wave
+      // away, and a rule is not something a model should be able to skip.
+      const needsApproval =
+        requiresApproval(task) || governed?.outcome === "require_approval";
+
+      if (needsApproval) {
         if (!this.approvalCoordinator) {
           throw new Error(
             "Task requires approval but no approval coordinator is configured.",
@@ -289,7 +313,9 @@ export class WorkExecutionService {
 
         await this.approvalCoordinator.requestApproval(
           work,
-          task,
+          governed?.outcome === "require_approval"
+            ? withGovernanceReason(task, governed)
+            : task,
         );
         continue;
       }
@@ -315,6 +341,70 @@ export class WorkExecutionService {
     return this.taskRepository.findByWork(
       tasks[0]!.workId,
     );
+  }
+
+  /**
+   * A step the company does not permit.
+   *
+   * Marked failed with the policy's own sentence rather than a generic
+   * error, so the mission's record says which rule stopped it and why. The
+   * surrounding loop already turns a failed task into a stopped mission, so
+   * this does not need to stop anything itself.
+   */
+  private async denyTask(
+    work: Work,
+    task: Task,
+    decision: {
+      summary: string;
+      risk: string;
+      policyId?: string;
+      policyName?: string;
+    },
+  ): Promise<void> {
+    const now = new Date();
+
+    const deniedTask = await this.taskRepository.update({
+      ...task,
+      status: "failed",
+      updatedAt: now,
+      completedAt: now,
+      metadata: {
+        ...task.metadata,
+        governance: {
+          outcome: "denied",
+          summary: decision.summary,
+          risk: decision.risk,
+          policyId: decision.policyId,
+          policyName: decision.policyName,
+          deniedAt: now.toISOString(),
+        },
+        execution: {
+          status: "failed",
+          error: {
+            code: "GOVERNANCE_DENIED",
+            message: decision.summary,
+          },
+        },
+      },
+    });
+
+    await this.eventRecorder.record({
+      organizationId: work.organizationId,
+      workId: work.id,
+      taskId: deniedTask.id,
+      agentId: deniedTask.assignedAgentId,
+      type: "task.failed",
+      payload: {
+        title: deniedTask.title,
+        error: decision.summary,
+        governance: {
+          outcome: "denied",
+          policyId: decision.policyId,
+          policyName: decision.policyName,
+          risk: decision.risk,
+        },
+      },
+    });
   }
 
   private async failWork(
@@ -363,6 +453,51 @@ export class WorkExecutionService {
 
     return work;
   }
+}
+
+/**
+ * Puts the policy's reason on the task before an approval is raised.
+ *
+ * The approval service reads its prompt from task.metadata.approval, so this
+ * is how a governance-compelled approval ends up saying which rule required
+ * it rather than repeating whatever the planner wrote.
+ */
+function withGovernanceReason(
+  task: Task,
+  decision: {
+    summary: string;
+    risk: string;
+    policyId?: string;
+    policyName?: string;
+    approvalPrompt?: string;
+  },
+): Task {
+  const existing =
+    typeof task.metadata.approval === "object" && task.metadata.approval !== null
+      ? (task.metadata.approval as Record<string, unknown>)
+      : {};
+
+  return {
+    ...task,
+    metadata: {
+      ...task.metadata,
+      governance: {
+        outcome: "approval_required",
+        summary: decision.summary,
+        risk: decision.risk,
+        policyId: decision.policyId,
+        policyName: decision.policyName,
+      },
+      approval: {
+        ...existing,
+        required: true,
+        reason: decision.approvalPrompt ?? decision.summary,
+        policyId: decision.policyId,
+        policyName: decision.policyName,
+        risk: decision.risk,
+      },
+    },
+  };
 }
 
 function requiresApproval(task: Task): boolean {
