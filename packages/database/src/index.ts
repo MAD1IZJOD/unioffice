@@ -11,6 +11,7 @@ export * from "./repositories/approval-repository.js";
 export * from "./repositories/artifact-repository.js";
 export * from "./repositories/memory-repository.js";
 export * from "./repositories/execution-job-repository.js";
+export * from "./repositories/policy-repository.js";
 
 export * from "./repositories/supabase-work-repository.js";
 export * from "./repositories/supabase-task-repository.js";
@@ -22,4 +23,5 @@ export * from "./repositories/supabase-approval-repository.js";
 export * from "./repositories/supabase-artifact-repository.js";
 export * from "./repositories/supabase-memory-repository.js";
 export * from "./repositories/supabase-execution-job-repository.js";
+export * from "./repositories/supabase-policy-repository.js";
 export * from "./repositories/in-memory-execution-job-repository.js";
