@@ -34,6 +34,7 @@ import {
 } from "../lib/mission";
 
 import { missionDataOfRoom, roomResult } from "../lib/room";
+import { summarizeGovernance } from "../lib/governance";
 
 import { toneClass } from "../lib/tone";
 
@@ -45,10 +46,7 @@ import { ResultBody } from "../components/ResultBody";
 import { WorkspaceMark } from "../components/WorkspaceMark";
 
 import { DecisionBand } from "../components/room/DecisionBand";
-import {
-  MissionGovernance,
-  summarizeGovernance,
-} from "../components/room/MissionGovernance";
+import { MissionGovernance } from "../components/room/MissionGovernance";
 import { ExecutionFloor } from "../components/room/ExecutionFloor";
 import { RoomCast } from "../components/room/RoomCast";
 
