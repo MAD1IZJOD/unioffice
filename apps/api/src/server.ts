@@ -797,25 +797,45 @@ function safeLength(payload: Record<string, unknown>): number {
 }
 
 /**
- * Every organization-scoped read resolves the same way: an explicit id, or
- * the seeded development organization when one exists. This was copy-pasted
- * into five handlers before the second wave of routes made that untenable.
+ * Resolves the organization every request acts within.
+ *
+ * There is no authentication yet, so the API is bound to exactly one
+ * organization - the seeded one. A request may name that organization
+ * explicitly (the web client does, on every scoped call), but it may not name
+ * a *different* one: with no caller identity to check an override against,
+ * honouring an arbitrary organizationId is a tenant boundary anyone can step
+ * across just by changing a query string. So a mismatch is refused rather than
+ * trusted. When real authentication lands, the bound organization comes from
+ * the caller's token instead of this default, and the same equality check
+ * still holds the line.
  */
 function requiredOrganizationId(
   services: ApiServices,
   value: unknown,
 ): OrganizationId {
-  const organizationId =
-    optionalText(value) ?? services.developmentOrganizationId;
+  const bound = services.developmentOrganizationId;
+  const requested = optionalText(value);
 
-  if (!organizationId) {
+  if (!bound) {
+    // No auth and no seeded organization: there is nothing to scope to, and
+    // trusting a caller-supplied id here would be the whole vulnerability.
     throw new ApiError(
       400,
       "organizationId is required when no development workforce is seeded.",
     );
   }
 
-  return organizationId as OrganizationId;
+  if (requested && requested !== bound) {
+    // Deliberately "not found" rather than "forbidden": a caller with no
+    // identity should not be able to tell a real other organization apart
+    // from a made-up one.
+    throw new ApiError(
+      404,
+      "Organization not found.",
+    );
+  }
+
+  return bound;
 }
 
 /**
