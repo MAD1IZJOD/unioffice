@@ -137,7 +137,14 @@ export interface ApiServices {
 export function buildApiServer(
   services: ApiServices,
 ) {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    // Every legitimate request here is small - an objective, a briefing, a
+    // policy's scope arrays. The framework default is 1MB, which is room for
+    // a caller to hand the planner an enormous prompt or bloat a row; 256KB
+    // is still far more than any real payload needs.
+    bodyLimit: 256 * 1024,
+  });
 
   // Routes are declared inside this nested register() so the rate-limit
   // plugin's onRoute hook (installed once its own registration resolves)
@@ -308,7 +315,7 @@ export function buildApiServer(
         requesterId:
           (optionalText(body.requesterId) ??
             developmentRequesterId) as UserId,
-        objective: requiredText(body.objective, "objective"),
+        objective: requiredText(body.objective, "objective", 4_000),
         priority: parsePriority(body.priority),
         workspaceId: optionalText(body.workspaceId) as
           | CreateWorkInput["workspaceId"]
@@ -1115,12 +1122,28 @@ function resolverId(body: unknown): string {
  * "Expected a non-empty string." - true, but it never told the caller which
  * field they had left blank.
  */
-function requiredText(value: unknown, field: string): string {
+function requiredText(
+  value: unknown,
+  field: string,
+  maxLength = 2_000,
+): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new ApiError(400, `${field} is required.`);
   }
 
-  return value.trim();
+  const text = value.trim();
+
+  // A required string with no ceiling is a resource-exhaustion vector: an
+  // objective, for one, is handed straight to the planner's model. The
+  // default is generous for every field that does not set its own bound.
+  if (text.length > maxLength) {
+    throw new ApiError(
+      400,
+      `${field} must be ${maxLength} characters or fewer.`,
+    );
+  }
+
+  return text;
 }
 
 function optionalText(value: unknown): string | undefined {
