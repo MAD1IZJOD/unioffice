@@ -660,3 +660,131 @@ async function waitFor(
 
   throw new Error("Condition was never met.");
 }
+
+/* --------------------------------------------------------------------------
+   Tenant isolation.
+
+   With no authentication the API is bound to a single organization. These
+   assert that a request naming a different one, or reaching for another
+   tenant's work by id, is refused rather than served.
+   -------------------------------------------------------------------------- */
+
+test("refuses a request that names a different organization", async () => {
+  let workListed = false;
+  const workQueryService = {
+    listWork: async () => {
+      workListed = true;
+      return [];
+    },
+  } as unknown as WorkQueryService;
+
+  const app = buildApiServer(baseServices({
+    workQueryService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/work?organizationId=org-2-someone-elses",
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json().error.message, "Organization not found.");
+  assert.equal(workListed, false, "the query must never run for a foreign org");
+});
+
+test("serves a request that names the bound organization", async () => {
+  const workQueryService = {
+    listWork: async () => [],
+  } as unknown as WorkQueryService;
+
+  const app = buildApiServer(baseServices({
+    workQueryService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/work?organizationId=org-1",
+  });
+
+  assert.equal(response.statusCode, 200);
+});
+
+test("a work item in another organization is not reachable by id", async () => {
+  let assertedOrg: string | undefined;
+  const workQueryService = {
+    assertWorkInOrganization: async (_id: unknown, organizationId: string) => {
+      assertedOrg = organizationId;
+      // The real method throws not-found when the work's org differs; the
+      // route must call it with the bound org, never a caller override.
+      throw new Error(`Work not found: ${_id}`);
+    },
+  } as unknown as WorkQueryService;
+
+  const app = buildApiServer(baseServices({
+    workQueryService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/work/33333333-3333-3333-3333-333333333333?organizationId=org-2-someone-elses",
+  });
+
+  // The foreign org override is rejected before the work is even looked up.
+  assert.equal(response.statusCode, 404);
+  assert.equal(assertedOrg, undefined);
+});
+
+test("rejects a malformed work id before it reaches a query", async () => {
+  let touched = false;
+  const workQueryService = {
+    assertWorkInOrganization: async () => {
+      touched = true;
+      return {} as never;
+    },
+  } as unknown as WorkQueryService;
+
+  const app = buildApiServer(baseServices({
+    workQueryService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/work/not-a-uuid?organizationId=org-1",
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(touched, false);
+});
+
+test("drops a caller-supplied work metadata object, keeping only the briefing", async () => {
+  let created: CreateWorkInput | undefined;
+  const applicationService = {
+    createWork: async (input: CreateWorkInput) => {
+      created = input;
+      return { id: "w1", metadata: input.metadata ?? {} } as never;
+    },
+  } as unknown as ApiServices["applicationService"];
+
+  const app = buildApiServer(baseServices({
+    applicationService,
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/work",
+    payload: {
+      organizationId: "org-1",
+      objective: "do the thing",
+      briefing: "some context",
+      metadata: { interrupted: true, injected: "PWNED" },
+    },
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.deepEqual(created?.metadata, { briefing: "some context" });
+});
