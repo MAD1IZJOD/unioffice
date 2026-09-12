@@ -206,7 +206,14 @@ export class DefaultAgentRuntime
           workId: context.workId,
           taskId: context.taskId,
           authorizedToolIds: definition.toolIds,
-          metadata: {},
+          // A governance guard scopes rules by capability and by workspace,
+          // and the runtime already holds both. Passing them here keeps the
+          // guard from re-reading the agent row on every single tool call
+          // inside the loop.
+          metadata: {
+            agentCapabilities: definition.capabilities,
+            workspaceId: context.work.workspaceId,
+          },
         };
 
         const result = await this.toolExecutor!.execute(
