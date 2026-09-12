@@ -3,6 +3,7 @@
 @import "./styles/surfaces.css";
 @import "./styles/mission.css";
 @import "./styles/room.css";
+@import "./styles/governance.css";
 @import "./styles/company.css";
 
 :root {
