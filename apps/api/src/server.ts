@@ -1091,25 +1091,34 @@ async function authorizedWorkId(
   return workId;
 }
 
-function parameterId(params: unknown): WorkId {
+/**
+ * Every id in the schema is a uuid. Validating the shape at the edge means a
+ * malformed id is a clean 400 rather than a 500 from the database rejecting
+ * the cast - which also keeps a garbage id from reaching the query at all.
+ */
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parameterUuid(params: unknown): string {
   if (typeof params !== "object" || params === null) {
     throw new ApiError(400, "Route id is required.");
   }
 
-  return requiredText(
-    (params as Record<string, unknown>).id,
-    "id",
-  ) as WorkId;
+  const id = requiredText((params as Record<string, unknown>).id, "id", 64);
+
+  if (!UUID_PATTERN.test(id)) {
+    throw new ApiError(400, "id must be a valid identifier.");
+  }
+
+  return id;
+}
+
+function parameterId(params: unknown): WorkId {
+  return parameterUuid(params) as WorkId;
 }
 
 function parameterApprovalId(params: unknown): ApprovalId {
-  if (typeof params !== "object" || params === null) {
-    throw new ApiError(400, "Route id is required.");
-  }
-  return requiredText(
-    (params as Record<string, unknown>).id,
-    "id",
-  ) as ApprovalId;
+  return parameterUuid(params) as ApprovalId;
 }
 
 function resolverId(body: unknown): string {
