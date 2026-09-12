@@ -137,7 +137,7 @@ function Decision({ decision }: { decision: GovernanceDecisionRecord }) {
             <span className="audit-actor">
               {decision.agentName ?? "The company"}
             </span>{" "}
-            tried to {lower(decision.action)} — it was{" "}
+            tried “{decision.action}” — it was{" "}
             <span className="audit-outcome">
               {outcomeLabel(decision.outcome)}
             </span>
@@ -221,23 +221,4 @@ function Row({
       <dd className="audit-detail-value">{children}</dd>
     </div>
   );
-}
-
-/**
- * Actions are stored capitalised ("Use calculator", a step's title), and they
- * read badly mid-sentence. Only the first letter is touched, so an action
- * that is a proper noun keeps its shape.
- */
-function lower(action: string): string {
-  if (!action) return "act";
-
-  const second = action.charAt(1);
-
-  // "JSON Transform" and friends stay as they are; only ordinary sentence
-  // capitalisation is undone.
-  if (second && second === second.toUpperCase() && second !== second.toLowerCase()) {
-    return action;
-  }
-
-  return action.charAt(0).toLowerCase() + action.slice(1);
 }
