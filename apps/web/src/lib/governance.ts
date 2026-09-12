@@ -1,4 +1,5 @@
 import type {
+  ActivityEvent,
   GovernanceDecisionRecord,
   PolicyEffect,
   PolicyItem,
@@ -236,4 +237,66 @@ export function subjectLabel(policy: PolicyItem): string {
 
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+export interface MissionGovernanceSummary {
+  allowed: number;
+  approvalRequired: number;
+  denied: number;
+  /** The rules that took part, newest first, de-duplicated. */
+  policyNames: string[];
+  /** What was blocked, if anything was. */
+  blocked: Array<{ action: string; policyName?: string; summary: string }>;
+}
+
+/**
+ * What governance did to one mission, counted from its own event log.
+ *
+ * Read from the mission's own record rather than from a governance query, so
+ * the numbers describe this operation and cannot disagree with the timeline
+ * printed beside them.
+ */
+export function summarizeGovernance(
+  events: ActivityEvent[],
+): MissionGovernanceSummary {
+  const summary: MissionGovernanceSummary = {
+    allowed: 0,
+    approvalRequired: 0,
+    denied: 0,
+    policyNames: [],
+    blocked: [],
+  };
+
+  const names = new Set<string>();
+
+  for (const event of events) {
+    if (!event.type.startsWith("governance.")) continue;
+
+    const payload = event.payload ?? {};
+    const policyName =
+      typeof payload.policyName === "string" ? payload.policyName : undefined;
+
+    if (policyName) names.add(policyName);
+
+    if (event.type === "governance.denied") {
+      summary.denied += 1;
+      summary.blocked.push({
+        action:
+          typeof payload.action === "string" ? payload.action : "An action",
+        policyName,
+        summary:
+          typeof payload.summary === "string"
+            ? payload.summary
+            : "A policy refused this.",
+      });
+    } else if (event.type === "governance.approval_required") {
+      summary.approvalRequired += 1;
+    } else {
+      summary.allowed += 1;
+    }
+  }
+
+  summary.policyNames = [...names];
+
+  return summary;
 }
