@@ -29,6 +29,8 @@ export const jsonTransformTool: ToolDefinition<
   description:
     "Applies a structural transform to JSON data. 'pick'/'omit' keep or drop keys and accept either one object or an array of objects (applied to every item); 'filter_equals' keeps matching items; 'map_field' projects one field from every item.",
   version: "1.0.0",
+  // Reshapes data it was given and hands it straight back. Nothing leaves.
+  risk: "low",
   inputSchema: {
     type: "object",
     required: ["operation", "data"],
