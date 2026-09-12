@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 
-import type { ActivityEvent } from "../../lib/api";
-
 import { toneClass } from "../../lib/tone";
+
+import type { MissionGovernanceSummary } from "../../lib/governance";
 
 /**
  * Governance, as it applied to one mission.
@@ -15,62 +15,6 @@ import { toneClass } from "../../lib/tone";
  * constrained does not get a panel saying zero, because a row of zeros reads
  * as a system that is not working rather than one that had nothing to say.
  */
-
-export interface MissionGovernanceSummary {
-  allowed: number;
-  approvalRequired: number;
-  denied: number;
-  /** The rules that took part, newest first, de-duplicated. */
-  policyNames: string[];
-  /** What was blocked, if anything was. */
-  blocked: Array<{ action: string; policyName?: string; summary: string }>;
-}
-
-export function summarizeGovernance(
-  events: ActivityEvent[],
-): MissionGovernanceSummary {
-  const summary: MissionGovernanceSummary = {
-    allowed: 0,
-    approvalRequired: 0,
-    denied: 0,
-    policyNames: [],
-    blocked: [],
-  };
-
-  const names = new Set<string>();
-
-  for (const event of events) {
-    if (!event.type.startsWith("governance.")) continue;
-
-    const payload = event.payload ?? {};
-    const policyName =
-      typeof payload.policyName === "string" ? payload.policyName : undefined;
-
-    if (policyName) names.add(policyName);
-
-    if (event.type === "governance.denied") {
-      summary.denied += 1;
-      summary.blocked.push({
-        action:
-          typeof payload.action === "string" ? payload.action : "An action",
-        policyName,
-        summary:
-          typeof payload.summary === "string"
-            ? payload.summary
-            : "A policy refused this.",
-      });
-    } else if (event.type === "governance.approval_required") {
-      summary.approvalRequired += 1;
-    } else {
-      summary.allowed += 1;
-    }
-  }
-
-  summary.policyNames = [...names];
-
-  return summary;
-}
-
 export function MissionGovernance({
   summary,
 }: {
