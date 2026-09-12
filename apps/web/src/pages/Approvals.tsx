@@ -76,7 +76,7 @@ export default function Approvals() {
               ? "HAS STOPPED."
               : `HAS STOPPED ${spellOut(pending.length)} TIMES.`
         }
-        detail="A task the planner marked consequential stops here. The company will not take these steps without a person."
+        detail="A step stops here when one of your rules requires a person, or when the planner judged it consequential. The company will not take these steps on its own."
         tone={pending.length > 0 ? "waiting" : "quiet"}
         meta={
           <Reading
