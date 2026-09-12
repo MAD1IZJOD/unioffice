@@ -58,13 +58,24 @@ export class PolicyTaskGovernanceGate implements TaskGovernanceGate {
 
     const decision = await this.governance.evaluateTask(work, task, agent);
 
-    await this.governance.recordDecision(decision, {
-      organizationId: work.organizationId,
-      workId: work.id,
-      taskId: task.id,
-      agentId: task.assignedAgentId,
-      action: task.title,
-    });
+    // A step is re-evaluated every time the executor looks at it, which after
+    // an approval means the same require_approval decision comes back - the
+    // policy has not changed, and it should not. Recording that again would
+    // write "approval required" into the trail for a step that then went
+    // ahead, so the second one is suppressed. The decision is unchanged; only
+    // the duplicate line is dropped.
+    const alreadySatisfied =
+      decision.outcome === "require_approval" && approvalGranted(task);
+
+    if (!alreadySatisfied) {
+      await this.governance.recordDecision(decision, {
+        organizationId: work.organizationId,
+        workId: work.id,
+        taskId: task.id,
+        agentId: task.assignedAgentId,
+        action: task.title,
+      });
+    }
 
     return {
       outcome: decision.outcome,
@@ -75,4 +86,15 @@ export class PolicyTaskGovernanceGate implements TaskGovernanceGate {
       approvalPrompt: decision.approvalPrompt,
     };
   }
+}
+
+/** A person has already decided this step, so the requirement is met. */
+function approvalGranted(task: Task): boolean {
+  const approval = task.metadata.approval;
+
+  return (
+    typeof approval === "object" &&
+    approval !== null &&
+    (approval as { status?: unknown }).status === "approved"
+  );
 }
