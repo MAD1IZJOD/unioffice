@@ -537,6 +537,75 @@ function tell(
         line: `“${task ?? "A task"}” was cancelled.`,
       };
 
+    case "governance.denied":
+      return {
+        act: "decisions",
+        tone: "tone-error",
+        actor,
+        line: `The company's rules would not allow ${lower(
+          text("action") ?? "this",
+        )}.`,
+        note: text("summary"),
+      };
+
+    case "governance.approval_required":
+      return {
+        act: "decisions",
+        tone: "tone-warning",
+        actor,
+        line: `A rule says ${lower(
+          text("action") ?? "this step",
+        )} needs a person.`,
+        note: text("policyName")
+          ? `Under ${text("policyName")}.`
+          : text("summary"),
+      };
+
+    case "governance.allowed":
+      return {
+        act: "decisions",
+        tone: "tone-live",
+        actor,
+        line: `${
+          text("policyName") ?? "A rule"
+        } explicitly permits ${lower(text("action") ?? "this")}.`,
+      };
+
+    case "policy.created":
+      return {
+        act: "decisions",
+        tone: "tone-idle",
+        line: `You wrote a rule: ${text("name") ?? "a policy"}.`,
+      };
+
+    case "policy.activated":
+      return {
+        act: "decisions",
+        tone: "tone-active",
+        line: `${text("name") ?? "A rule"} is now being enforced.`,
+      };
+
+    case "policy.paused":
+      return {
+        act: "decisions",
+        tone: "tone-idle",
+        line: `${text("name") ?? "A rule"} is no longer being enforced.`,
+      };
+
+    case "policy.archived":
+      return {
+        act: "decisions",
+        tone: "tone-idle",
+        line: `${text("name") ?? "A rule"} was retired.`,
+      };
+
+    case "policy.updated":
+      return {
+        act: "decisions",
+        tone: "tone-idle",
+        line: `${text("name") ?? "A rule"} was changed.`,
+      };
+
     case "approval.requested":
       return {
         act: "decisions",
@@ -648,6 +717,24 @@ function tell(
         line: event.type.replace(/[._]/g, " "),
       };
   }
+}
+
+/**
+ * Governance stores an action the way it is displayed elsewhere - "Use
+ * calculator", or a step's own title - and those read badly in the middle of
+ * a sentence. Only the first letter is touched, so an action that begins with
+ * a proper noun keeps its shape.
+ */
+function lower(action: string): string {
+  if (!action) return "this";
+
+  const second = action.charAt(1);
+
+  if (second && second === second.toUpperCase() && second !== second.toLowerCase()) {
+    return action;
+  }
+
+  return action.charAt(0).toLowerCase() + action.slice(1);
 }
 
 function requirementNote(
