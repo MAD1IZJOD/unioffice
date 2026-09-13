@@ -44,6 +44,23 @@ export async function createApiServer() {
       )
     : undefined;
 
+  // Knowledge written while the embedding model was unavailable is still
+  // searchable by keyword; this gives it a vector so semantic recall finds it
+  // too. Bounded and in the background, so a slow or absent model never
+  // delays the API coming up.
+  if (developmentOrganization) {
+    void runtime.knowledgeCaptureService
+      .backfillEmbeddings(developmentOrganization.organization.id, 200)
+      .then((stored) => {
+        if (stored > 0) {
+          console.warn(`Indexed ${stored} piece(s) of company knowledge for semantic recall.`);
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn(`Could not index company knowledge: ${errorMessage(error)}`);
+      });
+  }
+
   return buildApiServer({
     applicationService: runtime.applicationService,
     workService: runtime.workService,
