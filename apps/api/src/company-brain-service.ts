@@ -462,7 +462,150 @@ export class CompanyBrainService {
           // recalled what an earlier step learned - worth telling apart.
           fromThisMission: entry.knowledge.workId === workId,
         })),
+      review: await this.debrief(organizationId, workId, learned),
     };
+  }
+
+  /**
+   * The mission debrief: each thing the mission taught the company, the
+   * evidence it rests on, what became of it, and - while nobody has decided -
+   * how it stands against what the company already knows.
+   *
+   * Every relation shown is computed, never asserted: "restates" is a measured
+   * embedding similarity (or an identical title when nothing is embedded),
+   * "contradicts" is a detected open conflict. A person makes the decision;
+   * the debrief only puts it in front of them where the evidence is.
+   */
+  private async debrief(
+    organizationId: OrganizationId,
+    workId: WorkId,
+    learned: Memory[],
+  ): Promise<MissionDebriefItem[]> {
+    // The raw per-task trace from before knowledge existed is not something
+    // anyone is asked to review.
+    const items = learned
+      .filter((memory) => memory.type !== "experience")
+      .slice(0, MAX_DEBRIEF_ITEMS);
+
+    if (items.length === 0) {
+      return [];
+    }
+
+    const linkedIds = items.flatMap((memory) =>
+      [memory.metadata.mergedIntoId, memory.metadata.supersededById, memory.supersedesId]
+        .filter((id): id is MemoryId => typeof id === "string"));
+    const linked = new Map(
+      (await this.memories.findByIds(organizationId, linkedIds)).map((row) => [row.id, row]),
+    );
+    const titled = (id: unknown) => {
+      const row = typeof id === "string" ? linked.get(id as MemoryId) : undefined;
+      return row ? { id: row.id, title: row.title, status: row.status } : undefined;
+    };
+
+    const review: MissionDebriefItem[] = [];
+
+    for (const memory of items) {
+      const outcome = outcomeOf(memory);
+
+      review.push({
+        knowledge: memory,
+        outcome,
+        mergedInto: titled(memory.metadata.mergedIntoId),
+        replacedBy: titled(memory.metadata.supersededById),
+        replaces: titled(memory.supersedesId),
+        evidence: await this.evidenceOf(organizationId, workId, memory),
+        related: outcome === "pending" ? await this.relationsOf(organizationId, memory) : [],
+      });
+    }
+
+    return review;
+  }
+
+  private async evidenceOf(
+    organizationId: OrganizationId,
+    workId: WorkId,
+    memory: Memory,
+  ): Promise<MissionDebriefItem["evidence"]> {
+    const [task, agent, artifact] = await Promise.all([
+      memory.taskId ? this.taskRepository.findById(memory.taskId) : null,
+      memory.agentId ? this.agentRepository.findById(memory.agentId) : null,
+      memory.artifactId ? this.artifactRepository.findById(memory.artifactId) : null,
+    ]);
+
+    const extraction = memory.metadata.extraction as { rationale?: unknown } | undefined;
+
+    // Named only when the referenced row is confirmed to be this mission's or
+    // this organization's; a reference that fails the check is left out.
+    return {
+      task: task && task.workId === workId ? { id: task.id, title: task.title } : undefined,
+      agent: agent && agent.organizationId === organizationId ? { id: agent.id, name: agent.name } : undefined,
+      artifact: artifact && artifact.organizationId === organizationId ? { id: artifact.id, name: artifact.name } : undefined,
+      rationale:
+        typeof extraction?.rationale === "string" && extraction.rationale.trim()
+          ? extraction.rationale
+          : undefined,
+    };
+  }
+
+  private async relationsOf(organizationId: OrganizationId, memory: Memory): Promise<MissionDebriefRelation[]> {
+    const [conflicts, ranked] = await Promise.all([
+      this.links.findConflicts(organizationId, { status: "open", memoryId: memory.id, limit: 5 }),
+      this.recall.search({
+        organizationId,
+        text: `${memory.title}\n${memory.content}`,
+        workspace: { mode: "all" },
+        statuses: ["active", "proposed"],
+        workspaceId: memory.workspaceId,
+        limit: 8,
+      }),
+    ]);
+
+    const contradictingIds = new Set(conflicts.map((conflict) =>
+      conflict.memoryId === memory.id ? conflict.conflictingMemoryId : conflict.memoryId));
+
+    const contradicting = (await this.memories.findByIds(organizationId, [...contradictingIds]))
+      .filter((other) => other.status !== "archived" && visibleTogether(memory, other))
+      .map((other): MissionDebriefRelation => ({
+        knowledge: other,
+        relation: "contradicts",
+        canMerge: false,
+      }));
+
+    const title = normalizedTitle(memory.title);
+    const restating: MissionDebriefRelation[] = [];
+    const related: MissionDebriefRelation[] = [];
+
+    for (const entry of ranked) {
+      const other = entry.memory;
+
+      if (other.id === memory.id || contradictingIds.has(other.id) || !visibleTogether(memory, other)) {
+        continue;
+      }
+
+      // Recall lets a shared keyword qualify on its own; a person reviewing a
+      // lesson is not shown a note as "related" when the measured similarity
+      // says it is about something else.
+      if (entry.similarity !== undefined && entry.similarity < RELATED_SIMILARITY) {
+        continue;
+      }
+
+      const restates = entry.similarity !== undefined
+        ? entry.similarity >= RESTATEMENT_SIMILARITY
+        : normalizedTitle(other.title) === title;
+
+      const relation: MissionDebriefRelation = {
+        knowledge: other,
+        relation: restates ? "restates" : "related",
+        similarity: entry.similarity === undefined ? undefined : Math.round(entry.similarity * 100) / 100,
+        // The same rule mergeKnowledge enforces, so the page never offers a
+        // merge the service would refuse.
+        canMerge: !other.workspaceId || other.workspaceId === memory.workspaceId,
+      };
+
+      (restates ? restating : related).push(relation);
+    }
+
+    return [...contradicting, ...restating, ...related.slice(0, MAX_RELATED)].slice(0, MAX_RELATIONS);
   }
 
   /** Exactly what an agent would be handed for this text, not recorded. */
@@ -1066,6 +1209,87 @@ const MAX_REINFORCEMENTS = 20;
 function bounded(value: number | undefined, fallback: number): number {
   const number = typeof value === "number" && Number.isFinite(value) ? value : fallback;
   return Math.min(1, Math.max(0, number));
+}
+
+/* --------------------------------------------------------------------------
+   The mission debrief
+   -------------------------------------------------------------------------- */
+
+/** What became of one thing a mission taught the company. */
+export type MissionDebriefOutcome =
+  /** Nobody has decided: a proposal, or current knowledge no person reviewed. */
+  | "pending"
+  /** A person made it (or kept it as) current company knowledge. */
+  | "kept"
+  /** It said what the company already knew, and was folded into that entry. */
+  | "merged"
+  /** Newer knowledge replaced it. */
+  | "replaced"
+  /** Archived without a replacement. */
+  | "discarded";
+
+export interface MissionDebriefRelation {
+  knowledge: Memory;
+  relation: "restates" | "contradicts" | "related";
+  /** Measured embedding similarity, when both sides were embedded. */
+  similarity?: number;
+  /** Whether mergeKnowledge would accept this entry as the one to keep. */
+  canMerge: boolean;
+}
+
+export interface MissionDebriefItem {
+  knowledge: Memory;
+  outcome: MissionDebriefOutcome;
+  mergedInto?: { id: MemoryId; title: string; status: KnowledgeStatus };
+  replacedBy?: { id: MemoryId; title: string; status: KnowledgeStatus };
+  replaces?: { id: MemoryId; title: string; status: KnowledgeStatus };
+  evidence: {
+    task?: { id: string; title: string };
+    agent?: { id: string; name: string };
+    artifact?: { id: string; name: string };
+    rationale?: string;
+  };
+  /** Only while pending: what it stands against in the company's knowledge. */
+  related: MissionDebriefRelation[];
+}
+
+/**
+ * Where "about the same thing" becomes "saying the same thing", for the local
+ * embedding model. Measured on the live store with nomic-embed-text: four
+ * wordings of one pricing finding scored 0.91-0.99 against each other, while
+ * different findings about the same pricing tiers scored 0.73-0.84.
+ */
+const RESTATEMENT_SIMILARITY = 0.9;
+
+/**
+ * Below this, two entries only share vocabulary. On the same store an
+ * onboarding checklist scored 0.56-0.68 against the pricing findings - the same
+ * product words, a different subject.
+ */
+const RELATED_SIMILARITY = 0.7;
+
+/** One review per mission is bounded; each item's comparison is a search. */
+const MAX_DEBRIEF_ITEMS = 12;
+const MAX_RELATED = 2;
+const MAX_RELATIONS = 4;
+
+function outcomeOf(memory: Memory): MissionDebriefOutcome {
+  if (memory.status === "archived") {
+    if (typeof memory.metadata.mergedIntoId === "string") return "merged";
+    if (typeof memory.metadata.supersededById === "string") return "replaced";
+    return "discarded";
+  }
+
+  return memory.status === "active" && memory.reviewedAt ? "kept" : "pending";
+}
+
+/** Knowledge that can ever be recalled into the same work. */
+function visibleTogether(left: Memory, right: Memory): boolean {
+  return !left.workspaceId || !right.workspaceId || left.workspaceId === right.workspaceId;
+}
+
+function normalizedTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 /** The missions that arrived at this knowledge again, as merges recorded them. */
