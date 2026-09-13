@@ -57,7 +57,22 @@ export type PolicyStatus =
  */
 export type PolicySubject =
   | "tool"
-  | "task";
+  | "task"
+  /**
+   * Whether an agent may be handed a piece of company knowledge. Decided per
+   * item at recall, so it can only allow or deny.
+   */
+  | "knowledge_recall"
+  /**
+   * What happens to knowledge extraction proposes: allow records it as
+   * active, require_approval records it as a proposal a person reviews, deny
+   * discards it.
+   */
+  | "knowledge_capture";
+
+export function isKnowledgeSubject(subject: PolicySubject): boolean {
+  return subject === "knowledge_recall" || subject === "knowledge_capture";
+}
 
 /**
  * Who and what a policy applies to.
@@ -82,6 +97,13 @@ export interface PolicyScope {
    * roster, so it keeps applying when the workforce changes.
    */
   capabilities: string[];
+
+  /**
+   * Kinds of knowledge this applies to, for knowledge policies. Empty or
+   * absent means every kind. Optional so every policy written before
+   * knowledge existed still reads as what it always was.
+   */
+  knowledgeTypes?: string[];
 }
 
 export interface Policy {
