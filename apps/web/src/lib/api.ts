@@ -1323,6 +1323,121 @@ export async function createWork(mission: NewMission): Promise<WorkItem> {
   return data.work;
 }
 
+/* --------------------------------------------------------------------------
+   Mission templates.
+
+   A template briefs a mission; it does not run one. Starting a template
+   returns ordinary queued work, and the execution room takes it through the
+   same plan, governance and queue as a mission typed from scratch.
+   -------------------------------------------------------------------------- */
+
+export type TemplateComplexity = "focused" | "cross_functional" | "broad";
+
+export interface MissionTemplateField {
+  label: string;
+  placeholder: string;
+  hint: string;
+}
+
+export interface MissionTemplate {
+  id: string;
+  version: number;
+  name: string;
+  purpose: string;
+  outcome: string;
+  capabilities: string[];
+  complexity: TemplateComplexity;
+  objective: MissionTemplateField;
+  context: MissionTemplateField;
+  desiredOutcome: MissionTemplateField;
+  constraints: MissionTemplateField;
+  planningGuidance: string;
+}
+
+export interface TemplateTeamMember {
+  agentId: string;
+  name: string;
+  type: AgentSummary["type"];
+  /** The template's disciplines this agent actually holds. */
+  matchedCapabilities: string[];
+}
+
+export interface MissionTemplateView {
+  template: MissionTemplate;
+  /** Real agents from the roster, strongest match first. */
+  likelyTeam: TemplateTeamMember[];
+  planner?: TemplateTeamMember;
+  governance: {
+    /** Active rules that could stop a step or tool for this team. */
+    gatingPolicies: Array<{ id: string; name: string; effect: PolicyEffect }>;
+  };
+}
+
+export interface TemplateMissionInput {
+  name?: string;
+  objective: string;
+  context?: string;
+  desiredOutcome: string;
+  constraints?: string;
+  priority?: WorkItem["priority"];
+  workspaceId?: string;
+}
+
+/**
+ * The same limits the API enforces. Checked here only to tell a person early;
+ * the server checks again and its answer is the one that counts.
+ */
+export const TEMPLATE_INPUT_LIMITS = {
+  name: 120,
+  objective: 1_000,
+  context: 1_800,
+  desiredOutcome: 600,
+  constraints: 600,
+} as const;
+
+export const TEMPLATE_INPUT_MINIMUMS = {
+  objective: 8,
+  desiredOutcome: 4,
+} as const;
+
+export async function fetchMissionTemplates(): Promise<MissionTemplateView[]> {
+  const data = await get<{ templates: MissionTemplateView[] }>(
+    scoped("/mission-templates"),
+  );
+
+  return data.templates;
+}
+
+export async function fetchMissionTemplate(
+  templateId: string,
+): Promise<MissionTemplateView> {
+  return get<MissionTemplateView>(
+    scoped(`/mission-templates/${encodeURIComponent(templateId)}`),
+  );
+}
+
+export async function startTemplateMission(
+  templateId: string,
+  input: TemplateMissionInput,
+): Promise<WorkItem> {
+  const data = await post<{ work: WorkItem }>(
+    `/mission-templates/${encodeURIComponent(templateId)}/missions`,
+    {
+      organizationId: organizationId(),
+      name: input.name?.trim() || undefined,
+      objective: input.objective.trim(),
+      context: input.context?.trim() || undefined,
+      desiredOutcome: input.desiredOutcome.trim(),
+      constraints: input.constraints?.trim() || undefined,
+      priority: input.priority ?? "normal",
+      workspaceId: input.workspaceId || undefined,
+    },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.work;
+}
+
 export async function planWork(workId: string): Promise<{
   work: WorkItem;
   tasks: TaskItem[];
