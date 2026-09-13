@@ -648,24 +648,24 @@ export default function Command() {
             ) : (memory.data?.length ?? 0) === 0 ? (
               <Quiet
                 line="The company has not learned anything yet."
-                detail="Every completed and failed task writes a memory, and agents read from it before starting related work."
+                detail="Knowledge is proposed when a mission produces something durable and recorded when a person writes it down. Agents recall it before related work."
               />
             ) : (
               <div className="space-y-px">
                 {memory.data!.slice(0, 5).map((item) => (
-                  <div key={item.id} className="stream-row">
+                  <Link key={item.id} to={`/brain/${item.id}`} className="stream-row">
                     <span className="min-w-0 flex-1">
                       <span className="block text-[11px] leading-[1.55] text-[#a7b0bd]">
-                        {item.content.length > 130
-                          ? `${item.content.slice(0, 130)}…`
-                          : item.content}
+                        {item.title.length > 130
+                          ? `${item.title.slice(0, 130)}…`
+                          : item.title}
                       </span>
 
                       <span className="mt-1 block text-[9px] uppercase tracking-[0.13em] text-[#535b68]">
-                        {item.type} · {formatRelativeTime(item.createdAt)}
+                        {item.type} · {item.status} · {formatRelativeTime(item.createdAt)}
                       </span>
                     </span>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
