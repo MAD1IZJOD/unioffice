@@ -12,6 +12,7 @@ import type {
   AgentExecutionResult,
   AgentRuntime,
   AgentToolCall,
+  RecalledKnowledgeItem,
 } from "@unioffice/agents";
 
 export interface ExecutionRequest {
@@ -43,6 +44,9 @@ export interface ExecutionRequest {
   };
 
   context: Record<string, unknown>;
+
+  /** Company knowledge recalled for this step, handed to the runtime as-is. */
+  knowledge?: RecalledKnowledgeItem[];
 }
 
 export interface ExecutionEngine {
@@ -92,6 +96,7 @@ export class DefaultExecutionEngine
       work: request.work,
       task: request.task,
       context: request.context,
+      knowledge: request.knowledge,
     };
 
     const result: AgentExecutionResult =
