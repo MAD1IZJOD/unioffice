@@ -32,6 +32,18 @@ export type GovernanceAction =
       title: string;
       /** Tools the plan says this step needs, if any. */
       requiredTools: string[];
+    }
+  | {
+      /** An agent is about to be handed a piece of company knowledge. */
+      kind: "knowledge_recall";
+      knowledgeType: string;
+      title: string;
+    }
+  | {
+      /** Extraction has proposed knowledge and it is about to be recorded. */
+      kind: "knowledge_capture";
+      knowledgeType: string;
+      title: string;
     };
 
 /** Everything a decision is allowed to depend on. */

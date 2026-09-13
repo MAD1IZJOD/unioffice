@@ -108,7 +108,9 @@ export class DefaultPolicyEngine implements PolicyEngine {
       summary:
         action.kind === "tool"
           ? `No policy restricts ${action.toolId}, and the agent is authorized for it.`
-          : "No policy applies to this step.",
+          : action.kind === "task"
+            ? "No policy applies to this step."
+            : "No policy applies to this knowledge.",
     };
   }
 }
@@ -160,6 +162,12 @@ function scopeMatches(
   }
 
   if (scope.toolIds.length > 0) {
+    // A tool-scoped rule is about tools. Knowledge involves none, so such a
+    // rule can never be read as covering it.
+    if (isKnowledgeAction(action)) {
+      return false;
+    }
+
     // For a tool call this is the tool being called. For a step it is the
     // tools the plan says the step needs - so "no financial tools in the
     // engineering workspace" can stop the step before an agent starts it,
@@ -172,7 +180,25 @@ function scopeMatches(
     }
   }
 
+  const knowledgeTypes = scope.knowledgeTypes ?? [];
+
+  if (knowledgeTypes.length > 0) {
+    if (!isKnowledgeAction(action)) {
+      return false;
+    }
+
+    if (!knowledgeTypes.includes(action.knowledgeType)) {
+      return false;
+    }
+  }
+
   return true;
+}
+
+function isKnowledgeAction(
+  action: GovernanceAction,
+): action is Extract<GovernanceAction, { kind: "knowledge_recall" | "knowledge_capture" }> {
+  return action.kind === "knowledge_recall" || action.kind === "knowledge_capture";
 }
 
 /** Why this policy matched, in terms of the thing being evaluated. */
@@ -209,6 +235,10 @@ function explain(
     );
   }
 
+  if ((policy.scope.knowledgeTypes ?? []).length > 0 && isKnowledgeAction(action)) {
+    parts.push(`it covers ${action.knowledgeType} knowledge`);
+  }
+
   if (parts.length === 0) {
     return "it applies across the whole company";
   }
@@ -222,7 +252,13 @@ function summarize(
   matchedCount: number,
 ): string {
   const subject =
-    action.kind === "tool" ? `Using ${action.toolId}` : `“${action.title}”`;
+    action.kind === "tool"
+      ? `Using ${action.toolId}`
+      : action.kind === "task"
+        ? `“${action.title}”`
+        : action.kind === "knowledge_recall"
+          ? `Recalling ${action.knowledgeType} knowledge “${action.title}”`
+          : `Recording ${action.knowledgeType} knowledge “${action.title}”`;
 
   const also =
     matchedCount > 1
