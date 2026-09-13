@@ -7,6 +7,7 @@
 @import "./styles/company.css";
 @import "./styles/brain.css";
 @import "./styles/templates.css";
+@import "./styles/debrief.css";
 
 :root {
   font-family:

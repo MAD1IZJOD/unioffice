@@ -24,7 +24,8 @@ import {
   type MissionKnowledge,
 } from "../lib/api";
 
-import { kindLabel, knowledgeStatusLabel, knowledgeStatusTone } from "../lib/knowledge";
+import { kindLabel, knowledgeStatusLabel } from "../lib/knowledge";
+import { MissionDebrief } from "../components/room/MissionDebrief";
 import { useLiveResource } from "../lib/live";
 import { useResource } from "../lib/useResource";
 import { excerptOf } from "../lib/events";
@@ -179,7 +180,8 @@ export default function Room() {
 
   const data = room.data;
   const { work, plan, approvals, artifacts, executionJob, workspace } = data;
-  const learned = knowledge.data?.learned ?? [];
+  const review = knowledge.data?.review ?? [];
+  const toDecide = review.filter((item) => item.outcome === "pending").length;
   const used = knowledge.data?.used.filter((entry) => !entry.fromThisMission) ?? [];
 
   const state = readMission(missionDataOfRoom(data));
@@ -261,6 +263,13 @@ export default function Room() {
               <div className="operation-brief-label">What you told it</div>
               {briefing}
             </div>
+          )}
+
+          {toDecide > 0 && !state.live && (
+            <a href="#debrief" className="operation-debrief">
+              This mission taught the company {toDecide}{" "}
+              {toDecide === 1 ? "thing" : "things"}. Decide what to keep.
+            </a>
           )}
 
           <Stations
@@ -566,7 +575,7 @@ export default function Room() {
             </>
           )}
 
-          {(artifacts.length > 0 || learned.length > 0 || used.length > 0) && (
+          {(artifacts.length > 0 || review.length > 0 || used.length > 0) && (
             <>
               <Chapter index={settled.length > 0 ? "04" : "03"} title="What it left behind" />
 
@@ -652,33 +661,16 @@ export default function Room() {
                 </div>
               )}
 
-              {learned.length > 0 && (
-                <div className={artifacts.length > 0 || used.length > 0 ? "mt-10" : ""}>
-                  <p className="room-headline">
-                    What the company learned from this mission
-                  </p>
-                  <p className="room-lead">
-                    Proposed from what its steps produced, each traceable to the step and artifact it
-                    came from. Proposals are recalled as unverified leads until a person approves them.
-                  </p>
-
-                  <div className="knowledge-list">
-                    {learned.map((item) => (
-                      <div key={item.id} className="learned-line">
-                        <div className="learned-when">{formatRelativeTime(item.createdAt)}</div>
-                        <div className="min-w-0">
-                          <Link to={`/brain/${item.id}`} className="learned-title">{item.title}</Link>
-                          <div className="learned-source">
-                            <span className={`${toneClass[knowledgeStatusTone(item.status)]}`}>
-                              {knowledgeStatusLabel(item.status)}
-                            </span>
-                            {" · "}
-                            {kindLabel(item.type)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              {review.length > 0 && (
+                <div
+                  id="debrief"
+                  className={artifacts.length > 0 || used.length > 0 ? "mt-10" : ""}
+                >
+                  <MissionDebrief
+                    review={review}
+                    live={state.live}
+                    onChanged={knowledge.reload}
+                  />
 
                   <Link to="/brain" className="button-quiet mt-4 inline-flex">
                     Everything the company knows
