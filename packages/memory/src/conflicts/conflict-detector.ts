@@ -35,6 +35,19 @@ export const SAME_SUBJECT_SIMILARITY = 0.8;
 /** Title-term overlap at which two entries are taken to share a subject. */
 export const SAME_SUBJECT_OVERLAP = 0.6;
 
+/**
+ * A differing figure is only evidence of disagreement when the two entries are
+ * about the same thing - and embedding similarity alone does not establish
+ * that. On the live store, "A significant portion of Starter customers upgrade
+ * to the Growth tier" (40%) and "The current pricing strategy has two tiers
+ * with different churn rates" (2%, 6%) sat close in embedding space because
+ * both are about pricing tiers, and were raised as a conflict. They share one
+ * title word. So figures count only when the titles genuinely overlap, or the
+ * embeddings are close enough to be restatements.
+ */
+const FIGURE_SUBJECT_OVERLAP = 0.34;
+const FIGURE_RESTATEMENT_SIMILARITY = 0.9;
+
 export function detectConflict(
   left: ConflictSubject,
   right: ConflictSubject,
@@ -53,8 +66,12 @@ export function detectConflict(
   const leftText = `${left.title} ${left.content}`;
   const rightText = `${right.title} ${right.content}`;
 
-  const leftAmounts = amounts(leftText);
-  const rightAmounts = amounts(rightText);
+  const figuresComparable =
+    overlap >= FIGURE_SUBJECT_OVERLAP ||
+    (semanticSimilarity !== undefined && semanticSimilarity >= FIGURE_RESTATEMENT_SIMILARITY);
+
+  const leftAmounts = figuresComparable ? amounts(leftText) : [];
+  const rightAmounts = figuresComparable ? amounts(rightText) : [];
 
   if (
     leftAmounts.length > 0 &&
@@ -73,8 +90,8 @@ export function detectConflict(
     };
   }
 
-  const leftPercents = percentages(leftText);
-  const rightPercents = percentages(rightText);
+  const leftPercents = figuresComparable ? percentages(leftText) : [];
+  const rightPercents = figuresComparable ? percentages(rightText) : [];
 
   if (
     leftPercents.length > 0 &&
