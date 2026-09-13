@@ -1,5 +1,7 @@
 import {
   createEntityId,
+  isKnowledgeSubject,
+  KNOWLEDGE_TYPES,
   type Agent,
   type AgentId,
   type OrganizationId,
@@ -413,6 +415,39 @@ export class GovernanceService {
         "A tool policy can only allow or deny. To put a person in front of it, write a task policy instead - approval happens before a step starts, not in the middle of one.",
       );
     }
+
+    const knowledgeTypes = policy.scope.knowledgeTypes ?? [];
+
+    // Each of these would be stored and then never match anything - a rule
+    // that looks enforced and is not. The schema refuses them too; this says
+    // why in words the author can act on.
+    if (isKnowledgeSubject(policy.subject) && policy.scope.toolIds.length > 0) {
+      throw new PolicyValidationError(
+        "A knowledge policy cannot be narrowed to tools. Narrow it by agent, capability, workspace or kind of knowledge instead.",
+      );
+    }
+
+    if (!isKnowledgeSubject(policy.subject) && knowledgeTypes.length > 0) {
+      throw new PolicyValidationError(
+        "Only a knowledge policy can be narrowed to kinds of knowledge.",
+      );
+    }
+
+    const unknownTypes = knowledgeTypes.filter(
+      (type) => !(KNOWLEDGE_TYPES as readonly string[]).includes(type),
+    );
+
+    if (unknownTypes.length > 0) {
+      throw new PolicyValidationError(
+        `These are not kinds of knowledge: ${unknownTypes.join(", ")}.`,
+      );
+    }
+
+    if (policy.subject === "knowledge_recall" && policy.effect === "require_approval") {
+      throw new PolicyValidationError(
+        "A recall policy can only allow or deny - knowledge is recalled as a step starts, with nobody there to ask. To have a person look at knowledge before agents rely on it, write a capture policy that requires approval.",
+      );
+    }
   }
 }
 
@@ -436,6 +471,7 @@ function normalizeScope(
     toolIds: unique(scope?.toolIds),
     workspaceIds: unique(scope?.workspaceIds),
     capabilities: unique(scope?.capabilities),
+    knowledgeTypes: unique(scope?.knowledgeTypes),
   };
 }
 
