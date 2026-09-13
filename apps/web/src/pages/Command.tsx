@@ -319,6 +319,10 @@ export default function Command() {
               Add context
             </Link>
 
+            <Link to="/missions/new#templates" className="button-quiet">
+              From a template
+            </Link>
+
             <button
               type="button"
               onClick={launch}
