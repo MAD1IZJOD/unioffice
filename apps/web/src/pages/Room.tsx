@@ -13,6 +13,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   executeWork,
   fetchExecutionRoom,
+  fetchMissionKnowledge,
   formatDuration,
   formatRelativeTime,
   planWork,
@@ -20,9 +21,12 @@ import {
   retryWork,
   type ArtifactItem,
   type ExecutionRoom as ExecutionRoomData,
+  type MissionKnowledge,
 } from "../lib/api";
 
+import { kindLabel, knowledgeStatusLabel, knowledgeStatusTone } from "../lib/knowledge";
 import { useLiveResource } from "../lib/live";
+import { useResource } from "../lib/useResource";
 import { excerptOf } from "../lib/events";
 
 import {
@@ -88,6 +92,14 @@ export default function Room() {
       fallbackPollMs: FALLBACK_POLL_MS,
       enabled: Boolean(missionId),
     },
+  );
+
+  // What this mission was handed and what it taught the company. Knowledge is
+  // recalled as steps start and captured as they finish, so it is re-read on a
+  // modest interval rather than riding the room's live channel.
+  const knowledge = useResource<MissionKnowledge>(
+    useCallback(() => fetchMissionKnowledge(missionId), [missionId]),
+    { pollMs: 15_000, enabled: Boolean(missionId) },
   );
 
   const { reload } = room;
@@ -166,8 +178,9 @@ export default function Room() {
   }
 
   const data = room.data;
-  const { work, plan, approvals, artifacts, memories, executionJob, workspace } =
-    data;
+  const { work, plan, approvals, artifacts, executionJob, workspace } = data;
+  const learned = knowledge.data?.learned ?? [];
+  const used = knowledge.data?.used.filter((entry) => !entry.fromThisMission) ?? [];
 
   const state = readMission(missionDataOfRoom(data));
   const moments = narrateMission(data.events, {
@@ -553,7 +566,7 @@ export default function Room() {
             </>
           )}
 
-          {(artifacts.length > 0 || memories.length > 0) && (
+          {(artifacts.length > 0 || learned.length > 0 || used.length > 0) && (
             <>
               <Chapter index={settled.length > 0 ? "04" : "03"} title="What it left behind" />
 
@@ -596,24 +609,73 @@ export default function Room() {
                 </>
               )}
 
-              {memories.length > 0 && (
+              {used.length > 0 && (
                 <div className={artifacts.length > 0 ? "mt-10" : ""}>
                   <p className="room-headline">
-                    This mission taught the company {memories.length}{" "}
-                    {memories.length === 1 ? "thing" : "things"}
+                    Used {used.length} {used.length === 1 ? "piece" : "pieces"} of company knowledge
                   </p>
                   <p className="room-lead">
-                    Agents retrieve from here before starting related work, so
-                    the next mission begins from what this one learned.
+                    Recalled before planning and before each step, from what earlier work taught the
+                    company. Each entry says why it was chosen.
                   </p>
 
-                  <div className="space-y-2">
-                    {memories.map((memory) => (
-                      <div key={memory.id} className="callout">
-                        <div className="detail-label mb-1.5">
-                          {memory.type} · {formatRelativeTime(memory.createdAt)}
+                  <div className="knowledge-list">
+                    {used.map((entry) => (
+                      <div key={entry.knowledge.id} className="learned-line">
+                        <div className="learned-when">
+                          {entry.stages.includes("planning") ? "planning" : "a step"}
                         </div>
-                        {memory.content}
+                        <div className="min-w-0">
+                          <Link to={`/brain/${entry.knowledge.id}`} className="learned-title">
+                            {entry.knowledge.title}
+                          </Link>
+                          <div className="learned-source">
+                            {kindLabel(entry.knowledge.type)} · {knowledgeStatusLabel(entry.knowledge.status)}
+                            {entry.knowledge.workId && entry.knowledge.workId !== work.id && (
+                              <>
+                                {" · "}
+                                <Link to={`/missions/${entry.knowledge.workId}`} className="hover:text-[#84b4fb]">
+                                  learned in an earlier mission
+                                </Link>
+                              </>
+                            )}
+                          </div>
+                          {entry.reasons.length > 0 && (
+                            <ul className="knowledge-why">
+                              {entry.reasons.slice(0, 3).map((reason) => <li key={reason}>{reason}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {learned.length > 0 && (
+                <div className={artifacts.length > 0 || used.length > 0 ? "mt-10" : ""}>
+                  <p className="room-headline">
+                    What the company learned from this mission
+                  </p>
+                  <p className="room-lead">
+                    Proposed from what its steps produced, each traceable to the step and artifact it
+                    came from. Proposals are recalled as unverified leads until a person approves them.
+                  </p>
+
+                  <div className="knowledge-list">
+                    {learned.map((item) => (
+                      <div key={item.id} className="learned-line">
+                        <div className="learned-when">{formatRelativeTime(item.createdAt)}</div>
+                        <div className="min-w-0">
+                          <Link to={`/brain/${item.id}`} className="learned-title">{item.title}</Link>
+                          <div className="learned-source">
+                            <span className={`${toneClass[knowledgeStatusTone(item.status)]}`}>
+                              {knowledgeStatusLabel(item.status)}
+                            </span>
+                            {" · "}
+                            {kindLabel(item.type)}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
