@@ -284,6 +284,12 @@ export default function KnowledgeEntry() {
                   ? "Does not go stale with age"
                   : `${data.freshness.ageDays} days since confirmed · treated as current for ${data.freshness.horizonDays}`}
               </dd>
+              <dt>Confirmed</dt>
+              <dd>
+                {data.confirmations.length === 0
+                  ? "Not yet by another mission"
+                  : `Again by ${data.confirmations.length} later ${data.confirmations.length === 1 ? "mission" : "missions"}`}
+              </dd>
               <dt>Recalled</dt>
               <dd>{usage.recallCount} {usage.recallCount === 1 ? "time" : "times"}</dd>
               <dt>Indexed</dt>
@@ -297,9 +303,37 @@ export default function KnowledgeEntry() {
             </dl>
           </section>
 
-          {(related.supersedes || related.supersededBy) && (
+          {data.confirmations.length > 0 && (
+            <section className="entry-section">
+              <div className="entry-label">Confirmed again by</div>
+              {data.confirmations.map((entry, index) => (
+                <div key={`${entry.mission?.id ?? "unnamed"}-${index}`} className="learned-line">
+                  <div className="learned-when">
+                    {entry.mergedAt ? formatRelativeTime(entry.mergedAt) : "—"}
+                  </div>
+                  <div className="min-w-0">
+                    {entry.mission ? (
+                      <Link to={`/missions/${entry.mission.id}`} className="learned-title">
+                        {entry.mission.objective}
+                      </Link>
+                    ) : (
+                      <span className="learned-title">A mission that is no longer available</span>
+                    )}
+                    {entry.wording && <div className="learned-source">in its words: “{entry.wording}”</div>}
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {(related.supersedes || related.supersededBy || related.mergedInto) && (
             <section className="entry-section">
               <div className="entry-label">History</div>
+              {related.mergedInto && (
+                <p className="t-body">
+                  Merged into <Link to={`/brain/${related.mergedInto.id}`} className="text-[#84b4fb]">{related.mergedInto.title}</Link>, which says the same thing
+                </p>
+              )}
               {related.supersededBy && (
                 <p className="t-body">
                   Superseded by <Link to={`/brain/${related.supersededBy.id}`} className="text-[#84b4fb]">{related.supersededBy.title}</Link>

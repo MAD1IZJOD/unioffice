@@ -202,7 +202,15 @@ export interface KnowledgeDetail {
     similar: Array<{ knowledge: KnowledgeItem; relevance: number; reasons: string[] }>;
     supersedes?: KnowledgeItem;
     supersededBy?: KnowledgeItem;
+    /** Set when a person merged this entry into another that says the same. */
+    mergedInto?: KnowledgeItem;
   };
+  /** Later missions that arrived at this knowledge, recorded when merged in. */
+  confirmations: Array<{
+    mission?: { id: string; objective: string };
+    wording?: string;
+    mergedAt?: string;
+  }>;
   usage: {
     recallCount: number;
     missions: Array<{
