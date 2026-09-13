@@ -66,13 +66,27 @@ test("one entry negating the other is a conflict", () => {
   assert.equal(conflict?.signals.kind, "polarity");
 });
 
-test("embeddings can establish the shared subject when the titles are worded apart", () => {
+test("embeddings can establish the shared subject when the titles are near restatements", () => {
   const left = { title: "Entry tier cost", content: "The cheapest plan costs $99." };
   const right = { title: "What Starter customers pay", content: "Starter customers pay $129." };
 
   assert.ok(subjectOverlap(left, right) < 0.6);
   assert.equal(detectConflict(left, right), null);
-  assert.equal(detectConflict(left, right, 0.86)?.signals.kind, "amount");
+  assert.equal(detectConflict(left, right, 0.92)?.signals.kind, "amount");
+});
+
+test("figures about different subjects in the same area are not a conflict, however close the embeddings", () => {
+  // The exact pair the live store raised as a conflict before this rule.
+  const upgrades = {
+    title: "A significant portion of Starter customers upgrade to the Growth tier.",
+    content: "About 40% of Starter customers upgrade to Growth within a year.",
+  };
+  const churn = {
+    title: "The current pricing strategy has two tiers with different churn rates.",
+    content: "Starter churns at 6% after the second month; Growth churns at 2%.",
+  };
+
+  assert.equal(detectConflict(upgrades, churn, 0.84), null);
 });
 
 test("an entry with a figure and one without is not evidence of disagreement", () => {
