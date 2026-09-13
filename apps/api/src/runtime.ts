@@ -10,6 +10,7 @@ import {
   SupabaseArtifactRepository,
   SupabaseEventRepository,
   SupabaseExecutionJobRepository,
+  SupabaseKnowledgeLinkRepository,
   SupabaseMemoryRepository,
   SupabaseOrganizationRepository,
   SupabasePolicyRepository,
@@ -18,7 +19,10 @@ import {
   SupabaseWorkspaceRepository,
 } from "@unioffice/database";
 
-import { DefaultMemoryRetriever } from "@unioffice/memory";
+import {
+  KnowledgeExtractor,
+  OllamaEmbeddingProvider,
+} from "@unioffice/memory";
 
 import {
   DefaultDelegator,
@@ -38,6 +42,9 @@ import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
 import { EventRecorder } from "./event-recorder.js";
+import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
+import { KnowledgeGovernance } from "./knowledge-governance.js";
+import { KnowledgeRecallService } from "./knowledge-recall-service.js";
 import { ExecutionJobRunner } from "./execution-job-runner.js";
 import { ExecutionQueueService } from "./execution-queue-service.js";
 import { ExecutionRoomService } from "./execution-room-service.js";
@@ -73,16 +80,12 @@ export function createExecutionRuntime(config: ApiConfig) {
   const artifactRepository = new SupabaseArtifactRepository(supabase);
   const eventRepository = new SupabaseEventRepository(supabase);
   const memoryRepository = new SupabaseMemoryRepository(supabase);
+  const knowledgeLinkRepository = new SupabaseKnowledgeLinkRepository(supabase);
   const executionJobRepository = new SupabaseExecutionJobRepository(supabase);
   const policyRepository = new SupabasePolicyRepository(supabase);
   const workspaceRepository = new SupabaseWorkspaceRepository(supabase);
 
   const eventRecorder = new EventRecorder(eventRepository);
-  const memoryRetriever = new DefaultMemoryRetriever(memoryRepository);
-  const companyBrainService = new CompanyBrainService(
-    memoryRepository,
-    memoryRetriever,
-  );
 
   const toolRegistry = createDefaultToolRegistry();
 
@@ -116,6 +119,55 @@ export function createExecutionRuntime(config: ApiConfig) {
   });
   const executionEngine = new DefaultExecutionEngine(agentRuntime);
 
+  // Company knowledge. Built after governance for the same reason the tool
+  // executor is: recall and capture both go through policy, so there is no
+  // configuration in which knowledge reaches an agent without it.
+  const embeddingProvider = config.embeddingModel
+    ? new OllamaEmbeddingProvider({
+        baseUrl: config.ollamaBaseUrl,
+        model: config.embeddingModel,
+      })
+    : undefined;
+
+  const knowledgeGovernance = new KnowledgeGovernance(
+    policyRepository,
+    governanceService,
+  );
+
+  const knowledgeRecallService = new KnowledgeRecallService(
+    memoryRepository,
+    knowledgeLinkRepository,
+    knowledgeGovernance,
+    eventRecorder,
+    workRepository,
+    taskRepository,
+    artifactRepository,
+    embeddingProvider,
+  );
+
+  const knowledgeCaptureService = new KnowledgeCaptureService(
+    memoryRepository,
+    knowledgeLinkRepository,
+    knowledgeGovernance,
+    eventRecorder,
+    new KnowledgeExtractor(modelProvider, config.ollamaModel),
+    embeddingProvider,
+  );
+
+  const companyBrainService = new CompanyBrainService(
+    memoryRepository,
+    knowledgeLinkRepository,
+    knowledgeRecallService,
+    knowledgeCaptureService,
+    eventRecorder,
+    workRepository,
+    taskRepository,
+    artifactRepository,
+    workspaceRepository,
+    agentRepository,
+    embeddingProvider?.model,
+  );
+
   const applicationService = new WorkApplicationService(
     workRepository,
     eventRecorder,
@@ -133,6 +185,7 @@ export function createExecutionRuntime(config: ApiConfig) {
       name: tool.name,
       description: tool.description,
     })),
+    knowledgeRecallService,
   );
 
   const taskExecutionService = new TaskExecutionService(
@@ -142,7 +195,10 @@ export function createExecutionRuntime(config: ApiConfig) {
     agentRepository,
     executionEngine,
     eventRecorder,
-    companyBrainService,
+    {
+      recall: knowledgeRecallService,
+      capture: knowledgeCaptureService,
+    },
   );
 
   const workApprovalService = new WorkApprovalService(
@@ -289,6 +345,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     artifactRepository,
     eventRepository,
     memoryRepository,
+    knowledgeLinkRepository,
     executionJobRepository,
     policyRepository,
     eventRecorder,
@@ -306,6 +363,9 @@ export function createExecutionRuntime(config: ApiConfig) {
     executionJobRunner,
     workRecoveryService,
     companyBrainService,
+    knowledgeRecallService,
+    knowledgeCaptureService,
+    knowledgeGovernance,
     companyOverviewService,
     governanceService,
     governanceOverviewService,

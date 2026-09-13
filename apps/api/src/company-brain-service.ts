@@ -1,92 +1,926 @@
 import {
   createEntityId,
+  KNOWLEDGE_TYPES,
+  type Agent,
   type AgentId,
+  type ArtifactId,
+  type KnowledgeConflict,
+  type KnowledgeConflictId,
+  type KnowledgeRecall,
+  type KnowledgeSourceType,
+  type KnowledgeStatus,
   type Memory,
   type MemoryId,
+  type MemoryType,
   type OrganizationId,
-  type TaskId,
   type WorkId,
+  type WorkspaceId,
 } from "@unioffice/core";
 
 import type {
+  AgentRepository,
+  ArtifactRepository,
+  KnowledgeLinkRepository,
+  KnowledgeSearchRepository,
   MemoryRepository,
+  TaskRepository,
+  WorkRepository,
+  WorkspaceRepository,
 } from "@unioffice/database";
 
-import type {
-  MemoryRetriever,
+import {
+  detectInstructionSignals,
+  freshnessOf,
+  knowledgeContentHash,
+  sanitizeKnowledgeText,
 } from "@unioffice/memory";
 
-export interface TaskOutcomeMemory {
-  organizationId: OrganizationId;
-
-  agentId?: AgentId;
-
-  workId: WorkId;
-
-  taskId: TaskId;
-
-  title: string;
-
-  status: "completed" | "failed";
-
-  summary: string;
-}
-
-export interface RelevantMemoryQuery {
-  organizationId: OrganizationId;
-
-  agentId?: AgentId;
-
-  query: string;
-
-  limit?: number;
-}
-
-const MAX_SUMMARY_CHARS = 500;
+import type { EventRecorder } from "./event-recorder.js";
+import type { CaptureReport, KnowledgeCaptureService } from "./knowledge-capture-service.js";
+import type { KnowledgeRecallService, RecallResult } from "./knowledge-recall-service.js";
 
 /**
- * The company's small, queryable record of what happened and why. Every
- * completed or failed task leaves a memory; agents retrieve relevant prior
- * memories before executing a new task instead of starting from nothing.
+ * The Company Brain: what the company knows, where it came from, and what it
+ * is being used for.
+ *
+ * This is the service behind the Brain surface and the knowledge API. It does
+ * not retrieve or write knowledge by a route of its own - recall and capture
+ * each have exactly one path, shared with execution - so what a person sees
+ * here is what the agents actually get.
+ *
+ * Every lookup by id is checked against the caller's organization and a
+ * mismatch reads as "not found", the same shape every other scoped read in
+ * the API uses.
  */
+
+export class KnowledgeNotFoundError extends Error {
+  constructor(message = "Knowledge not found.") {
+    super(message);
+    this.name = "KnowledgeNotFoundError";
+  }
+}
+
+export class KnowledgeValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "KnowledgeValidationError";
+  }
+}
+
+export class KnowledgeStateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "KnowledgeStateError";
+  }
+}
+
+export interface KnowledgeSearchInput {
+  query?: string;
+  types?: MemoryType[];
+  statuses?: KnowledgeStatus[];
+  /** A workspace id narrows to that workspace; null to company-wide only. */
+  workspaceId?: WorkspaceId | null;
+  sourceType?: KnowledgeSourceType;
+  minImportance?: number;
+  createdAfter?: Date;
+  createdBefore?: Date;
+  limit?: number;
+  offset?: number;
+}
+
+export interface KnowledgeSearchResult {
+  knowledge: Memory;
+  /** 0-1, only when the search had a query to be relevant to. */
+  relevance?: number;
+  reasons: string[];
+  stale: boolean;
+  ageDays: number;
+  flagged: boolean;
+}
+
+export interface CreateKnowledgeInput {
+  organizationId: OrganizationId;
+  title: string;
+  content: string;
+  type: MemoryType;
+  importance?: number;
+  confidence?: number;
+  workspaceId?: WorkspaceId;
+  createdBy: string;
+}
+
+export interface UpdateKnowledgeInput {
+  organizationId: OrganizationId;
+  knowledgeId: MemoryId;
+  title?: string;
+  content?: string;
+  type?: MemoryType;
+  importance?: number;
+  /** null clears the confidence. */
+  confidence?: number | null;
+  /** null makes it company-wide. */
+  workspaceId?: WorkspaceId | null;
+  updatedBy: string;
+}
+
+export type ConflictResolution =
+  | { kind: "keep"; keepId: MemoryId }
+  | { kind: "both_hold" }
+  | { kind: "dismiss" };
+
+const MAX_TITLE_CHARS = 160;
+const MAX_CONTENT_CHARS = 4_000;
+const MAX_PAGE = 50;
+const MAX_OFFSET = 1_000;
+
 export class CompanyBrainService {
   constructor(
-    private readonly memoryRepository: MemoryRepository,
-    private readonly memoryRetriever: MemoryRetriever,
+    private readonly memories: MemoryRepository & KnowledgeSearchRepository,
+    private readonly links: KnowledgeLinkRepository,
+    private readonly recall: KnowledgeRecallService,
+    private readonly capture: KnowledgeCaptureService,
+    private readonly eventRecorder: EventRecorder,
+    private readonly workRepository: WorkRepository,
+    private readonly taskRepository: TaskRepository,
+    private readonly artifactRepository: ArtifactRepository,
+    private readonly workspaceRepository: WorkspaceRepository,
+    private readonly agentRepository: AgentRepository,
+    private readonly embeddingModel?: string,
   ) {}
 
-  async recordTaskOutcome(outcome: TaskOutcomeMemory): Promise<Memory> {
+  /* ----------------------------------------------------------------------
+     Reading
+     ---------------------------------------------------------------------- */
+
+  async search(
+    organizationId: OrganizationId,
+    input: KnowledgeSearchInput,
+  ): Promise<{ mode: "relevance" | "recent"; items: KnowledgeSearchResult[] }> {
+    if (input.workspaceId) {
+      await this.requireWorkspace(organizationId, input.workspaceId);
+    }
+
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), MAX_PAGE);
+    const offset = Math.min(Math.max(input.offset ?? 0, 0), MAX_OFFSET);
+    const statuses = input.statuses?.length ? input.statuses : (["active", "proposed"] as KnowledgeStatus[]);
+    const query = input.query?.trim();
+
+    if (!query) {
+      const rows = await this.memories.query({
+        organizationId,
+        types: input.types,
+        statuses,
+        workspaceId: input.workspaceId,
+        sourceType: input.sourceType,
+        minImportance: input.minImportance,
+        createdAfter: input.createdAfter,
+        createdBefore: input.createdBefore,
+        limit,
+        offset,
+      });
+
+      const now = new Date();
+
+      return {
+        mode: "recent",
+        items: rows.map((knowledge) => {
+          const freshness = freshnessOf(knowledge, now);
+          return {
+            knowledge,
+            reasons: [],
+            stale: freshness.stale,
+            ageDays: freshness.ageDays,
+            flagged: detectInstructionSignals(`${knowledge.title}\n${knowledge.content}`).length > 0,
+          };
+        }),
+      };
+    }
+
+    // Relevance search ranks a bounded pool, then applies the remaining
+    // filters. A person browsing sees the whole organization; the workspace
+    // filter narrows what is shown, it is not the recall boundary agents get.
+    const ranked = await this.recall.search({
+      organizationId,
+      text: query,
+      workspace: { mode: "all" },
+      statuses,
+      workspaceId: input.workspaceId ?? undefined,
+      limit: MAX_PAGE,
+    });
+
+    const filtered = ranked.filter(({ memory }) =>
+      (!input.types?.length || input.types.includes(memory.type)) &&
+      (input.workspaceId === undefined ||
+        (input.workspaceId === null ? !memory.workspaceId : memory.workspaceId === input.workspaceId)) &&
+      (!input.sourceType || memory.sourceType === input.sourceType) &&
+      (input.minImportance === undefined || memory.importance >= input.minImportance) &&
+      (!input.createdAfter || memory.createdAt >= input.createdAfter) &&
+      (!input.createdBefore || memory.createdAt <= input.createdBefore));
+
+    return {
+      mode: "relevance",
+      items: filtered.slice(offset, offset + limit).map((entry) => ({
+        knowledge: entry.memory,
+        relevance: Math.round(entry.score * 1_000) / 1_000,
+        reasons: entry.reasons,
+        stale: entry.stale,
+        ageDays: entry.ageDays,
+        flagged: detectInstructionSignals(`${entry.memory.title}\n${entry.memory.content}`).length > 0,
+      })),
+    };
+  }
+
+  /** The Brain's opening: what the company knows, learned, uses and disputes. */
+  async getOverview(organizationId: OrganizationId) {
+    const [counts, recentlyLearned, awaitingReview, important, recentRecalls, openConflicts, archived, sample] =
+      await Promise.all([
+        this.memories.countByStatus(organizationId),
+        this.memories.query({ organizationId, statuses: ["active", "proposed"], limit: 8 }),
+        this.memories.query({ organizationId, statuses: ["proposed"], limit: 8 }),
+        this.memories.query({ organizationId, statuses: ["active"], minImportance: 0.7, limit: 8 }),
+        this.links.findRecentRecalls(organizationId, 300),
+        this.links.findConflicts(organizationId, { status: "open", limit: 10 }),
+        this.memories.query({ organizationId, statuses: ["archived"], limit: 5 }),
+        this.memories.query({ organizationId, statuses: ["active", "proposed"], limit: 200 }),
+      ]);
+
+    const usage = new Map<MemoryId, { count: number; works: Set<string>; lastRecalledAt: Date }>();
+
+    for (const recall of recentRecalls) {
+      const entry = usage.get(recall.memoryId) ?? { count: 0, works: new Set<string>(), lastRecalledAt: recall.recalledAt };
+      entry.count += 1;
+      if (recall.workId) entry.works.add(recall.workId);
+      if (recall.recalledAt > entry.lastRecalledAt) entry.lastRecalledAt = recall.recalledAt;
+      usage.set(recall.memoryId, entry);
+    }
+
+    const mostUsedIds = [...usage.entries()]
+      .sort((left, right) => right[1].count - left[1].count || right[1].lastRecalledAt.getTime() - left[1].lastRecalledAt.getTime())
+      .slice(0, 8)
+      .map(([id]) => id);
+
+    const conflictSideIds = openConflicts.flatMap((conflict) => [conflict.memoryId, conflict.conflictingMemoryId]);
+
+    const [usedRows, conflictRows] = await Promise.all([
+      this.memories.findByIds(organizationId, mostUsedIds),
+      this.memories.findByIds(organizationId, conflictSideIds),
+    ]);
+
+    const usedById = new Map(usedRows.map((row) => [row.id, row]));
+    const conflictById = new Map(conflictRows.map((row) => [row.id, row]));
+
+    const byType: Partial<Record<MemoryType, number>> = {};
+    for (const row of sample) byType[row.type] = (byType[row.type] ?? 0) + 1;
+
     const now = new Date();
 
-    return this.memoryRepository.create({
-      id: createEntityId<"MemoryId">() as MemoryId,
-      organizationId: outcome.organizationId,
-      agentId: outcome.agentId,
-      workId: outcome.workId,
-      taskId: outcome.taskId,
-      scope: "company",
-      type: "experience",
-      status: "active",
-      title: truncate(`Task "${outcome.title}" ${outcome.status}`, 160),
-      content: `Task "${outcome.title}" ${outcome.status}: ${truncate(outcome.summary, MAX_SUMMARY_CHARS)}`,
-      source: `task:${outcome.taskId}`,
-      sourceType: "task",
-      importance: outcome.status === "failed" ? 0.7 : 0.5,
-      createdAt: now,
-      updatedAt: now,
-      metadata: { status: outcome.status },
+    return {
+      organizationId,
+      generatedAt: now,
+      counts: {
+        ...counts,
+        openConflicts: openConflicts.length,
+        missionsInformed: new Set(recentRecalls.flatMap((recall) => (recall.workId ? [recall.workId] : []))).size,
+        recallsRecorded: recentRecalls.length,
+        stale: sample.filter((row) => freshnessOf(row, now).stale).length,
+      },
+      byType,
+      /** byType is counted over at most this many of the newest recallable rows. */
+      byTypeSampleSize: sample.length,
+      recentlyLearned,
+      awaitingReview,
+      important,
+      inUse: mostUsedIds.flatMap((id) => {
+        const knowledge = usedById.get(id);
+        const entry = usage.get(id)!;
+        return knowledge
+          ? [{ knowledge, recallCount: entry.count, missionCount: entry.works.size, lastRecalledAt: entry.lastRecalledAt }]
+          : [];
+      }),
+      conflicts: openConflicts.flatMap((conflict) => {
+        const left = conflictById.get(conflict.memoryId);
+        const right = conflictById.get(conflict.conflictingMemoryId);
+        return left && right ? [{ conflict, left, right }] : [];
+      }),
+      archived,
+      retrieval: {
+        semantic: Boolean(this.embeddingModel),
+        embeddingModel: this.embeddingModel,
+      },
+    };
+  }
+
+  async getDetail(organizationId: OrganizationId, knowledgeId: MemoryId) {
+    const knowledge = await this.requireKnowledge(organizationId, knowledgeId);
+    const now = new Date();
+
+    const [work, task, artifact, agent, workspace, recalls, conflicts, sameMission, sameArtifact, similar, supersedes] =
+      await Promise.all([
+        knowledge.workId ? this.workRepository.findById(knowledge.workId) : null,
+        knowledge.taskId ? this.taskRepository.findById(knowledge.taskId) : null,
+        knowledge.artifactId ? this.artifactRepository.findById(knowledge.artifactId) : null,
+        knowledge.agentId ? this.agentRepository.findById(knowledge.agentId) : null,
+        knowledge.workspaceId ? this.workspaceRepository.findById(knowledge.workspaceId) : null,
+        this.links.findRecallsByMemory(organizationId, knowledge.id, 100),
+        this.links.findConflicts(organizationId, { memoryId: knowledge.id, limit: 20 }),
+        knowledge.workId
+          ? this.memories.query({ organizationId, workId: knowledge.workId, limit: 11 })
+          : Promise.resolve([]),
+        knowledge.artifactId
+          ? this.memories.query({ organizationId, artifactId: knowledge.artifactId, limit: 11 })
+          : Promise.resolve([]),
+        this.recall.search({
+          organizationId,
+          text: `${knowledge.title}\n${knowledge.content}`,
+          workspace: { mode: "all" },
+          statuses: ["active", "proposed"],
+          limit: 7,
+        }),
+        knowledge.supersedesId ? this.memories.findByIds(organizationId, [knowledge.supersedesId]) : Promise.resolve([]),
+      ]);
+
+    // Every referenced row is confirmed to belong to this organization before
+    // it is named. A reference that fails the check is simply not shown.
+    const ownWork = work && work.organizationId === organizationId ? work : undefined;
+    const ownTask = task && ownWork && task.workId === ownWork.id ? task : undefined;
+    const ownArtifact = artifact && artifact.organizationId === organizationId ? artifact : undefined;
+    const ownAgent = agent && agent.organizationId === organizationId ? agent : undefined;
+    const ownWorkspace = workspace && workspace.organizationId === organizationId ? workspace : undefined;
+
+    const usage = await this.describeUsage(organizationId, recalls);
+
+    const counterpartIds = conflicts.map((conflict) =>
+      conflict.memoryId === knowledge.id ? conflict.conflictingMemoryId : conflict.memoryId);
+    const counterparts = new Map(
+      (await this.memories.findByIds(organizationId, counterpartIds)).map((row) => [row.id, row]),
+    );
+
+    const freshness = freshnessOf(knowledge, now);
+    const supersededById = typeof knowledge.metadata.supersededById === "string"
+      ? (knowledge.metadata.supersededById as MemoryId)
+      : undefined;
+    const supersededBy = supersededById
+      ? (await this.memories.findByIds(organizationId, [supersededById]))[0]
+      : undefined;
+
+    return {
+      knowledge,
+      freshness: {
+        ageDays: Math.round(freshness.ageDays),
+        stale: freshness.stale,
+        horizonDays: freshness.horizonDays,
+      },
+      flags: detectInstructionSignals(`${knowledge.title}\n${knowledge.content}`),
+      provenance: {
+        sourceType: knowledge.sourceType,
+        createdBy: knowledge.createdBy,
+        reviewedBy: knowledge.reviewedBy,
+        reviewedAt: knowledge.reviewedAt,
+        mission: ownWork ? { id: ownWork.id, objective: ownWork.objective, status: ownWork.status, createdAt: ownWork.createdAt } : undefined,
+        task: ownTask ? { id: ownTask.id, title: ownTask.title, status: ownTask.status } : undefined,
+        artifact: ownArtifact ? { id: ownArtifact.id, name: ownArtifact.name, type: ownArtifact.type } : undefined,
+        agent: ownAgent ? { id: ownAgent.id, name: ownAgent.name, capabilities: ownAgent.capabilities } : undefined,
+        workspace: ownWorkspace ? { id: ownWorkspace.id, name: ownWorkspace.name } : undefined,
+        extraction: knowledge.metadata.extraction,
+      },
+      related: {
+        sameMission: sameMission.filter((row) => row.id !== knowledge.id).slice(0, 10),
+        sameArtifact: sameArtifact.filter((row) => row.id !== knowledge.id).slice(0, 10),
+        similar: similar
+          .filter((entry) => entry.memory.id !== knowledge.id)
+          .slice(0, 6)
+          .map((entry) => ({ knowledge: entry.memory, relevance: Math.round(entry.score * 1_000) / 1_000, reasons: entry.reasons })),
+        supersedes: supersedes[0],
+        supersededBy,
+      },
+      usage,
+      conflicts: conflicts.map((conflict) => ({
+        conflict,
+        counterpart: counterparts.get(
+          conflict.memoryId === knowledge.id ? conflict.conflictingMemoryId : conflict.memoryId,
+        ),
+      })),
+    };
+  }
+
+  /** What one mission learned, and what it was given. */
+  async getMissionKnowledge(organizationId: OrganizationId, workId: WorkId) {
+    const [learned, recalls] = await Promise.all([
+      this.memories.query({ organizationId, workId, limit: 50 }),
+      this.links.findRecallsByWork(organizationId, workId),
+    ]);
+
+    const rows = new Map(
+      (await this.memories.findByIds(organizationId, [...new Set(recalls.map((recall) => recall.memoryId))]))
+        .map((row) => [row.id, row]),
+    );
+
+    const used = new Map<MemoryId, {
+      knowledge: Memory;
+      stages: Set<string>;
+      taskIds: Set<string>;
+      agentIds: Set<string>;
+      bestRank: number;
+      reasons: string[];
+    }>();
+
+    for (const recall of recalls) {
+      const knowledge = rows.get(recall.memoryId);
+      if (!knowledge) continue;
+
+      const entry = used.get(recall.memoryId) ?? {
+        knowledge,
+        stages: new Set<string>(),
+        taskIds: new Set<string>(),
+        agentIds: new Set<string>(),
+        bestRank: recall.rank,
+        reasons: recall.reasons,
+      };
+
+      entry.stages.add(recall.stage);
+      if (recall.taskId) entry.taskIds.add(recall.taskId);
+      if (recall.agentId) entry.agentIds.add(recall.agentId);
+      if (recall.rank < entry.bestRank) {
+        entry.bestRank = recall.rank;
+        entry.reasons = recall.reasons;
+      }
+
+      used.set(recall.memoryId, entry);
+    }
+
+    return {
+      learned,
+      used: [...used.values()]
+        .sort((left, right) => left.bestRank - right.bestRank)
+        .map((entry) => ({
+          knowledge: entry.knowledge,
+          stages: [...entry.stages],
+          taskIds: [...entry.taskIds],
+          agentIds: [...entry.agentIds],
+          reasons: entry.reasons,
+          // Knowledge from this same mission is "used" only if a later step
+          // recalled what an earlier step learned - worth telling apart.
+          fromThisMission: entry.knowledge.workId === workId,
+        })),
+    };
+  }
+
+  /** Exactly what an agent would be handed for this text, not recorded. */
+  async previewRecall(
+    organizationId: OrganizationId,
+    input: { query: string; workspaceId?: WorkspaceId; agentId?: AgentId },
+  ): Promise<RecallResult> {
+    if (input.workspaceId) await this.requireWorkspace(organizationId, input.workspaceId);
+
+    let agent: Agent | undefined;
+
+    if (input.agentId) {
+      const found = await this.agentRepository.findById(input.agentId);
+      if (!found || found.organizationId !== organizationId) {
+        throw new KnowledgeNotFoundError("Agent not found.");
+      }
+      agent = found;
+    }
+
+    return this.recall.previewRecall({
+      organizationId,
+      text: input.query,
+      workspaceId: input.workspaceId,
+      agent,
     });
   }
 
-  async retrieveRelevant(query: RelevantMemoryQuery): Promise<Memory[]> {
-    return this.memoryRetriever.retrieve(query);
+  /* ----------------------------------------------------------------------
+     Writing
+     ---------------------------------------------------------------------- */
+
+  async createKnowledge(input: CreateKnowledgeInput): Promise<Memory> {
+    if (input.workspaceId) await this.requireWorkspace(input.organizationId, input.workspaceId);
+
+    const title = this.validTitle(input.title);
+    const content = this.validContent(input.content);
+    const type = this.validType(input.type);
+    const contentHash = knowledgeContentHash(content);
+
+    const duplicate = await this.memories.query({
+      organizationId: input.organizationId,
+      contentHash,
+      statuses: ["proposed", "active"],
+      limit: 1,
+    });
+
+    if (duplicate.length > 0) {
+      throw new KnowledgeStateError("The company already records this knowledge.");
+    }
+
+    const flags = detectInstructionSignals(`${title}\n${content}`);
+    const now = new Date();
+
+    return this.capture.persist(
+      {
+        id: createEntityId<"MemoryId">() as MemoryId,
+        organizationId: input.organizationId,
+        workspaceId: input.workspaceId,
+        scope: "company",
+        type,
+        // A person writing knowledge is vouching for it, so it is active from
+        // the start - except when it reads like an instruction to an AI, which
+        // waits for a second look however it arrived.
+        status: flags.length > 0 ? "proposed" : "active",
+        title,
+        content,
+        sourceType: "user",
+        importance: bounded(input.importance, 0.5),
+        confidence: input.confidence === undefined ? undefined : bounded(input.confidence, 0.5),
+        createdBy: input.createdBy,
+        contentHash,
+        createdAt: now,
+        updatedAt: now,
+        metadata: flags.length > 0 ? { safety: { instructionSignals: flags } } : {},
+      },
+      {
+        actorType: "user",
+        actorId: input.createdBy,
+        reason: flags.length > 0
+          ? "Held as a proposal: the text is phrased as instructions to an AI."
+          : "Written by a person.",
+      },
+    );
   }
 
-  async listByOrganization(organizationId: OrganizationId): Promise<Memory[]> {
-    return this.memoryRepository.query({ organizationId, limit: 100 });
+  async updateKnowledge(input: UpdateKnowledgeInput): Promise<Memory> {
+    const current = await this.requireKnowledge(input.organizationId, input.knowledgeId);
+
+    if (current.status === "archived") {
+      throw new KnowledgeStateError("Archived knowledge cannot be changed. Restore it first.");
+    }
+
+    if (input.workspaceId) await this.requireWorkspace(input.organizationId, input.workspaceId);
+
+    const title = input.title === undefined ? current.title : this.validTitle(input.title);
+    const content = input.content === undefined ? current.content : this.validContent(input.content);
+    const type = input.type === undefined ? current.type : this.validType(input.type);
+
+    const changed: string[] = [];
+    if (title !== current.title) changed.push("title");
+    if (content !== current.content) changed.push("content");
+    if (type !== current.type) changed.push("type");
+    if (input.importance !== undefined && input.importance !== current.importance) changed.push("importance");
+    if (input.confidence !== undefined && input.confidence !== current.confidence) changed.push("confidence");
+    if (input.workspaceId !== undefined && (input.workspaceId ?? undefined) !== current.workspaceId) changed.push("workspace");
+
+    if (changed.length === 0) {
+      return current;
+    }
+
+    const updated = await this.memories.update({
+      ...current,
+      title,
+      content,
+      type,
+      importance: input.importance === undefined ? current.importance : bounded(input.importance, current.importance),
+      confidence:
+        input.confidence === undefined
+          ? current.confidence
+          : input.confidence === null ? undefined : bounded(input.confidence, 0.5),
+      workspaceId: input.workspaceId === undefined ? current.workspaceId : (input.workspaceId ?? undefined),
+      contentHash: knowledgeContentHash(content),
+      updatedAt: new Date(),
+    });
+
+    await this.eventRecorder.record({
+      organizationId: updated.organizationId,
+      workId: updated.workId,
+      actorType: "user",
+      actorId: input.updatedBy,
+      type: "knowledge.updated",
+      payload: { knowledgeId: updated.id, title: updated.title, changed },
+    });
+
+    if (changed.includes("title") || changed.includes("content")) {
+      await this.capture.index(updated);
+    }
+
+    return updated;
+  }
+
+  /**
+   * A person vouches for knowledge. A proposal becomes active; knowledge that
+   * was already active is re-confirmed, which is what keeps it from reading as
+   * stale.
+   */
+  async approveKnowledge(organizationId: OrganizationId, knowledgeId: MemoryId, reviewer: string): Promise<Memory> {
+    const current = await this.requireKnowledge(organizationId, knowledgeId);
+
+    if (current.status === "archived") {
+      throw new KnowledgeStateError("Archived knowledge cannot be approved. Restore it first.");
+    }
+
+    const now = new Date();
+    const approved = await this.memories.update({
+      ...current,
+      status: "active",
+      reviewedBy: reviewer,
+      reviewedAt: now,
+      updatedAt: now,
+    });
+
+    await this.eventRecorder.record({
+      organizationId,
+      workId: approved.workId,
+      actorType: "user",
+      actorId: reviewer,
+      type: "knowledge.approved",
+      payload: {
+        knowledgeId: approved.id,
+        title: approved.title,
+        previousStatus: current.status,
+      },
+    });
+
+    return approved;
+  }
+
+  async archiveKnowledge(
+    organizationId: OrganizationId,
+    knowledgeId: MemoryId,
+    input: { by: string; reason?: string; supersededById?: MemoryId },
+  ): Promise<Memory> {
+    const current = await this.requireKnowledge(organizationId, knowledgeId);
+
+    if (current.status === "archived") {
+      return current;
+    }
+
+    const now = new Date();
+    const archived = await this.memories.update({
+      ...current,
+      status: "archived",
+      archivedAt: now,
+      updatedAt: now,
+      metadata: {
+        ...current.metadata,
+        archivedReason: input.reason,
+        archivedBy: input.by,
+        ...(input.supersededById ? { supersededById: input.supersededById } : {}),
+      },
+    });
+
+    await this.eventRecorder.record({
+      organizationId,
+      workId: archived.workId,
+      actorType: "user",
+      actorId: input.by,
+      type: "knowledge.archived",
+      payload: {
+        knowledgeId: archived.id,
+        title: archived.title,
+        reason: input.reason,
+        supersededById: input.supersededById,
+      },
+    });
+
+    // A disagreement with knowledge that is no longer current is settled.
+    const open = await this.links.findConflicts(organizationId, { status: "open", memoryId: archived.id });
+
+    for (const conflict of open) {
+      await this.closeConflict(conflict, "resolved", "One side was archived.", input.by);
+    }
+
+    return archived;
+  }
+
+  /** Archived knowledge comes back as a proposal, so it is looked at again. */
+  async restoreKnowledge(organizationId: OrganizationId, knowledgeId: MemoryId, by: string): Promise<Memory> {
+    const current = await this.requireKnowledge(organizationId, knowledgeId);
+
+    if (current.status !== "archived") {
+      throw new KnowledgeStateError("Only archived knowledge can be restored.");
+    }
+
+    const restored = await this.memories.update({
+      ...current,
+      status: "proposed",
+      archivedAt: undefined,
+      reviewedAt: undefined,
+      reviewedBy: undefined,
+      updatedAt: new Date(),
+    });
+
+    await this.eventRecorder.record({
+      organizationId,
+      workId: restored.workId,
+      actorType: "user",
+      actorId: by,
+      type: "knowledge.restored",
+      payload: { knowledgeId: restored.id, title: restored.title },
+    });
+
+    await this.capture.index(restored);
+
+    return restored;
+  }
+
+  /**
+   * Settles a conflict the way a person chose. Nothing here picks a winner on
+   * its own: "keep" names the side to keep, and the other is archived as
+   * superseded rather than deleted, so the history of what the company used
+   * to believe survives.
+   */
+  async resolveConflict(
+    organizationId: OrganizationId,
+    conflictId: KnowledgeConflictId,
+    resolution: ConflictResolution,
+    by: string,
+    note?: string,
+  ): Promise<KnowledgeConflict> {
+    const conflict = await this.links.findConflictById(organizationId, conflictId);
+
+    if (!conflict) {
+      throw new KnowledgeNotFoundError("Conflict not found.");
+    }
+
+    if (conflict.status !== "open") {
+      throw new KnowledgeStateError("This conflict has already been settled.");
+    }
+
+    if (resolution.kind === "dismiss") {
+      return this.closeConflict(conflict, "dismissed", note ?? "Not a real disagreement.", by);
+    }
+
+    if (resolution.kind === "both_hold") {
+      return this.closeConflict(conflict, "resolved", note ?? "Both hold, in different circumstances.", by);
+    }
+
+    const sides = [conflict.memoryId, conflict.conflictingMemoryId];
+
+    if (!sides.includes(resolution.keepId)) {
+      throw new KnowledgeValidationError("keepId must be one side of the conflict.");
+    }
+
+    const dropId = sides.find((id) => id !== resolution.keepId)!;
+    const kept = await this.requireKnowledge(organizationId, resolution.keepId);
+
+    const closed = await this.closeConflict(conflict, "resolved", note ?? "Kept one side; the other was superseded.", by);
+
+    await this.archiveKnowledge(organizationId, dropId, {
+      by,
+      reason: `Superseded by “${kept.title}” when a conflict was resolved.`,
+      supersededById: kept.id,
+    });
+
+    const now = new Date();
+    await this.memories.update({
+      ...kept,
+      status: "active",
+      supersedesId: dropId,
+      reviewedBy: by,
+      reviewedAt: now,
+      updatedAt: now,
+    });
+
+    return closed;
+  }
+
+  async deriveFromArtifact(
+    organizationId: OrganizationId,
+    artifactId: ArtifactId,
+    requestedBy: string,
+  ): Promise<CaptureReport> {
+    const artifact = await this.artifactRepository.findById(artifactId);
+
+    if (!artifact || artifact.organizationId !== organizationId) {
+      throw new KnowledgeNotFoundError("Artifact not found.");
+    }
+
+    if (artifact.metadata.content === undefined) {
+      throw new KnowledgeStateError("This artifact has no stored content to learn from.");
+    }
+
+    const work = artifact.workId ? await this.workRepository.findById(artifact.workId) : null;
+
+    return this.capture.captureFromArtifact({
+      artifact,
+      work: work && work.organizationId === organizationId ? work : undefined,
+      requestedBy,
+    });
+  }
+
+  /* ----------------------------------------------------------------------
+     Internals
+     ---------------------------------------------------------------------- */
+
+  private async closeConflict(
+    conflict: KnowledgeConflict,
+    status: "resolved" | "dismissed",
+    resolution: string,
+    by: string,
+  ): Promise<KnowledgeConflict> {
+    const closed = await this.links.updateConflict({
+      ...conflict,
+      status,
+      resolution,
+      resolvedBy: by,
+      resolvedAt: new Date(),
+    });
+
+    await this.eventRecorder.record({
+      organizationId: conflict.organizationId,
+      actorType: "user",
+      actorId: by,
+      type: "knowledge.conflict_resolved",
+      payload: {
+        conflictId: conflict.id,
+        knowledgeId: conflict.memoryId,
+        conflictingKnowledgeId: conflict.conflictingMemoryId,
+        status,
+        resolution,
+      },
+    });
+
+    return closed;
+  }
+
+  private async describeUsage(organizationId: OrganizationId, recalls: KnowledgeRecall[]) {
+    const workIds = [...new Set(recalls.flatMap((recall) => (recall.workId ? [recall.workId] : [])))].slice(0, 25);
+    const works = await Promise.all(workIds.map((id) => this.workRepository.findById(id as WorkId)));
+    const byId = new Map(
+      works.flatMap((work) => (work && work.organizationId === organizationId ? [[work.id as string, work]] : [])),
+    );
+
+    return {
+      recallCount: recalls.length,
+      missions: workIds.flatMap((workId) => {
+        const work = byId.get(workId);
+        if (!work) return [];
+
+        const mine = recalls.filter((recall) => recall.workId === workId);
+
+        return [{
+          mission: { id: work.id, objective: work.objective, status: work.status },
+          stages: [...new Set(mine.map((recall) => recall.stage))],
+          lastRecalledAt: mine[0]!.recalledAt,
+          bestRank: Math.min(...mine.map((recall) => recall.rank)),
+          reasons: mine[0]!.reasons,
+        }];
+      }),
+    };
+  }
+
+  private async requireKnowledge(organizationId: OrganizationId, knowledgeId: MemoryId): Promise<Memory> {
+    const knowledge = await this.memories.findById(knowledgeId);
+
+    if (!knowledge || knowledge.organizationId !== organizationId) {
+      throw new KnowledgeNotFoundError();
+    }
+
+    return knowledge;
+  }
+
+  private async requireWorkspace(organizationId: OrganizationId, workspaceId: WorkspaceId): Promise<void> {
+    const workspace = await this.workspaceRepository.findById(workspaceId);
+
+    if (!workspace || workspace.organizationId !== organizationId) {
+      throw new KnowledgeNotFoundError("Workspace not found.");
+    }
+  }
+
+  private validTitle(value: string): string {
+    const title = sanitizeKnowledgeText(value, MAX_TITLE_CHARS).replace(/\n+/g, " ");
+
+    if (title.length < 3) {
+      throw new KnowledgeValidationError("title must be at least 3 characters.");
+    }
+
+    return title;
+  }
+
+  private validContent(value: string): string {
+    if (value.length > MAX_CONTENT_CHARS * 2) {
+      throw new KnowledgeValidationError(`content must be ${MAX_CONTENT_CHARS} characters or fewer.`);
+    }
+
+    const content = sanitizeKnowledgeText(value, MAX_CONTENT_CHARS);
+
+    if (content.length < 3) {
+      throw new KnowledgeValidationError("content must be at least 3 characters.");
+    }
+
+    return content;
+  }
+
+  private validType(value: MemoryType): MemoryType {
+    // A person may state any kind of knowledge except the raw execution
+    // record, which only ever came from the old per-task log.
+    if (!KNOWLEDGE_TYPES.includes(value) || value === "experience") {
+      throw new KnowledgeValidationError("type is not a kind of knowledge a person can record.");
+    }
+
+    return value;
   }
 }
 
-function truncate(value: string, maxChars: number): string {
-  return value.length <= maxChars ? value : `${value.slice(0, maxChars)}…`;
+function bounded(value: number | undefined, fallback: number): number {
+  const number = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return Math.min(1, Math.max(0, number));
 }

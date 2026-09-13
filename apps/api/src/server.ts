@@ -2,11 +2,23 @@ import Fastify from "fastify";
 
 import rateLimit from "@fastify/rate-limit";
 
+import {
+  KNOWLEDGE_SOURCE_TYPES,
+  KNOWLEDGE_STATUSES,
+  KNOWLEDGE_TYPES,
+} from "@unioffice/core";
+
 import type {
   AgentId,
   AgentStatus,
   AgentType,
+  ArtifactId,
   Event,
+  KnowledgeConflictId,
+  KnowledgeSourceType,
+  KnowledgeStatus,
+  MemoryId,
+  MemoryType,
   OrganizationId,
   PolicyEffect,
   PolicyId,
@@ -80,6 +92,13 @@ import type {
 
 import type {
   CompanyBrainService,
+  ConflictResolution,
+} from "./company-brain-service.js";
+
+import {
+  KnowledgeNotFoundError,
+  KnowledgeStateError,
+  KnowledgeValidationError,
 } from "./company-brain-service.js";
 
 import type {
@@ -754,26 +773,199 @@ export function buildApiServer(
       return { events };
     });
 
-    instance.get("/memory", async (request) => {
+    // ---------------------------------------------------------------------
+    // Company knowledge.
+    //
+    // Reads, authoring and review. Recall into an agent is not reachable from
+    // here - it happens inside planning and execution, through governance -
+    // and the preview route runs that same recall without recording it.
+    //
+    // The actor on every write is the server's notion of the caller, never a
+    // field in the body: a knowledge record whose "reviewed by" a caller can
+    // type is provenance anyone can forge.
+    // ---------------------------------------------------------------------
+
+    // Kept for the surfaces that still read the company's memory as a list.
+    // It is the same search the Brain uses, not a second retrieval path.
+    instance.get("/memory", { config: { rateLimit: KNOWLEDGE_SEARCH_LIMIT } }, async (request) => {
       const query = objectBody(request.query);
-      const organizationId = requiredOrganizationId(
-        services,
-        query.organizationId,
+      const result = await services.companyBrainService.search(
+        requiredOrganizationId(services, query.organizationId),
+        {
+          query: optionalBoundedText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
+          limit: parseOptionalLimit(query.limit),
+        },
       );
-      const searchQuery = optionalText(query.query);
 
-      const memories = searchQuery
-        ? await services.companyBrainService.retrieveRelevant({
-            organizationId,
-            query: searchQuery,
-            limit: parseOptionalLimit(query.limit),
-          })
-        : await services.companyBrainService.listByOrganization(
-            organizationId,
-          );
+      return { memories: result.items.map((item) => item.knowledge) };
+    });
 
-      return { memories };
+    instance.get("/knowledge", { config: { rateLimit: KNOWLEDGE_SEARCH_LIMIT } }, async (request) => {
+      const query = objectBody(request.query);
+
+      return services.companyBrainService.search(
+        requiredOrganizationId(services, query.organizationId),
+        {
+          query: optionalBoundedText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
+          types: parseKnowledgeTypes(query.types),
+          statuses: parseKnowledgeStatuses(query.statuses),
+          workspaceId: parseWorkspaceFilter(query.workspaceId),
+          sourceType: parseKnowledgeSourceType(query.sourceType),
+          minImportance: parseUnitNumber(query.minImportance, "minImportance"),
+          createdAfter: parseOptionalDate(query.createdAfter, "createdAfter"),
+          createdBefore: parseOptionalDate(query.createdBefore, "createdBefore"),
+          limit: parseOptionalLimit(query.limit),
+          offset: parseOptionalOffset(query.offset),
+        },
+      );
+    });
+
+    instance.get("/knowledge/overview", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.companyBrainService.getOverview(
+        requiredOrganizationId(services, query.organizationId),
+      );
+    });
+
+    instance.get("/knowledge/recall-preview", { config: { rateLimit: KNOWLEDGE_SEARCH_LIMIT } }, async (request) => {
+      const query = objectBody(request.query);
+
+      return services.companyBrainService.previewRecall(
+        requiredOrganizationId(services, query.organizationId),
+        {
+          query: requiredText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
+          workspaceId: optionalUuid(query.workspaceId, "workspaceId") as WorkspaceId | undefined,
+          agentId: optionalUuid(query.agentId, "agentId") as AgentId | undefined,
+        },
+      );
+    });
+
+    instance.get("/knowledge/:id", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.companyBrainService.getDetail(
+        requiredOrganizationId(services, query.organizationId),
+        parameterUuid(request.params) as MemoryId,
+      );
+    });
+
+    instance.post("/knowledge", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request, reply) => {
+      const body = objectBody(request.body);
+
+      const knowledge = await services.companyBrainService.createKnowledge({
+        organizationId: requiredOrganizationId(services, body.organizationId),
+        title: requiredText(body.title, "title", 200),
+        content: requiredText(body.content, "content", 4_000),
+        type: parseKnowledgeType(body.type),
+        importance: parseUnitNumber(body.importance, "importance"),
+        confidence: parseUnitNumber(body.confidence, "confidence"),
+        workspaceId: optionalUuid(body.workspaceId, "workspaceId") as WorkspaceId | undefined,
+        createdBy: actorOf(),
       });
+
+      return reply.status(201).send({ knowledge });
+    });
+
+    instance.post("/knowledge/:id", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      const knowledge = await services.companyBrainService.updateKnowledge({
+        organizationId: requiredOrganizationId(services, body.organizationId),
+        knowledgeId: parameterUuid(request.params) as MemoryId,
+        title: body.title === undefined ? undefined : requiredText(body.title, "title", 200),
+        content: body.content === undefined ? undefined : requiredText(body.content, "content", 4_000),
+        type: body.type === undefined ? undefined : parseKnowledgeType(body.type),
+        importance: parseUnitNumber(body.importance, "importance"),
+        confidence: body.confidence === null ? null : parseUnitNumber(body.confidence, "confidence"),
+        // null is meaningful: it makes the knowledge company-wide.
+        workspaceId:
+          body.workspaceId === undefined
+            ? undefined
+            : body.workspaceId === null
+              ? null
+              : (requiredUuid(body.workspaceId, "workspaceId") as WorkspaceId),
+        updatedBy: actorOf(),
+      });
+
+      return { knowledge };
+    });
+
+    instance.post("/knowledge/:id/approve", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      const knowledge = await services.companyBrainService.approveKnowledge(
+        requiredOrganizationId(services, body.organizationId),
+        parameterUuid(request.params) as MemoryId,
+        actorOf(),
+      );
+
+      return { knowledge };
+    });
+
+    instance.post("/knowledge/:id/archive", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      const knowledge = await services.companyBrainService.archiveKnowledge(
+        requiredOrganizationId(services, body.organizationId),
+        parameterUuid(request.params) as MemoryId,
+        {
+          by: actorOf(),
+          reason: optionalBoundedText(body.reason, "reason", 500),
+        },
+      );
+
+      return { knowledge };
+    });
+
+    instance.post("/knowledge/:id/restore", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      const knowledge = await services.companyBrainService.restoreKnowledge(
+        requiredOrganizationId(services, body.organizationId),
+        parameterUuid(request.params) as MemoryId,
+        actorOf(),
+      );
+
+      return { knowledge };
+    });
+
+    instance.post("/knowledge/conflicts/:id/resolve", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      const conflict = await services.companyBrainService.resolveConflict(
+        requiredOrganizationId(services, body.organizationId),
+        parameterUuid(request.params) as KnowledgeConflictId,
+        parseConflictResolution(body),
+        actorOf(),
+        optionalBoundedText(body.note, "note", 500),
+      );
+
+      return { conflict };
+    });
+
+    // Asks a model to read the artifact, so it is the most expensive write
+    // here and limited accordingly.
+    instance.post("/artifacts/:id/knowledge", { config: { rateLimit: KNOWLEDGE_DERIVE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      const report = await services.companyBrainService.deriveFromArtifact(
+        requiredOrganizationId(services, body.organizationId),
+        parameterUuid(request.params) as ArtifactId,
+        actorOf(),
+      );
+
+      return report;
+    });
+
+    instance.get("/work/:id/knowledge", async (request) => {
+      const workId = await authorizedWorkId(services, request);
+
+      return services.companyBrainService.getMissionKnowledge(
+        requiredOrganizationId(services, objectBody(request.query).organizationId),
+        workId,
+      );
+    });
   });
 
   return app;
@@ -808,6 +1000,163 @@ function streamFrame(event: Event): Record<string, unknown> {
 }
 
 const MAX_STREAM_PAYLOAD_BYTES = 2_000;
+
+const MAX_KNOWLEDGE_QUERY_CHARS = 500;
+
+/**
+ * A search embeds its query on the local model, so it costs more than a plain
+ * read; a write re-embeds and re-checks for conflicts; deriving from an
+ * artifact runs the generation model. The limits follow the cost.
+ */
+const KNOWLEDGE_SEARCH_LIMIT = { max: 60, timeWindow: "1 minute" };
+const KNOWLEDGE_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
+const KNOWLEDGE_DERIVE_LIMIT = { max: 5, timeWindow: "1 minute" };
+
+/**
+ * Who is acting, for provenance. There is no authentication yet, so every
+ * write is attributed to the seeded development requester - the same identity
+ * /work uses - rather than to anything the request says about itself.
+ */
+function actorOf(): string {
+  return `user:${developmentRequesterId}`;
+}
+
+function parseKnowledgeType(value: unknown): MemoryType {
+  if (typeof value === "string" && (KNOWLEDGE_TYPES as readonly string[]).includes(value)) {
+    return value as MemoryType;
+  }
+
+  throw new ApiError(400, `type must be one of ${KNOWLEDGE_TYPES.join(", ")}.`);
+}
+
+/** A comma-separated list in a query string, each entry validated. */
+function parseKnowledgeTypes(value: unknown): MemoryType[] | undefined {
+  const text = optionalBoundedText(value, "types", 200);
+  return text === undefined ? undefined : text.split(",").map((entry) => parseKnowledgeType(entry.trim()));
+}
+
+function parseKnowledgeStatuses(value: unknown): KnowledgeStatus[] | undefined {
+  const text = optionalBoundedText(value, "statuses", 100);
+
+  if (text === undefined) return undefined;
+
+  return text.split(",").map((entry) => {
+    const status = entry.trim();
+
+    if (!(KNOWLEDGE_STATUSES as readonly string[]).includes(status)) {
+      throw new ApiError(400, `statuses must be drawn from ${KNOWLEDGE_STATUSES.join(", ")}.`);
+    }
+
+    return status as KnowledgeStatus;
+  });
+}
+
+function parseKnowledgeSourceType(value: unknown): KnowledgeSourceType | undefined {
+  const text = optionalBoundedText(value, "sourceType", 40);
+
+  if (text === undefined) return undefined;
+
+  if (!(KNOWLEDGE_SOURCE_TYPES as readonly string[]).includes(text)) {
+    throw new ApiError(400, `sourceType must be one of ${KNOWLEDGE_SOURCE_TYPES.join(", ")}.`);
+  }
+
+  return text as KnowledgeSourceType;
+}
+
+/** "company" narrows to company-wide knowledge; a uuid narrows to one workspace. */
+function parseWorkspaceFilter(value: unknown): WorkspaceId | null | undefined {
+  const text = optionalBoundedText(value, "workspaceId", 64);
+
+  if (text === undefined) return undefined;
+  if (text === "company") return null;
+
+  return requiredUuid(text, "workspaceId") as WorkspaceId;
+}
+
+/**
+ * A number in [0, 1]. Accepts a JSON number or a query-string numeral and
+ * nothing else - not NaN, not "0x1", not an array.
+ */
+function parseUnitNumber(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+
+  const number =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d+(\.\d+)?$/.test(value.trim())
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(number) || number < 0 || number > 1) {
+    throw new ApiError(400, `${field} must be a number between 0 and 1.`);
+  }
+
+  return number;
+}
+
+function parseOptionalDate(value: unknown, field: string): Date | undefined {
+  const text = optionalBoundedText(value, field, 40);
+
+  if (text === undefined) return undefined;
+
+  const date = new Date(text);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new ApiError(400, `${field} must be an ISO date.`);
+  }
+
+  return date;
+}
+
+function parseOptionalOffset(value: unknown): number | undefined {
+  const text = optionalText(value);
+
+  if (text === undefined) return undefined;
+
+  const parsed = Number(text);
+
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 1_000) {
+    throw new ApiError(400, "offset must be an integer between 0 and 1000.");
+  }
+
+  return parsed;
+}
+
+function parseConflictResolution(body: Record<string, unknown>): ConflictResolution {
+  if (body.resolution === "both_hold" || body.resolution === "dismiss") {
+    return { kind: body.resolution };
+  }
+
+  if (body.resolution === "keep") {
+    return { kind: "keep", keepId: requiredUuid(body.keepId, "keepId") as MemoryId };
+  }
+
+  throw new ApiError(400, "resolution must be keep, both_hold or dismiss.");
+}
+
+function optionalBoundedText(value: unknown, field: string, maxLength: number): string | undefined {
+  const text = optionalText(value);
+
+  if (text !== undefined && text.length > maxLength) {
+    throw new ApiError(400, `${field} must be ${maxLength} characters or fewer.`);
+  }
+
+  return text;
+}
+
+function requiredUuid(value: unknown, field: string): string {
+  const text = requiredText(value, field, 64);
+
+  if (!UUID_PATTERN.test(text)) {
+    throw new ApiError(400, `${field} must be a valid identifier.`);
+  }
+
+  return text;
+}
+
+function optionalUuid(value: unknown, field: string): string | undefined {
+  return value === undefined || value === null ? undefined : requiredUuid(value, field);
+}
 
 function safeLength(payload: Record<string, unknown>): number {
   try {
@@ -899,9 +1248,19 @@ function withBriefing(
 }
 
 function parsePolicySubject(value: unknown): PolicySubject {
-  if (value === "tool" || value === "task") return value;
+  if (
+    value === "tool" ||
+    value === "task" ||
+    value === "knowledge_recall" ||
+    value === "knowledge_capture"
+  ) {
+    return value;
+  }
 
-  throw new ApiError(400, "subject must be tool or task.");
+  throw new ApiError(
+    400,
+    "subject must be tool, task, knowledge_recall or knowledge_capture.",
+  );
 }
 
 function parsePolicyEffect(value: unknown): PolicyEffect {
@@ -950,9 +1309,10 @@ function parsePolicyScope(value: unknown): {
   toolIds: string[];
   workspaceIds: WorkspaceId[];
   capabilities: string[];
+  knowledgeTypes: string[];
 } {
   if (value === undefined || value === null) {
-    return { agentIds: [], toolIds: [], workspaceIds: [], capabilities: [] };
+    return { agentIds: [], toolIds: [], workspaceIds: [], capabilities: [], knowledgeTypes: [] };
   }
 
   if (typeof value !== "object") {
@@ -969,6 +1329,7 @@ function parsePolicyScope(value: unknown): {
       "scope.workspaceIds",
     ) as WorkspaceId[],
     capabilities: optionalStringArray(scope.capabilities, "scope.capabilities"),
+    knowledgeTypes: optionalStringArray(scope.knowledgeTypes, "scope.knowledgeTypes"),
   };
 }
 
@@ -1223,7 +1584,8 @@ function statusForError(error: Error): number {
 
   if (
     error instanceof WorkspaceNotFoundError ||
-    error instanceof AgentNotFoundError
+    error instanceof AgentNotFoundError ||
+    error instanceof KnowledgeNotFoundError
   ) {
     return 404;
   }
@@ -1231,9 +1593,14 @@ function statusForError(error: Error): number {
   if (
     error instanceof WorkspaceValidationError ||
     error instanceof AgentValidationError ||
-    error instanceof PolicyValidationError
+    error instanceof PolicyValidationError ||
+    error instanceof KnowledgeValidationError
   ) {
     return 400;
+  }
+
+  if (error instanceof KnowledgeStateError) {
+    return 409;
   }
 
   if (error instanceof PolicyNotFoundError) {

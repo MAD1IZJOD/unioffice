@@ -4,6 +4,7 @@ import type {
   ArtifactId,
   Task,
   TaskId,
+  Work,
 } from "@unioffice/core";
 
 import {
@@ -18,6 +19,10 @@ import type {
 } from "@unioffice/database";
 
 import type {
+  RecalledKnowledgeItem,
+} from "@unioffice/agents";
+
+import type {
   ExecutionEngine,
 } from "@unioffice/orchestrator";
 
@@ -26,12 +31,26 @@ import {
 } from "./agent-definition.js";
 
 import type {
-  CompanyBrainService,
-} from "./company-brain-service.js";
-
-import type {
   EventRecorder,
 } from "./event-recorder.js";
+
+import type {
+  KnowledgeCaptureService,
+} from "./knowledge-capture-service.js";
+
+import type {
+  KnowledgeRecallService,
+} from "./knowledge-recall-service.js";
+
+/**
+ * What a step needs from company knowledge: something to recall before it
+ * runs, and somewhere to put what it learned afterwards. Narrowed to the two
+ * calls actually made, so a test can supply either without the rest.
+ */
+export interface TaskKnowledge {
+  recall: Pick<KnowledgeRecallService, "recallForStep">;
+  capture: Pick<KnowledgeCaptureService, "captureFromTask">;
+}
 
 export class TaskExecutionService {
   constructor(
@@ -53,8 +72,8 @@ export class TaskExecutionService {
     private readonly eventRecorder:
       EventRecorder,
 
-    private readonly companyBrainService?:
-      CompanyBrainService,
+    private readonly knowledge?:
+      TaskKnowledge,
   ) {}
 
   async executeTask(
@@ -115,6 +134,15 @@ export class TaskExecutionService {
       );
     }
 
+    // An agent can only ever work inside its own organization. Delegation
+    // already guarantees this; checking it here as well means knowledge is
+    // never recalled on behalf of an agent from somewhere else.
+    if (agent.organizationId !== work.organizationId) {
+      throw new Error(
+        `Agent does not belong to the work's organization: ${agent.id}`,
+      );
+    }
+
     const startedAt = new Date();
     const runningTask =
       await this.taskRepository.claimReadyForExecution(
@@ -144,10 +172,10 @@ export class TaskExecutionService {
     });
 
     try {
-      const relevantMemory = await this.retrieveRelevantMemory(
-        agent.organizationId,
-        agent.id,
+      const knowledge = await this.recallKnowledge(
+        work,
         runningTask,
+        agent,
       );
 
       const result =
@@ -171,8 +199,8 @@ export class TaskExecutionService {
           },
           context: {
             taskMetadata: runningTask.metadata,
-            relevantMemory,
           },
+          knowledge,
         });
 
       for (const toolCall of result.toolCalls) {
@@ -217,6 +245,19 @@ export class TaskExecutionService {
             metadata: result.metadata,
             toolCalls: result.toolCalls,
           },
+          // Which knowledge this step was handed, by reference. The full
+          // record of why lives on the recall rows; this is what lets a step
+          // say "used K1 and K3" without another read.
+          knowledge: knowledge.length > 0
+            ? {
+                recalled: knowledge.map((item) => ({
+                  ref: item.ref,
+                  id: item.id,
+                  title: item.title,
+                  status: item.status,
+                })),
+              }
+            : undefined,
         },
       };
 
@@ -226,11 +267,13 @@ export class TaskExecutionService {
       let resolvedTask = persistedTask;
 
       if (persistedTask.status === "completed") {
-        resolvedTask = await this.persistResultArtifact(
+        const persisted = await this.persistResultArtifact(
           persistedTask,
           agent,
           result.metadata,
         );
+
+        resolvedTask = persisted.task;
 
         await this.eventRecorder.record({
           organizationId: agent.organizationId,
@@ -243,7 +286,13 @@ export class TaskExecutionService {
           },
         });
 
-        await this.recordOutcomeMemory(agent, resolvedTask, "completed", stringifyResult(result.output));
+        await this.captureKnowledge(
+          work,
+          resolvedTask,
+          agent,
+          result.output,
+          persisted.artifactId,
+        );
       } else if (persistedTask.status === "failed") {
         await this.eventRecorder.record({
           organizationId: agent.organizationId,
@@ -256,13 +305,6 @@ export class TaskExecutionService {
             error: result.error,
           },
         });
-
-        await this.recordOutcomeMemory(
-          agent,
-          persistedTask,
-          "failed",
-          result.error?.message ?? "Execution failed without a specific error.",
-        );
       }
 
       return resolvedTask;
@@ -300,63 +342,63 @@ export class TaskExecutionService {
         },
       });
 
-      await this.recordOutcomeMemory(agent, persistedTask, "failed", errorMessage(error));
-
       return persistedTask;
     }
   }
 
-  private async retrieveRelevantMemory(
-    organizationId: Agent["organizationId"],
-    agentId: Agent["id"],
+  private async recallKnowledge(
+    work: Work,
     task: Task,
-  ): Promise<unknown[]> {
-    if (!this.companyBrainService) {
+    agent: Agent,
+  ): Promise<RecalledKnowledgeItem[]> {
+    if (!this.knowledge) {
       return [];
     }
 
     try {
-      const memories = await this.companyBrainService.retrieveRelevant({
-        organizationId,
-        agentId,
-        query: `${task.title} ${task.description}`,
-        limit: 5,
-      });
+      const recalled = await this.knowledge.recall.recallForStep(
+        work,
+        task,
+        agent,
+      );
 
-      return memories.map((memory) => ({
-        type: memory.type,
-        content: memory.content,
-      }));
+      return recalled.items;
     } catch {
-      // Memory retrieval is an enhancement, not a dependency. A failure here
-      // must not block task execution.
+      // Knowledge is an enhancement, not a dependency. A step that cannot
+      // recall anything runs from its objective and dependencies alone.
       return [];
     }
   }
 
-  private async recordOutcomeMemory(
-    agent: Agent,
+  /**
+   * What the step taught the company, if anything.
+   *
+   * Only a completed step is considered - a failure's error message is not
+   * company knowledge - and the capture path decides whether anything in the
+   * output is durable at all. Failures of that path never reach the task.
+   */
+  private async captureKnowledge(
+    work: Work,
     task: Task,
-    status: "completed" | "failed",
-    summary: string,
+    agent: Agent,
+    output: unknown,
+    artifactId: ArtifactId | undefined,
   ): Promise<void> {
-    if (!this.companyBrainService) {
+    if (!this.knowledge) {
       return;
     }
 
     try {
-      await this.companyBrainService.recordTaskOutcome({
-        organizationId: agent.organizationId,
-        agentId: agent.id,
-        workId: task.workId,
-        taskId: task.id,
-        title: task.title,
-        status,
-        summary,
+      await this.knowledge.capture.captureFromTask({
+        work,
+        task,
+        agent,
+        output,
+        artifactId,
       });
     } catch {
-      // Best-effort: the task's own persisted status remains the source of
-      // truth even if the company brain write fails.
+      // Best-effort: the completed task and its artifact are the source of
+      // truth whether or not anything was learned from them.
     }
   }
 
@@ -388,9 +430,9 @@ export class TaskExecutionService {
     task: Task,
     agent: Agent,
     executionMetadata: Record<string, unknown>,
-  ): Promise<Task> {
+  ): Promise<{ task: Task; artifactId?: ArtifactId }> {
     if (task.result === undefined) {
-      return task;
+      return { task };
     }
 
     const now = new Date();
@@ -432,45 +474,35 @@ export class TaskExecutionService {
         },
       });
 
-      return task;
+      return { task, artifactId: createdArtifact.id };
     } catch (error) {
       // Task completion remains durable even if a secondary artifact projection
       // cannot be written. Preserve that degradation on the task for operators.
       try {
-        return await this.taskRepository.update({
-          ...task,
-          metadata: {
-            ...task.metadata,
-            artifact: {
-              status: "failed",
-              error: errorMessage(error),
+        return {
+          task: await this.taskRepository.update({
+            ...task,
+            metadata: {
+              ...task.metadata,
+              artifact: {
+                status: "failed",
+                error: errorMessage(error),
+              },
             },
-          },
-        });
+          }),
+        };
       } catch {
         // The completed task result remains the source of truth if this
         // diagnostic update also fails.
       }
 
-      return task;
+      return { task };
     }
   }
 }
 
 function isStructured(value: unknown): boolean {
   return typeof value === "object" && value !== null;
-}
-
-function stringifyResult(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value) ?? "No result was produced.";
-  } catch {
-    return "Result could not be serialized.";
-  }
 }
 
 function errorMessage(error: unknown): string {

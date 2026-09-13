@@ -9,8 +9,6 @@ import type {
   Artifact,
   ArtifactId,
   Event,
-  Memory,
-  MemoryId,
   OrganizationId,
   Task,
   TaskId,
@@ -23,21 +21,25 @@ import type {
   ApprovalRepository,
   ArtifactRepository,
   EventRepository,
-  MemoryQuery,
-  MemoryRepository,
+  PolicyRepository,
   TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
 
-import { DefaultMemoryRetriever } from "@unioffice/memory";
+import { InMemoryKnowledgeRepository } from "@unioffice/database";
+
+import { KnowledgeExtractor } from "@unioffice/memory";
 
 import type {
   ExecutionEngine,
 } from "@unioffice/orchestrator";
 
-import {
-  CompanyBrainService,
-} from "./company-brain-service.js";
+import { createDefaultToolRegistry } from "@unioffice/tools";
+
+import { GovernanceService } from "./governance-service.js";
+import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
+import { KnowledgeGovernance } from "./knowledge-governance.js";
+import { KnowledgeRecallService } from "./knowledge-recall-service.js";
 
 import {
   EventRecorder,
@@ -268,34 +270,6 @@ class MemoryApprovalRepository implements ApprovalRepository {
     if (!current || current.status !== "pending") return null;
     this.approvals.set(approval.id, approval);
     return approval;
-  }
-}
-
-class FakeMemoryRepository implements MemoryRepository {
-  readonly memories = new Map<MemoryId, Memory>();
-
-  async create(memory: Memory): Promise<Memory> {
-    this.memories.set(memory.id, memory);
-    return memory;
-  }
-
-  async findById(id: MemoryId): Promise<Memory | null> {
-    return this.memories.get(id) ?? null;
-  }
-
-  async query(query: MemoryQuery): Promise<Memory[]> {
-    return [...this.memories.values()]
-      .filter((memory) => memory.organizationId === query.organizationId)
-      .slice(0, query.limit);
-  }
-
-  async update(memory: Memory): Promise<Memory> {
-    this.memories.set(memory.id, memory);
-    return memory;
-  }
-
-  async delete(id: MemoryId): Promise<void> {
-    this.memories.delete(id);
   }
 }
 
@@ -1083,19 +1057,89 @@ test("returns an already completed work item without re-executing tasks", async 
   assert.equal(eventRepository.events.length, 0);
 });
 
-test("records a company memory when a task completes and surfaces it to a later related task", async () => {
+/**
+ * Governed recall and capture over an in-memory store, with extraction
+ * answered by a fixed model reply. Everything else is the production code.
+ */
+function knowledgeFabric(
+  recorder: EventRecorder,
+  repositories: {
+    workRepository: WorkRepository;
+    taskRepository: TaskRepository;
+    artifactRepository: ArtifactRepository;
+  },
+  extractionReply: string,
+) {
+  const store = new InMemoryKnowledgeRepository();
+  const policyRepository: PolicyRepository = {
+    async create(policy) { return policy; },
+    async findById() { return null; },
+    async findByOrganization() { return []; },
+    async findEnforced() { return []; },
+    async update(policy) { return policy; },
+  };
+  const governance = new KnowledgeGovernance(
+    policyRepository,
+    new GovernanceService(policyRepository, createDefaultToolRegistry(), recorder),
+  );
+  const extractionCalls: string[] = [];
+
+  const recall = new KnowledgeRecallService(
+    store,
+    store,
+    governance,
+    recorder,
+    repositories.workRepository,
+    repositories.taskRepository,
+    repositories.artifactRepository,
+  );
+
+  const capture = new KnowledgeCaptureService(
+    store,
+    store,
+    governance,
+    recorder,
+    new KnowledgeExtractor({
+      async generate(request) {
+        extractionCalls.push(request.messages[1]!.content);
+        return { content: extractionReply, model: "test-extractor" };
+      },
+    }, "test-extractor"),
+  );
+
+  return { store, recall, capture, extractionCalls };
+}
+
+const onboardingFinding = [
+  "Enterprise onboarding review.",
+  "Every enterprise customer in the pilot required single sign-on before rollout,",
+  "and deals without SSO stalled in security review for weeks.",
+  "Recommendation: make SSO part of the standard enterprise onboarding checklist.",
+].join(" ");
+
+test("captures durable knowledge from a substantial result and recalls it into a later related step", async () => {
   const taskRepository = new MemoryTaskRepository();
   const artifactRepository = new MemoryArtifactRepository();
   const workRepository = new MemoryWorkRepository();
   const agentRepository = new MemoryAgentRepository();
-  const memoryRepository = new FakeMemoryRepository();
-  const companyBrainService = new CompanyBrainService(
-    memoryRepository,
-    new DefaultMemoryRetriever(memoryRepository),
-  );
   const { recorder, repository: eventRepository } = createRecorder();
+  const fabric = knowledgeFabric(
+    recorder,
+    { workRepository, taskRepository, artifactRepository },
+    JSON.stringify({
+      knowledge: [{
+        type: "insight",
+        title: "Enterprise onboarding requires single sign-on",
+        content: "Every enterprise customer in the pilot required single sign-on before rollout; deals without SSO stalled in security review.",
+        importance: 0.7,
+        confidence: 0.8,
+        rationale: "Future onboarding plans should include SSO from the start.",
+      }],
+    }),
+  );
+
   const firstTask = makeTask("task-onboarding-1" as TaskId, {
-    title: "Draft onboarding SSO plan",
+    title: "Assess enterprise onboarding",
     status: "ready",
   });
   await taskRepository.create(firstTask);
@@ -1109,38 +1153,49 @@ test("records a company memory when a task completes and surfaces it to a later 
         taskId: request.taskId,
         agentId: request.agentId,
         status: "completed",
-        output: "SSO is required for enterprise onboarding.",
+        output: onboardingFinding,
         toolCalls: [],
         metadata: {},
       };
     },
   };
-  const firstService = new TaskExecutionService(
+
+  await new TaskExecutionService(
     taskRepository,
     artifactRepository,
     workRepository,
     agentRepository,
     completingEngine,
     recorder,
-    companyBrainService,
-  );
+    { recall: fabric.recall, capture: fabric.capture },
+  ).executeTask(firstTask.id);
 
-  await firstService.executeTask(firstTask.id);
+  assert.equal(fabric.extractionCalls.length, 1);
+  assert.equal(fabric.store.memories.size, 1);
 
-  assert.equal(memoryRepository.memories.size, 1);
-  const stored = [...memoryRepository.memories.values()][0];
-  assert.equal(stored?.type, "experience");
-  assert.match(stored?.content ?? "", /SSO is required for enterprise onboarding/);
+  const stored = [...fabric.store.memories.values()][0]!;
+  const artifact = [...artifactRepository.artifacts.values()][0]!;
 
-  let capturedContext: Record<string, unknown> | undefined;
+  // Proposed, not active: extraction suggests, a person decides.
+  assert.equal(stored.status, "proposed");
+  assert.equal(stored.type, "insight");
+  assert.equal(stored.sourceType, "task");
+  assert.equal(stored.taskId, firstTask.id);
+  assert.equal(stored.workId, workId);
+  assert.equal(stored.artifactId, artifact.id, "the knowledge names the artifact it was derived from");
+  assert.equal(stored.agentId, agentId);
+  assert.ok(eventRepository.events.some((event) => event.type === "knowledge.created"));
+
+  let handed: unknown[] | undefined;
   const secondTask = makeTask("task-onboarding-2" as TaskId, {
-    title: "Review onboarding SSO requirements",
+    title: "Review enterprise onboarding SSO requirements",
     status: "ready",
   });
   await taskRepository.create(secondTask);
+
   const observingEngine: ExecutionEngine = {
     async execute(request) {
-      capturedContext = request.context;
+      handed = request.knowledge;
       return {
         workId: request.workId,
         taskId: request.taskId,
@@ -1152,34 +1207,47 @@ test("records a company memory when a task completes and surfaces it to a later 
       };
     },
   };
-  const secondService = new TaskExecutionService(
+
+  const reviewed = await new TaskExecutionService(
     taskRepository,
     artifactRepository,
     workRepository,
     agentRepository,
     observingEngine,
     recorder,
-    companyBrainService,
+    { recall: fabric.recall, capture: fabric.capture },
+  ).executeTask(secondTask.id);
+
+  const items = handed as Array<{ ref: string; title: string; status: string; source: string }>;
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.title, "Enterprise onboarding requires single sign-on");
+  assert.equal(items[0]!.status, "proposed");
+  assert.match(items[0]!.source, /Extracted from task “Assess enterprise onboarding”/);
+
+  // The step records what it was handed, and the recall is on record too.
+  assert.deepEqual(
+    (reviewed.metadata.knowledge as { recalled: Array<{ ref: string }> }).recalled.map((entry) => entry.ref),
+    ["K1"],
   );
+  assert.equal(fabric.store.recalls.length, 1);
+  assert.equal(fabric.store.recalls[0]!.taskId, secondTask.id);
+  assert.equal(fabric.store.recalls[0]!.stage, "execution");
 
-  await secondService.executeTask(secondTask.id);
-
-  const relevantMemory = capturedContext?.relevantMemory as Array<{ content: string }> | undefined;
-  assert.ok(relevantMemory && relevantMemory.length > 0, "expected prior task outcome to be retrieved as context");
-  assert.match(relevantMemory![0]!.content, /SSO is required for enterprise onboarding/);
+  // "Reviewed." is too short to hold knowledge, so no second extraction ran.
+  assert.equal(fabric.extractionCalls.length, 1);
 });
 
-test("records a failure memory without blocking task failure when a task fails", async () => {
+test("writes no knowledge when a task fails", async () => {
   const taskRepository = new MemoryTaskRepository();
   const artifactRepository = new MemoryArtifactRepository();
   const workRepository = new MemoryWorkRepository();
   const agentRepository = new MemoryAgentRepository();
-  const memoryRepository = new FakeMemoryRepository();
-  const companyBrainService = new CompanyBrainService(
-    memoryRepository,
-    new DefaultMemoryRetriever(memoryRepository),
-  );
   const { recorder } = createRecorder();
+  const fabric = knowledgeFabric(
+    recorder,
+    { workRepository, taskRepository, artifactRepository },
+    JSON.stringify({ knowledge: [] }),
+  );
   const task = makeTask("task-brain-failure" as TaskId, { status: "ready" });
   await taskRepository.create(task);
   await workRepository.create(makeWork());
@@ -1198,21 +1266,60 @@ test("records a failure memory without blocking task failure when a task fails",
       };
     },
   };
-  const service = new TaskExecutionService(
+
+  const result = await new TaskExecutionService(
     taskRepository,
     artifactRepository,
     workRepository,
     agentRepository,
     failingEngine,
     recorder,
-    companyBrainService,
-  );
-
-  const result = await service.executeTask(task.id);
+    { recall: fabric.recall, capture: fabric.capture },
+  ).executeTask(task.id);
 
   assert.equal(result.status, "failed");
-  assert.equal(memoryRepository.memories.size, 1);
-  const stored = [...memoryRepository.memories.values()][0];
-  assert.equal(stored?.type, "experience");
-  assert.match(stored?.content ?? "", /Model timed out/);
+  assert.equal(fabric.store.memories.size, 0, "an error message is not company knowledge");
+  assert.equal(fabric.extractionCalls.length, 0);
+});
+
+test("a knowledge outage never fails the step it was meant to inform", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder } = createRecorder();
+  const task = makeTask("task-knowledge-outage" as TaskId, { status: "ready" });
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: onboardingFinding,
+        toolCalls: [],
+        metadata: {},
+      };
+    },
+  };
+
+  const result = await new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+    {
+      recall: { async recallForStep() { throw new Error("knowledge store unreachable"); } },
+      capture: { async captureFromTask() { throw new Error("knowledge store unreachable"); } },
+    },
+  ).executeTask(task.id);
+
+  assert.equal(result.status, "completed");
+  assert.equal(artifactRepository.artifacts.size, 1);
 });

@@ -24,12 +24,15 @@ import type {
   ApprovalRepository,
   ArtifactRepository,
   EventRepository,
-  MemoryRepository,
+  PolicyRepository,
   TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
 
-import { InMemoryExecutionJobRepository } from "@unioffice/database";
+import {
+  InMemoryExecutionJobRepository,
+  InMemoryKnowledgeRepository,
+} from "@unioffice/database";
 
 import {
   DefaultAgentRuntime,
@@ -37,7 +40,7 @@ import {
   type ModelRequest,
 } from "@unioffice/agents";
 
-import { DefaultMemoryRetriever } from "@unioffice/memory";
+import { KnowledgeExtractor } from "@unioffice/memory";
 
 import {
   DefaultDelegator,
@@ -48,8 +51,11 @@ import {
 import { createDefaultToolRegistry } from "@unioffice/tools";
 
 import { WorkApplicationService } from "./application.js";
-import { CompanyBrainService } from "./company-brain-service.js";
 import { EventRecorder } from "./event-recorder.js";
+import { GovernanceService } from "./governance-service.js";
+import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
+import { KnowledgeGovernance } from "./knowledge-governance.js";
+import { KnowledgeRecallService } from "./knowledge-recall-service.js";
 import { ExecutionJobRunner } from "./execution-job-runner.js";
 import { ExecutionQueueService } from "./execution-queue-service.js";
 import { ExecutionWorker } from "./execution-worker.js";
@@ -119,7 +125,7 @@ function harness(
   const works = new Map<WorkId, Work>();
   const tasks = new Map<TaskId, Task>();
   const artifacts = new Map<ArtifactId, Artifact>();
-  const memories = new Map<MemoryId, Memory>();
+  const knowledge = new InMemoryKnowledgeRepository();
   const approvals = new Map<ApprovalId, ApprovalRequest>();
   const events: Event[] = [];
 
@@ -188,12 +194,12 @@ function harness(
     async findByOrganization() { return [...artifacts.values()]; },
   };
 
-  const memoryRepository: MemoryRepository = {
-    async create(memory) { memories.set(memory.id, memory); return memory; },
-    async findById(id) { return memories.get(id) ?? null; },
-    async query() { return [...memories.values()]; },
-    async update(memory) { memories.set(memory.id, memory); return memory; },
-    async delete(id) { memories.delete(id); },
+  const policyRepository: PolicyRepository = {
+    async create(policy) { return policy; },
+    async findById() { return null; },
+    async findByOrganization() { return []; },
+    async findEnforced() { return []; },
+    async update(policy) { return policy; },
   };
 
   const approvalRepository: ApprovalRepository = {
@@ -225,9 +231,25 @@ function harness(
   const toolRegistry = createDefaultToolRegistry();
   const jobs = new InMemoryExecutionJobRepository();
 
-  const companyBrainService = new CompanyBrainService(
-    memoryRepository,
-    new DefaultMemoryRetriever(memoryRepository),
+  const governanceService = new GovernanceService(policyRepository, toolRegistry, eventRecorder);
+  const knowledgeGovernance = new KnowledgeGovernance(policyRepository, governanceService);
+
+  const knowledgeRecall = new KnowledgeRecallService(
+    knowledge,
+    knowledge,
+    knowledgeGovernance,
+    eventRecorder,
+    workRepository,
+    taskRepository,
+    artifactRepository,
+  );
+
+  const knowledgeCapture = new KnowledgeCaptureService(
+    knowledge,
+    knowledge,
+    knowledgeGovernance,
+    eventRecorder,
+    new KnowledgeExtractor(modelProvider, "scripted"),
   );
 
   const applicationService = new WorkApplicationService(
@@ -247,6 +269,7 @@ function harness(
       name: tool.name,
       description: tool.description,
     })),
+    knowledgeRecall,
   );
 
   const taskExecutionService = new TaskExecutionService(
@@ -262,7 +285,7 @@ function harness(
       }),
     ),
     eventRecorder,
-    companyBrainService,
+    { recall: knowledgeRecall, capture: knowledgeCapture },
   );
 
   const workApprovalService = new WorkApprovalService(
@@ -325,7 +348,7 @@ function harness(
     jobs,
     events,
     artifacts,
-    memories,
+    knowledge,
     approvals,
     workRepository,
     taskRepository,
@@ -406,11 +429,12 @@ test("a worker claims a queued job and executes it through the real pipeline", a
   assert.equal(task.assignedAgentId, ledgerId);
 
   // The existing semantics are untouched: the tool really ran, and the
-  // artifact, memory and events were written exactly as before.
+  // artifact and events were written exactly as before. A one-line total is a
+  // result rather than durable knowledge, so the Brain gains nothing from it.
   const toolCalls = (task.metadata.execution as { toolCalls: unknown[] }).toolCalls;
   assert.equal(toolCalls.length, 1);
   assert.equal(h.artifacts.size, 1);
-  assert.equal(h.memories.size, 1);
+  assert.equal(h.knowledge.memories.size, 0);
   assert.ok(h.events.some((event) => event.type === "tool.completed"));
   assert.ok(h.events.some((event) => event.type === "work.completed"));
 
