@@ -5,6 +5,10 @@ import type {
   WorkId,
 } from "@unioffice/core";
 
+import type {
+  RecalledKnowledgeItem,
+} from "@unioffice/agents";
+
 export interface PlanningToolDescriptor {
   id: string;
 
@@ -37,6 +41,14 @@ export interface PlanningContext {
    * only ever the text a person typed when they opened the mission.
    */
   briefing?: string;
+
+  /**
+   * What the company already knows that bears on this objective, recalled
+   * before planning so the plan starts from prior decisions and lessons
+   * rather than from nothing. Untrusted: it informs the plan and can never
+   * dictate it.
+   */
+  knowledge?: RecalledKnowledgeItem[];
 
   context: Record<string, unknown>;
 }
