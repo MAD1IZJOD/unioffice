@@ -57,9 +57,15 @@ export interface RankedKnowledge {
  * Where raw cosine similarity starts to mean something for the embedding
  * model in use, and where it saturates. Below the floor two texts are merely
  * in the same language; above the ceiling they are about the same thing.
+ *
+ * Measured, not guessed: against the live store, nomic-embed-text scored
+ * "what did we decide about pricing" at 0.574 against a pricing decision and
+ * 0.442 against an unrelated lease note. Its similarities sit in a narrow
+ * band, so a ceiling of 0.85 left genuinely relevant knowledge scoring as
+ * barely related.
  */
 export const SEMANTIC_FLOOR = 0.45;
-export const SEMANTIC_CEILING = 0.85;
+export const SEMANTIC_CEILING = 0.75;
 
 const WEIGHTS = {
   semantic: 0.45,
