@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import type {
   AgentSummary,
+  KnowledgeType,
   NewPolicy,
   PolicyEffect,
   PolicySubject,
@@ -31,6 +32,19 @@ import { Failure } from "../primitives";
  * registry, the real workspaces. There is no way to write a rule here that
  * names something that does not exist.
  */
+
+/** The kinds of knowledge a policy can be narrowed to, in the backend's words. */
+const KNOWLEDGE_KINDS: KnowledgeType[] = [
+  "fact",
+  "decision",
+  "insight",
+  "policy",
+  "process",
+  "preference",
+  "lesson",
+  "assumption",
+  "reference",
+];
 
 const RISKS: Array<{ value: RiskLevel; label: string; hint: string }> = [
   { value: "low", label: "Low", hint: "Routine. Nothing to worry about." },
@@ -71,13 +85,17 @@ export function PolicyComposer({
   const [toolIds, setToolIds] = useState<string[]>([]);
   const [workspaceIds, setWorkspaceIds] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [knowledgeTypes, setKnowledgeTypes] = useState<string[]>([]);
+
+  const aboutKnowledge =
+    subject === "knowledge_recall" || subject === "knowledge_capture";
 
   // A tool rule cannot stop for a person: by the time a tool is called the
-  // agent is mid-reasoning and there is nothing to suspend. The backend
-  // refuses to save one, so the option is not offered rather than being
-  // offered and then rejected.
+  // agent is mid-reasoning and there is nothing to suspend. Recall is the
+  // same - it happens as a step starts. The backend refuses to save either,
+  // so the option is not offered rather than being offered and then rejected.
   const effects: PolicyEffect[] =
-    subject === "tool"
+    subject === "tool" || subject === "knowledge_recall"
       ? ["deny", "allow"]
       : ["deny", "require_approval", "allow"];
 
@@ -115,7 +133,7 @@ export function PolicyComposer({
         <Field
           index="01"
           question="What is this rule about?"
-          hint="A whole step stops before an agent starts it. A tool call is stopped at the moment it is made."
+          hint="A whole step stops before an agent starts it. A tool call is stopped at the moment it is made. Knowledge rules decide what an agent may be handed, and what happens to knowledge extraction proposes."
         >
           <div className="choice-row">
             <Choice
@@ -129,6 +147,24 @@ export function PolicyComposer({
               onClick={() => setSubject("tool")}
               label="Tool calls"
               detail="Checked at the moment a tool runs"
+            />
+            <Choice
+              active={subject === "knowledge_recall"}
+              onClick={() => {
+                setSubject("knowledge_recall");
+                setToolIds([]);
+              }}
+              label="Knowledge recall"
+              detail="Checked before knowledge reaches an agent"
+            />
+            <Choice
+              active={subject === "knowledge_capture"}
+              onClick={() => {
+                setSubject("knowledge_capture");
+                setToolIds([]);
+              }}
+              label="Knowledge capture"
+              detail="Checked before extracted knowledge is recorded"
             />
           </div>
         </Field>
@@ -149,13 +185,23 @@ export function PolicyComposer({
             onChange={setAgentIds}
           />
 
-          <Picker
-            label={subject === "tool" ? "Tools" : "Steps needing"}
-            empty={subject === "tool" ? "Every tool" : "Any step"}
-            options={tools.map((tool) => ({ id: tool.id, label: tool.name }))}
-            selected={toolIds}
-            onChange={setToolIds}
-          />
+          {aboutKnowledge ? (
+            <Picker
+              label="Kinds of knowledge"
+              empty="Every kind"
+              options={KNOWLEDGE_KINDS.map((kind) => ({ id: kind, label: kind }))}
+              selected={knowledgeTypes}
+              onChange={setKnowledgeTypes}
+            />
+          ) : (
+            <Picker
+              label={subject === "tool" ? "Tools" : "Steps needing"}
+              empty={subject === "tool" ? "Every tool" : "Any step"}
+              options={tools.map((tool) => ({ id: tool.id, label: tool.name }))}
+              selected={toolIds}
+              onChange={setToolIds}
+            />
+          )}
 
           <Picker
             label="Disciplines"
@@ -201,13 +247,7 @@ export function PolicyComposer({
                       : "live"
                 }
                 label={effectLabel(option)}
-                detail={
-                  option === "deny"
-                    ? "The step or call does not happen"
-                    : option === "require_approval"
-                      ? "Execution waits for your decision"
-                      : "Recorded as explicitly permitted"
-                }
+                detail={effectDetail(subject, option)}
               />
             ))}
           </div>
@@ -293,7 +333,9 @@ export function PolicyComposer({
                 effect,
                 risk,
                 approvalPrompt: approvalPrompt.trim() || undefined,
-                scope: { agentIds, toolIds, workspaceIds, capabilities },
+                scope: aboutKnowledge
+                  ? { agentIds, toolIds: [], workspaceIds, capabilities, knowledgeTypes }
+                  : { agentIds, toolIds, workspaceIds, capabilities, knowledgeTypes: [] },
               })
             }
           >
@@ -304,6 +346,29 @@ export function PolicyComposer({
       </footer>
     </section>
   );
+}
+
+/** What an effect actually does, for the kind of rule being written. */
+function effectDetail(subject: PolicySubject, effect: PolicyEffect): string {
+  if (subject === "knowledge_capture") {
+    return effect === "deny"
+      ? "Extracted knowledge is discarded"
+      : effect === "require_approval"
+        ? "Held as a proposal for a person to review"
+        : "Recorded as active knowledge";
+  }
+
+  if (subject === "knowledge_recall") {
+    return effect === "deny"
+      ? "The agent is never handed it"
+      : "Recorded as explicitly permitted";
+  }
+
+  return effect === "deny"
+    ? "The step or call does not happen"
+    : effect === "require_approval"
+      ? "Execution waits for your decision"
+      : "Recorded as explicitly permitted";
 }
 
 function Field({
