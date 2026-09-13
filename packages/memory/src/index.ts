@@ -1,5 +1,3 @@
-export * from "./retrieval/memory-retriever.js";
-export * from "./retrieval/default-memory-retriever.js";
 export * from "./retrieval/query-terms.js";
 export * from "./retrieval/freshness.js";
 export * from "./retrieval/hybrid-ranker.js";
