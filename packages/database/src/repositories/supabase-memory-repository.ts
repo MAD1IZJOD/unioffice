@@ -16,6 +16,12 @@ import type {
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
+  KnowledgeCandidateQuery,
+  KnowledgeCandidateRow,
+  KnowledgeSearchRepository,
+} from "./knowledge-repository.js";
+
+import type {
   MemoryQuery,
   MemoryRepository,
 } from "./memory-repository.js";
@@ -47,6 +53,12 @@ interface MemoryRow {
   created_at: string;
   updated_at: string;
   metadata: Record<string, unknown> | null;
+}
+
+interface CandidateRow {
+  memory_id: string;
+  semantic_similarity: number | null;
+  keyword_rank: number | null;
 }
 
 /**
@@ -85,7 +97,14 @@ const MEMORY_COLUMNS = [
 
 const DEFAULT_QUERY_LIMIT = 50;
 
-export class SupabaseMemoryRepository implements MemoryRepository {
+/** The most any single read will return, whatever a caller asks for. */
+const MAX_QUERY_LIMIT = 200;
+
+const KNOWLEDGE_STATUSES: KnowledgeStatus[] = ["proposed", "active", "archived"];
+
+export class SupabaseMemoryRepository
+  implements MemoryRepository, KnowledgeSearchRepository
+{
   constructor(private readonly client: SupabaseClient) {}
 
   async create(memory: Memory): Promise<Memory> {
@@ -111,17 +130,32 @@ export class SupabaseMemoryRepository implements MemoryRepository {
   }
 
   async query(query: MemoryQuery): Promise<Memory[]> {
+    const limit = Math.min(query.limit ?? DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT);
+    const offset = Math.max(query.offset ?? 0, 0);
+
     let builder = this.client
       .from("memories")
       .select(MEMORY_COLUMNS)
       .eq("organization_id", query.organizationId)
       .order("created_at", { ascending: false })
-      .limit(query.limit ?? DEFAULT_QUERY_LIMIT);
+      .order("id", { ascending: true })
+      .range(offset, offset + limit - 1);
 
     if (query.agentId) builder = builder.eq("agent_id", query.agentId);
     if (query.workId) builder = builder.eq("work_id", query.workId);
+    if (query.taskId) builder = builder.eq("task_id", query.taskId);
+    if (query.artifactId) builder = builder.eq("artifact_id", query.artifactId);
     if (query.scope) builder = builder.eq("scope", query.scope);
     if (query.type) builder = builder.eq("type", query.type);
+    if (query.types?.length) builder = builder.in("type", query.types);
+    if (query.statuses?.length) builder = builder.in("status", query.statuses);
+    if (query.workspaceId === null) builder = builder.is("workspace_id", null);
+    if (query.workspaceId) builder = builder.eq("workspace_id", query.workspaceId);
+    if (query.sourceType) builder = builder.eq("source_type", query.sourceType);
+    if (query.minImportance !== undefined) builder = builder.gte("importance", query.minImportance);
+    if (query.createdAfter) builder = builder.gte("created_at", query.createdAfter.toISOString());
+    if (query.createdBefore) builder = builder.lte("created_at", query.createdBefore.toISOString());
+    if (query.contentHash) builder = builder.eq("content_hash", query.contentHash);
 
     const { data, error } = await builder;
 
@@ -152,6 +186,113 @@ export class SupabaseMemoryRepository implements MemoryRepository {
 
     if (error) throw new Error(`Failed to delete memory: ${error.message}`);
   }
+
+  async searchCandidates(
+    query: KnowledgeCandidateQuery,
+  ): Promise<KnowledgeCandidateRow[]> {
+    const { data, error } = await this.client.rpc("match_knowledge", {
+      p_organization_id: query.organizationId,
+      p_statuses: query.statuses,
+      p_workspace_mode: query.workspace.mode,
+      p_workspace_id:
+        query.workspace.mode === "company_and_workspace"
+          ? query.workspace.workspaceId
+          : null,
+      p_query_embedding: query.embedding ? vectorLiteral(query.embedding) : null,
+      p_query_terms: query.terms,
+      p_candidate_limit: query.candidateLimit,
+    });
+
+    if (error) throw new Error(`Failed to search knowledge: ${error.message}`);
+
+    return ((data ?? []) as CandidateRow[]).map((row) => ({
+      memoryId: row.memory_id as MemoryId,
+      semanticSimilarity: row.semantic_similarity ?? undefined,
+      keywordRank: row.keyword_rank ?? 0,
+    }));
+  }
+
+  async findByIds(
+    organizationId: OrganizationId,
+    ids: MemoryId[],
+  ): Promise<Memory[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await this.client
+      .from("memories")
+      .select(MEMORY_COLUMNS)
+      .eq("organization_id", organizationId)
+      .in("id", ids.slice(0, MAX_QUERY_LIMIT));
+
+    if (error) throw new Error(`Failed to read knowledge: ${error.message}`);
+    return ((data ?? []) as unknown as MemoryRow[]).map(fromRow);
+  }
+
+  async setEmbedding(
+    organizationId: OrganizationId,
+    id: MemoryId,
+    embedding: number[],
+    model: string,
+  ): Promise<void> {
+    const { error } = await this.client
+      .from("memories")
+      .update({
+        embedding: vectorLiteral(embedding),
+        embedding_model: model,
+        embedded_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("organization_id", organizationId);
+
+    if (error) throw new Error(`Failed to store embedding: ${error.message}`);
+  }
+
+  async findMissingEmbeddings(
+    organizationId: OrganizationId,
+    limit: number,
+  ): Promise<Memory[]> {
+    const { data, error } = await this.client
+      .from("memories")
+      .select(MEMORY_COLUMNS)
+      .eq("organization_id", organizationId)
+      .is("embedding", null)
+      .neq("status", "archived")
+      .order("created_at", { ascending: true })
+      .limit(Math.min(limit, MAX_QUERY_LIMIT));
+
+    if (error) throw new Error(`Failed to find unembedded knowledge: ${error.message}`);
+    return ((data ?? []) as unknown as MemoryRow[]).map(fromRow);
+  }
+
+  async countByStatus(
+    organizationId: OrganizationId,
+  ): Promise<Record<KnowledgeStatus, number>> {
+    const counts = await Promise.all(
+      KNOWLEDGE_STATUSES.map(async (status) => {
+        const { count, error } = await this.client
+          .from("memories")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", organizationId)
+          .eq("status", status);
+
+        if (error) throw new Error(`Failed to count knowledge: ${error.message}`);
+        return [status, count ?? 0] as const;
+      }),
+    );
+
+    return Object.fromEntries(counts) as Record<KnowledgeStatus, number>;
+  }
+}
+
+/** pgvector's text form. Every value is validated finite before it gets here. */
+function vectorLiteral(values: number[]): string {
+  if (!values.every((value) => Number.isFinite(value))) {
+    throw new Error("An embedding must contain only finite numbers.");
+  }
+
+  return `[${values.join(",")}]`;
 }
 
 function toRow(memory: Memory) {
