@@ -43,6 +43,13 @@ export interface RankedKnowledge {
   /** 0-1 after every adjustment. Comparable within one ranking only. */
   score: number;
 
+  /**
+   * Raw cosine similarity to the query, when both sides were embedded. The
+   * score normalizes this away; telling a restatement from a merely related
+   * entry needs the raw value.
+   */
+  similarity?: number;
+
   signals: RankingSignals;
 
   /** Why it was retrieved, most significant first. Shown to people. */
@@ -187,6 +194,7 @@ function score(
   return {
     memory,
     score: clamp(total),
+    similarity: candidate.semanticSimilarity,
     signals,
     reasons: explain({
       memory,

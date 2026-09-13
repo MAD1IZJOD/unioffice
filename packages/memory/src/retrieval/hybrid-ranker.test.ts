@@ -86,6 +86,25 @@ test("semantic relevance outranks importance alone", () => {
   assert.match(ranked[0]!.reasons[0]!, /Matched the topic of the work \(similarity 0.80\)/);
 });
 
+test("the raw similarity is kept beside the score, and absent when nothing was embedded", () => {
+  const restatement = knowledge({ title: "Starter churn peaks in month two", content: "Starter churn is highest in month two." });
+  const unembedded = knowledge({ title: "Starter churn note", content: "Starter churn is high." });
+
+  const ranked = rankKnowledge(
+    [candidate(restatement, 0.96), candidate(unembedded, undefined, 0.6)],
+    { terms: queryTerms("starter churn month two"), now },
+    5,
+  );
+
+  const byId = new Map(ranked.map((entry) => [entry.memory.id, entry]));
+
+  // The score saturates well below 0.96, so only the raw value can tell a
+  // restatement from something merely on the same topic.
+  assert.equal(byId.get(restatement.id)!.similarity, 0.96);
+  assert.equal(byId.get(restatement.id)!.signals.semantic, 1);
+  assert.equal(byId.get(unembedded.id)!.similarity, undefined);
+});
+
 test("critical knowledge is retrieved on weight alone, and says so", () => {
   const critical = knowledge({ title: "Legal sign-off", content: "Never launch in the EU without legal sign-off.", importance: 0.95 });
 
