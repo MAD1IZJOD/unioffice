@@ -9,6 +9,7 @@ import Artifacts from "../pages/Artifacts";
 import Brain from "../pages/Brain";
 import Command from "../pages/Command";
 import Governance from "../pages/Governance";
+import KnowledgeEntry from "../pages/KnowledgeEntry";
 import MissionStart from "../pages/MissionStart";
 import Missions from "../pages/Missions";
 import Room from "../pages/Room";
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
       { path: "agents/:agentId", element: <Agent /> },
       { path: "tools", element: <Tools /> },
       { path: "brain", element: <Brain /> },
+      { path: "brain/:knowledgeId", element: <KnowledgeEntry /> },
       { path: "artifacts", element: <Artifacts /> },
       { path: "approvals", element: <Approvals /> },
       { path: "activity", element: <Activity /> },
