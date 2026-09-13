@@ -13,6 +13,7 @@ import KnowledgeEntry from "../pages/KnowledgeEntry";
 import MissionStart from "../pages/MissionStart";
 import Missions from "../pages/Missions";
 import Room from "../pages/Room";
+import TemplateMission from "../pages/TemplateMission";
 import Organization from "../pages/Organization";
 import Tools from "../pages/Tools";
 import Workspace from "../pages/Workspace";
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
       { path: "command", element: <Command /> },
       { path: "missions", element: <Missions /> },
       { path: "missions/new", element: <MissionStart /> },
+      { path: "missions/new/:templateId", element: <TemplateMission /> },
       { path: "missions/:missionId", element: <Room /> },
       { path: "work", loader: () => redirect("/missions") },
       {

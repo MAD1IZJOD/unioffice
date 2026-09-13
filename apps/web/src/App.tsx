@@ -138,6 +138,10 @@ function locate(pathname: string): { group: string; title: string } {
     return { group: "Work", title: "Open a mission" };
   }
 
+  if (pathname.startsWith("/missions/new/")) {
+    return { group: "Work", title: "Start from a template" };
+  }
+
   if (pathname.startsWith("/missions/")) {
     return { group: "Work", title: "Execution room" };
   }
