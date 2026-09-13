@@ -242,7 +242,41 @@ export interface RecallPreview {
   withheldCount: number;
 }
 
+/** What became of one thing a mission taught the company. */
+export type MissionDebriefOutcome =
+  | "pending"
+  | "kept"
+  | "merged"
+  | "replaced"
+  | "discarded";
+
+export interface MissionDebriefRelation {
+  knowledge: KnowledgeItem;
+  /** Measured by the backend: an embedding similarity or a detected conflict. */
+  relation: "restates" | "contradicts" | "related";
+  similarity?: number;
+  /** Whether the backend would accept this entry as the one to merge into. */
+  canMerge: boolean;
+}
+
+export interface MissionDebriefItem {
+  knowledge: KnowledgeItem;
+  outcome: MissionDebriefOutcome;
+  mergedInto?: { id: string; title: string; status: KnowledgeStatus };
+  replacedBy?: { id: string; title: string; status: KnowledgeStatus };
+  replaces?: { id: string; title: string; status: KnowledgeStatus };
+  evidence: {
+    task?: { id: string; title: string };
+    agent?: { id: string; name: string };
+    artifact?: { id: string; name: string };
+    rationale?: string;
+  };
+  related: MissionDebriefRelation[];
+}
+
 export interface MissionKnowledge {
+  /** Each thing the mission taught, with its evidence and what became of it. */
+  review: MissionDebriefItem[];
   learned: KnowledgeItem[];
   used: Array<{
     knowledge: KnowledgeItem;
@@ -1117,6 +1151,31 @@ export async function restoreKnowledge(knowledgeId: string): Promise<KnowledgeIt
   );
 
   return data.knowledge;
+}
+
+/** The knowledge says what `intoId` already says; that entry is kept and re-confirmed. */
+export async function mergeKnowledge(
+  knowledgeId: string,
+  intoId: string,
+): Promise<{ knowledge: KnowledgeItem; merged: KnowledgeItem }> {
+  return post<{ knowledge: KnowledgeItem; merged: KnowledgeItem }>(
+    `/knowledge/${knowledgeId}/merge`,
+    { organizationId: organizationId(), intoId },
+    READ_TIMEOUT_MS,
+  );
+}
+
+/** The knowledge replaces `replacesId`, which is archived as history. */
+export async function supersedeKnowledge(
+  knowledgeId: string,
+  replacesId: string,
+  note?: string,
+): Promise<{ knowledge: KnowledgeItem; replaced: KnowledgeItem }> {
+  return post<{ knowledge: KnowledgeItem; replaced: KnowledgeItem }>(
+    `/knowledge/${knowledgeId}/supersede`,
+    { organizationId: organizationId(), replacesId, note: note?.trim() || undefined },
+    READ_TIMEOUT_MS,
+  );
 }
 
 export async function resolveKnowledgeConflict(
