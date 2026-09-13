@@ -51,6 +51,15 @@ type SearchableMemoryRepository = MemoryRepository & KnowledgeSearchRepository;
 
 const CONFLICT_CANDIDATES = 20;
 
+/**
+ * How close an extracted item must sit to existing knowledge to be the same
+ * knowledge said again. The content hash only catches identical text; on the
+ * live store a second mission re-extracted "The current pricing strategy has
+ * two tiers with different churn rates" word for word as a title with
+ * different detail, and recall then handed agents the same fact as K2 and K3.
+ */
+const NEAR_DUPLICATE_SIMILARITY = 0.93;
+
 export class KnowledgeCaptureService {
   constructor(
     private readonly memories: SearchableMemoryRepository,
@@ -351,7 +360,7 @@ export class KnowledgeCaptureService {
         limit: 1,
       });
 
-      if (existing.length > 0) {
+      if (existing.length > 0 || await this.isNearDuplicate(context.actor.organizationId, candidate)) {
         report.duplicates.push(candidate.title);
         continue;
       }
@@ -378,7 +387,38 @@ export class KnowledgeCaptureService {
     return report;
   }
 
-  private async embed(memory: Memory): Promise<number[] | undefined> {
+  /**
+   * Whether the company already holds this knowledge in other words: the same
+   * title once case and punctuation are set aside, or an embedding so close it
+   * is a restatement. Only current and proposed knowledge counts - something
+   * archived can be learned again.
+   */
+  private async isNearDuplicate(
+    organizationId: OrganizationId,
+    candidate: ExtractedKnowledge,
+  ): Promise<boolean> {
+    const embedding = await this.embed({ title: candidate.title, content: candidate.content });
+
+    const nearby = await this.memories.searchCandidates({
+      organizationId,
+      statuses: ["active", "proposed"],
+      workspace: { mode: "all" },
+      embedding,
+      terms: toTsQueryTerms(queryTerms(candidate.title)),
+      candidateLimit: 10,
+    });
+
+    if (nearby.some((row) => (row.semanticSimilarity ?? 0) >= NEAR_DUPLICATE_SIMILARITY)) {
+      return true;
+    }
+
+    const rows = await this.memories.findByIds(organizationId, nearby.map((row) => row.memoryId));
+    const title = normalizedTitle(candidate.title);
+
+    return rows.some((row) => normalizedTitle(row.title) === title);
+  }
+
+  private async embed(memory: Pick<Memory, "title" | "content">): Promise<number[] | undefined> {
     if (!this.embeddings) return undefined;
 
     try {
@@ -432,6 +472,10 @@ function fromExtraction(
       },
     },
   };
+}
+
+function normalizedTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function visibleTogether(left: Memory, right: Memory): boolean {
