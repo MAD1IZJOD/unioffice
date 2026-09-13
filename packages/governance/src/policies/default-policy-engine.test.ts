@@ -55,6 +55,98 @@ const useCalculator: GovernanceAction = {
   toolRisk: "low",
 };
 
+const recallAssumption: GovernanceAction = {
+  kind: "knowledge_recall",
+  knowledgeType: "assumption",
+  title: "Customers pay annually",
+};
+
+const captureDecision: GovernanceAction = {
+  kind: "knowledge_capture",
+  knowledgeType: "decision",
+  title: "Keep Starter at $99",
+};
+
+test("knowledge nothing governs is allowed, and says so", () => {
+  const decision = engine.evaluate(recallAssumption, context(), []);
+
+  assert.equal(decision.outcome, "allow");
+  assert.match(decision.summary, /No policy applies to this knowledge/);
+});
+
+test("a recall policy narrowed to a knowledge type denies only that type", () => {
+  const rule = policy("k1", {
+    name: "No assumptions in finance",
+    subject: "knowledge_recall",
+    effect: "deny",
+    scope: { agentIds: [], toolIds: [], workspaceIds: [], capabilities: [], knowledgeTypes: ["assumption"] },
+  });
+
+  const denied = engine.evaluate(recallAssumption, context(), [rule]);
+  const allowed = engine.evaluate({ ...recallAssumption, knowledgeType: "decision" }, context(), [rule]);
+
+  assert.equal(denied.outcome, "deny");
+  assert.match(denied.summary, /Recalling assumption knowledge “Customers pay annually” is not permitted by No assumptions in finance/);
+  assert.match(denied.reasons[0]!.explanation, /it covers assumption knowledge/);
+  assert.equal(allowed.outcome, "allow");
+});
+
+test("a recall policy scoped to a workspace only reaches work in that workspace", () => {
+  const legal = "legal" as WorkspaceId;
+  const rule = policy("k2", {
+    subject: "knowledge_recall",
+    effect: "deny",
+    scope: { agentIds: [], toolIds: [], workspaceIds: [legal], capabilities: [] },
+  });
+
+  assert.equal(engine.evaluate(recallAssumption, context({ workspaceId: legal }), [rule]).outcome, "deny");
+  assert.equal(engine.evaluate(recallAssumption, context({ workspaceId: "sales" as WorkspaceId }), [rule]).outcome, "allow");
+  assert.equal(engine.evaluate(recallAssumption, context(), [rule]).outcome, "allow");
+});
+
+test("a capture policy decides what happens to extracted knowledge, strongest effect winning", () => {
+  const autoAccept = policy("k3", { subject: "knowledge_capture", effect: "allow", risk: "low" });
+  const reviewDecisions = policy("k4", {
+    subject: "knowledge_capture",
+    effect: "require_approval",
+    scope: { agentIds: [], toolIds: [], workspaceIds: [], capabilities: [], knowledgeTypes: ["decision"] },
+  });
+
+  assert.equal(engine.evaluate(captureDecision, context(), [autoAccept, reviewDecisions]).outcome, "require_approval");
+  assert.equal(
+    engine.evaluate({ ...captureDecision, knowledgeType: "insight" }, context(), [autoAccept, reviewDecisions]).outcome,
+    "allow",
+  );
+});
+
+test("tool and knowledge policies never leak into each other's decisions", () => {
+  const denyEverythingTool = policy("t1", { subject: "tool", effect: "deny" });
+  const denyToolScopedKnowledge = policy("t2", {
+    subject: "knowledge_recall",
+    effect: "deny",
+    scope: { agentIds: [], toolIds: ["calculator"], workspaceIds: [], capabilities: [] },
+  });
+  const denyKnowledge = policy("k5", { subject: "knowledge_recall", effect: "deny" });
+  const typedTaskPolicy = policy("t3", {
+    subject: "task",
+    effect: "deny",
+    scope: { agentIds: [], toolIds: [], workspaceIds: [], capabilities: [], knowledgeTypes: ["fact"] },
+  });
+
+  assert.equal(engine.evaluate(recallAssumption, context(), [denyEverythingTool, denyToolScopedKnowledge]).outcome, "allow");
+  assert.equal(engine.evaluate(useCalculator, context(), [denyKnowledge]).outcome, "allow");
+  assert.equal(
+    engine.evaluate({ kind: "task", title: "Model pricing", requiredTools: [] }, context(), [typedTaskPolicy]).outcome,
+    "allow",
+  );
+});
+
+test("a knowledge policy from another organization never applies", () => {
+  const foreign = policy("k6", { organizationId: otherOrganizationId, subject: "knowledge_recall", effect: "deny" });
+
+  assert.equal(engine.evaluate(recallAssumption, context(), [foreign]).outcome, "allow");
+});
+
 test("an action nothing governs is allowed, and says so rather than inventing a rule", () => {
   const decision = engine.evaluate(useCalculator, context(), []);
 
