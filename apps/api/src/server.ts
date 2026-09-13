@@ -1004,6 +1004,37 @@ export function buildApiServer(
       return { knowledge };
     });
 
+    // The knowledge in the route is the restatement; intoId is the entry it
+    // says the same as. Both ids are resolved inside the caller's organization.
+    instance.post("/knowledge/:id/merge", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      const { kept, merged } = await services.companyBrainService.mergeKnowledge(
+        requiredOrganizationId(services, body.organizationId),
+        parameterUuid(request.params) as MemoryId,
+        requiredUuid(body.intoId, "intoId") as MemoryId,
+        actorOf(),
+      );
+
+      return { knowledge: kept, merged };
+    });
+
+    // The knowledge in the route is the newer entry; replacesId is the older
+    // one it retires.
+    instance.post("/knowledge/:id/supersede", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      const { current, replaced } = await services.companyBrainService.supersedeKnowledge(
+        requiredOrganizationId(services, body.organizationId),
+        parameterUuid(request.params) as MemoryId,
+        requiredUuid(body.replacesId, "replacesId") as MemoryId,
+        actorOf(),
+        optionalBoundedText(body.note, "note", 500),
+      );
+
+      return { knowledge: current, replaced };
+    });
+
     instance.post("/knowledge/conflicts/:id/resolve", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
       const body = objectBody(request.body);
 
