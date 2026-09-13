@@ -42,18 +42,224 @@ export interface ActivityEvent {
   payload: Record<string, unknown>;
 }
 
-export interface MemoryItem {
+/* --------------------------------------------------------------------------
+   Company knowledge.
+
+   What the company knows, where each piece came from, and what it has been
+   used for. The backend decides relevance, lifecycle, conflicts and who may
+   see what; every field here is read back from it.
+   -------------------------------------------------------------------------- */
+
+export type KnowledgeType =
+  | "fact"
+  | "decision"
+  | "insight"
+  | "policy"
+  | "process"
+  | "preference"
+  | "lesson"
+  | "assumption"
+  | "reference"
+  | "experience";
+
+export type KnowledgeStatus = "proposed" | "active" | "archived";
+
+export type KnowledgeSourceType =
+  | "mission"
+  | "task"
+  | "artifact"
+  | "user"
+  | "agent"
+  | "approval";
+
+export interface KnowledgeItem {
   id: string;
-  type: string;
-  scope: string;
-  content: string;
-  importance: number;
+  organizationId: string;
+  workspaceId?: string;
   agentId?: string;
   workId?: string;
   taskId?: string;
+  artifactId?: string;
+  scope: string;
+  type: KnowledgeType;
+  status: KnowledgeStatus;
+  title: string;
+  content: string;
   source?: string;
+  sourceType: KnowledgeSourceType;
+  importance: number;
+  confidence?: number;
+  createdBy?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  supersedesId?: string;
+  archivedAt?: string;
+  embeddingModel?: string;
   createdAt: string;
+  updatedAt: string;
   metadata: Record<string, unknown>;
+}
+
+/** Company memory, as the surfaces that predate knowledge still name it. */
+export type MemoryItem = KnowledgeItem;
+
+export interface KnowledgeSearchResult {
+  knowledge: KnowledgeItem;
+  /** 0-1, present only when the search had a query. */
+  relevance?: number;
+  reasons: string[];
+  stale: boolean;
+  ageDays: number;
+  /** The text is phrased as instructions to an AI. */
+  flagged: boolean;
+}
+
+export interface KnowledgeSearchResponse {
+  mode: "relevance" | "recent";
+  items: KnowledgeSearchResult[];
+}
+
+export interface KnowledgeFilters {
+  query?: string;
+  types?: KnowledgeType[];
+  statuses?: KnowledgeStatus[];
+  /** A workspace id, or "company" for company-wide knowledge only. */
+  workspaceId?: string;
+  sourceType?: KnowledgeSourceType;
+  minImportance?: number;
+  createdAfter?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export type KnowledgeConflictStatus = "open" | "resolved" | "dismissed";
+
+export interface KnowledgeConflictItem {
+  id: string;
+  organizationId: string;
+  memoryId: string;
+  conflictingMemoryId: string;
+  reason: string;
+  signals: Record<string, unknown>;
+  status: KnowledgeConflictStatus;
+  resolution?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  detectedAt: string;
+}
+
+export interface KnowledgeOverview {
+  organizationId: string;
+  generatedAt: string;
+  counts: {
+    proposed: number;
+    active: number;
+    archived: number;
+    openConflicts: number;
+    missionsInformed: number;
+    recallsRecorded: number;
+    stale: number;
+  };
+  byType: Partial<Record<KnowledgeType, number>>;
+  byTypeSampleSize: number;
+  recentlyLearned: KnowledgeItem[];
+  awaitingReview: KnowledgeItem[];
+  important: KnowledgeItem[];
+  inUse: Array<{
+    knowledge: KnowledgeItem;
+    recallCount: number;
+    missionCount: number;
+    lastRecalledAt: string;
+  }>;
+  conflicts: Array<{
+    conflict: KnowledgeConflictItem;
+    left: KnowledgeItem;
+    right: KnowledgeItem;
+  }>;
+  archived: KnowledgeItem[];
+  retrieval: { semantic: boolean; embeddingModel?: string };
+}
+
+export interface KnowledgeDetail {
+  knowledge: KnowledgeItem;
+  freshness: { ageDays: number; stale: boolean; horizonDays: number | null };
+  flags: string[];
+  provenance: {
+    sourceType: KnowledgeSourceType;
+    createdBy?: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    mission?: { id: string; objective: string; status: WorkStatus; createdAt: string };
+    task?: { id: string; title: string; status: TaskStatus };
+    artifact?: { id: string; name: string; type: string };
+    agent?: { id: string; name: string; capabilities: string[] };
+    workspace?: { id: string; name: string };
+    extraction?: { model?: string; rationale?: string; governance?: string };
+  };
+  related: {
+    sameMission: KnowledgeItem[];
+    sameArtifact: KnowledgeItem[];
+    similar: Array<{ knowledge: KnowledgeItem; relevance: number; reasons: string[] }>;
+    supersedes?: KnowledgeItem;
+    supersededBy?: KnowledgeItem;
+  };
+  usage: {
+    recallCount: number;
+    missions: Array<{
+      mission: { id: string; objective: string; status: WorkStatus };
+      stages: Array<"planning" | "execution">;
+      lastRecalledAt: string;
+      bestRank: number;
+      reasons: string[];
+    }>;
+  };
+  conflicts: Array<{
+    conflict: KnowledgeConflictItem;
+    counterpart?: KnowledgeItem;
+  }>;
+}
+
+/** One entry exactly as an agent would be handed it. */
+export interface RecalledKnowledge {
+  ref: string;
+  id: string;
+  type: KnowledgeType;
+  status: "active" | "proposed";
+  title: string;
+  content: string;
+  source: string;
+  recordedAt: string;
+  reviewed: boolean;
+  stale: boolean;
+  confidence?: number;
+  reasons: string[];
+  conflictsWith?: string[];
+  flags?: string[];
+}
+
+export interface RecallPreview {
+  items: RecalledKnowledge[];
+  withheldCount: number;
+}
+
+export interface MissionKnowledge {
+  learned: KnowledgeItem[];
+  used: Array<{
+    knowledge: KnowledgeItem;
+    stages: Array<"planning" | "execution">;
+    taskIds: string[];
+    agentIds: string[];
+    reasons: string[];
+    fromThisMission: boolean;
+  }>;
+}
+
+export interface CaptureReport {
+  created: KnowledgeItem[];
+  duplicates: string[];
+  discarded: Array<{ title: string; reason: string }>;
+  rejected: Array<{ title?: string; reason: string }>;
+  skipped?: string;
 }
 
 export interface AgentSummary {
@@ -384,7 +590,11 @@ export type AttentionSeverity = "action" | "watch";
    one.
    -------------------------------------------------------------------------- */
 
-export type PolicySubject = "tool" | "task";
+export type PolicySubject =
+  | "tool"
+  | "task"
+  | "knowledge_recall"
+  | "knowledge_capture";
 
 export type PolicyEffect = "allow" | "require_approval" | "deny";
 
@@ -397,6 +607,8 @@ export interface PolicyScope {
   toolIds: string[];
   workspaceIds: string[];
   capabilities: string[];
+  /** Kinds of knowledge, for knowledge policies. Empty or absent is every kind. */
+  knowledgeTypes?: string[];
 }
 
 export interface PolicyItem {
@@ -774,12 +986,165 @@ export async function fetchActivity(limit = 40): Promise<ActivityEvent[]> {
   return data.events;
 }
 
-export async function fetchMemory(query?: string, limit = 60): Promise<MemoryItem[]> {
+export async function fetchMemory(query?: string, limit = 50): Promise<MemoryItem[]> {
   const data = await get<{ memories: MemoryItem[] }>(
-    scoped("/memory", { limit, query: query?.trim() || undefined }),
+    scoped("/memory", { limit: Math.min(limit, 50), query: query?.trim() || undefined }),
   );
 
   return data.memories;
+}
+
+// A search embeds its query on the local model, which is quick but not free.
+const KNOWLEDGE_SEARCH_TIMEOUT_MS = 60_000;
+
+export async function searchKnowledge(
+  filters: KnowledgeFilters = {},
+): Promise<KnowledgeSearchResponse> {
+  return get<KnowledgeSearchResponse>(
+    scoped("/knowledge", {
+      query: filters.query?.trim() || undefined,
+      types: filters.types?.length ? filters.types.join(",") : undefined,
+      statuses: filters.statuses?.length ? filters.statuses.join(",") : undefined,
+      workspaceId: filters.workspaceId,
+      sourceType: filters.sourceType,
+      minImportance: filters.minImportance,
+      createdAfter: filters.createdAfter,
+      limit: filters.limit,
+      offset: filters.offset,
+    }),
+    KNOWLEDGE_SEARCH_TIMEOUT_MS,
+  );
+}
+
+export async function fetchKnowledgeOverview(): Promise<KnowledgeOverview> {
+  return get<KnowledgeOverview>(scoped("/knowledge/overview"), 60_000);
+}
+
+export async function fetchKnowledgeDetail(knowledgeId: string): Promise<KnowledgeDetail> {
+  return get<KnowledgeDetail>(scoped(`/knowledge/${knowledgeId}`), KNOWLEDGE_SEARCH_TIMEOUT_MS);
+}
+
+export async function previewRecall(input: {
+  query: string;
+  workspaceId?: string;
+  agentId?: string;
+}): Promise<RecallPreview> {
+  return get<RecallPreview>(
+    scoped("/knowledge/recall-preview", {
+      query: input.query.trim(),
+      workspaceId: input.workspaceId || undefined,
+      agentId: input.agentId || undefined,
+    }),
+    KNOWLEDGE_SEARCH_TIMEOUT_MS,
+  );
+}
+
+export async function fetchMissionKnowledge(workId: string): Promise<MissionKnowledge> {
+  return get<MissionKnowledge>(scoped(`/work/${workId}/knowledge`));
+}
+
+export async function createKnowledge(input: {
+  title: string;
+  content: string;
+  type: KnowledgeType;
+  importance?: number;
+  confidence?: number;
+  workspaceId?: string;
+}): Promise<KnowledgeItem> {
+  const data = await post<{ knowledge: KnowledgeItem }>(
+    "/knowledge",
+    {
+      organizationId: organizationId(),
+      ...input,
+      workspaceId: input.workspaceId || undefined,
+    },
+    KNOWLEDGE_SEARCH_TIMEOUT_MS,
+  );
+
+  return data.knowledge;
+}
+
+export async function updateKnowledge(
+  knowledgeId: string,
+  changes: {
+    title?: string;
+    content?: string;
+    type?: KnowledgeType;
+    importance?: number;
+    /** null clears it. */
+    confidence?: number | null;
+    /** null makes it company-wide. */
+    workspaceId?: string | null;
+  },
+): Promise<KnowledgeItem> {
+  const data = await post<{ knowledge: KnowledgeItem }>(
+    `/knowledge/${knowledgeId}`,
+    { organizationId: organizationId(), ...changes },
+    KNOWLEDGE_SEARCH_TIMEOUT_MS,
+  );
+
+  return data.knowledge;
+}
+
+export async function approveKnowledge(knowledgeId: string): Promise<KnowledgeItem> {
+  const data = await post<{ knowledge: KnowledgeItem }>(
+    `/knowledge/${knowledgeId}/approve`,
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.knowledge;
+}
+
+export async function archiveKnowledge(
+  knowledgeId: string,
+  reason?: string,
+): Promise<KnowledgeItem> {
+  const data = await post<{ knowledge: KnowledgeItem }>(
+    `/knowledge/${knowledgeId}/archive`,
+    { organizationId: organizationId(), reason: reason?.trim() || undefined },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.knowledge;
+}
+
+export async function restoreKnowledge(knowledgeId: string): Promise<KnowledgeItem> {
+  const data = await post<{ knowledge: KnowledgeItem }>(
+    `/knowledge/${knowledgeId}/restore`,
+    { organizationId: organizationId() },
+    KNOWLEDGE_SEARCH_TIMEOUT_MS,
+  );
+
+  return data.knowledge;
+}
+
+export async function resolveKnowledgeConflict(
+  conflictId: string,
+  resolution:
+    | { resolution: "keep"; keepId: string }
+    | { resolution: "both_hold" }
+    | { resolution: "dismiss" },
+  note?: string,
+): Promise<KnowledgeConflictItem> {
+  const data = await post<{ conflict: KnowledgeConflictItem }>(
+    `/knowledge/conflicts/${conflictId}/resolve`,
+    { organizationId: organizationId(), ...resolution, note: note?.trim() || undefined },
+    READ_TIMEOUT_MS,
+  );
+
+  return data.conflict;
+}
+
+/** Runs the generation model over the artifact, so it gets the long timeout. */
+export async function deriveKnowledgeFromArtifact(
+  artifactId: string,
+): Promise<CaptureReport> {
+  return post<CaptureReport>(
+    `/artifacts/${artifactId}/knowledge`,
+    { organizationId: organizationId() },
+    MODEL_TIMEOUT_MS,
+  );
 }
 
 export async function fetchAgents(): Promise<AgentSummary[]> {
