@@ -97,10 +97,21 @@ export default function Room() {
 
   // What this mission was handed and what it taught the company. Knowledge is
   // recalled as steps start and captured as they finish, so it is re-read on a
-  // modest interval rather than riding the room's live channel.
+  // modest interval while that can still happen. Once the mission has finished
+  // it only changes through the debrief, which re-reads it after each decision -
+  // and each read compares every open lesson against the Brain, which is not
+  // worth repeating every few seconds for a mission nobody is running. It waits
+  // for the room so the interval is decided once, not flipped after a first read.
+  const finished =
+    room.data?.work.status === "completed" ||
+    room.data?.work.status === "failed" ||
+    room.data?.work.status === "cancelled";
   const knowledge = useResource<MissionKnowledge>(
     useCallback(() => fetchMissionKnowledge(missionId), [missionId]),
-    { pollMs: 15_000, enabled: Boolean(missionId) },
+    {
+      pollMs: finished ? undefined : 15_000,
+      enabled: Boolean(missionId) && Boolean(room.data),
+    },
   );
 
   const { reload } = room;
