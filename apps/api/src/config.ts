@@ -17,6 +17,13 @@ export interface ApiConfig {
   supabaseServiceRoleKey: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
+  /**
+   * The local model company knowledge is embedded with. Empty disables
+   * semantic retrieval; keyword, importance and recency ranking still work.
+   * Embeddings stay on this machine - knowledge is never sent to a third party
+   * to be indexed.
+   */
+  embeddingModel?: string;
   seedDevelopmentWorkforce: boolean;
   corsOrigins: string[];
   /**
@@ -69,6 +76,10 @@ export function loadApiConfig(
       "OLLAMA_BASE_URL",
     ),
     ollamaModel: env.OLLAMA_MODEL ?? "qwen3:8b",
+    embeddingModel:
+      env.OLLAMA_EMBEDDING_MODEL === undefined
+        ? "nomic-embed-text"
+        : env.OLLAMA_EMBEDDING_MODEL.trim() || undefined,
     seedDevelopmentWorkforce:
       env.SEED_DEVELOPMENT_WORKFORCE === "true",
     corsOrigins: parseCorsOrigins(env.API_CORS_ORIGINS),
