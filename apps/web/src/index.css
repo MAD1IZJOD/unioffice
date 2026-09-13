@@ -5,6 +5,7 @@
 @import "./styles/room.css";
 @import "./styles/governance.css";
 @import "./styles/company.css";
+@import "./styles/brain.css";
 
 :root {
   font-family:
