@@ -170,11 +170,33 @@ export function scopeSentence(policy: PolicyItem): string {
     );
   }
 
+  const knowledgeTypes = policy.scope.knowledgeTypes ?? [];
+
+  if (isKnowledgePolicy(policy)) {
+    const kinds =
+      knowledgeTypes.length > 0 ? knowledgeTypes.join(" or ") : "any kind of";
+
+    parts.unshift(
+      policy.subject === "knowledge_recall"
+        ? `${kinds} knowledge handed to an agent`
+        : `${kinds} knowledge extraction proposes`,
+    );
+
+    return capitalize(parts.join(", for "));
+  }
+
   if (parts.length === 0) {
     return "Everything the company does";
   }
 
   return capitalize(parts.join(", and "));
+}
+
+export function isKnowledgePolicy(policy: Pick<PolicyItem, "subject">): boolean {
+  return (
+    policy.subject === "knowledge_recall" ||
+    policy.subject === "knowledge_capture"
+  );
 }
 
 /**
@@ -186,6 +208,25 @@ export function scopeSentence(policy: PolicyItem): string {
  */
 export function policySentence(policy: PolicyItem): string {
   const scope = scopeSentence(policy).toLowerCase();
+
+  // Knowledge effects mean something specific, so they are said specifically:
+  // "stops for a person" is not what a capture policy does.
+  if (policy.subject === "knowledge_capture") {
+    switch (policy.effect) {
+      case "deny":
+        return `${capitalize(scope)} — never recorded.`;
+      case "require_approval":
+        return `${capitalize(scope)} — held as a proposal until a person reviews it.`;
+      default:
+        return `${capitalize(scope)} — recorded as active knowledge.`;
+    }
+  }
+
+  if (policy.subject === "knowledge_recall") {
+    return policy.effect === "deny"
+      ? `${capitalize(scope)} — never handed over.`
+      : `${capitalize(scope)} — explicitly permitted.`;
+  }
 
   switch (policy.effect) {
     case "deny":
@@ -232,7 +273,16 @@ export function orderPolicies(policies: PolicyItem[]): PolicyItem[] {
 
 /** What this policy governs, named for a person rather than for the schema. */
 export function subjectLabel(policy: PolicyItem): string {
-  return policy.subject === "tool" ? "Tool calls" : "Whole steps";
+  switch (policy.subject) {
+    case "tool":
+      return "Tool calls";
+    case "knowledge_recall":
+      return "Knowledge recall";
+    case "knowledge_capture":
+      return "Knowledge capture";
+    default:
+      return "Whole steps";
+  }
 }
 
 function capitalize(value: string): string {
