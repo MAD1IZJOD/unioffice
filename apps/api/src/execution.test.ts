@@ -1213,6 +1213,6 @@ test("records a failure memory without blocking task failure when a task fails",
   assert.equal(result.status, "failed");
   assert.equal(memoryRepository.memories.size, 1);
   const stored = [...memoryRepository.memories.values()][0];
-  assert.equal(stored?.type, "decision");
+  assert.equal(stored?.type, "experience");
   assert.match(stored?.content ?? "", /Model timed out/);
 });
