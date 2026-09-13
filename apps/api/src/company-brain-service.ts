@@ -362,6 +362,30 @@ export class CompanyBrainService {
     const supersededBy = supersededById
       ? (await this.memories.findByIds(organizationId, [supersededById]))[0]
       : undefined;
+    const mergedIntoId = typeof knowledge.metadata.mergedIntoId === "string"
+      ? (knowledge.metadata.mergedIntoId as MemoryId)
+      : undefined;
+    const mergedInto = mergedIntoId
+      ? (await this.memories.findByIds(organizationId, [mergedIntoId]))[0]
+      : undefined;
+
+    // Other missions that arrived at this knowledge, as merges recorded them.
+    // A mission is named only when it is confirmed to be this organization's.
+    const confirmations = await Promise.all(
+      reinforcementsOf(knowledge).map(async (entry) => {
+        const confirmingWork = typeof entry.workId === "string"
+          ? await this.workRepository.findById(entry.workId as WorkId)
+          : null;
+
+        return {
+          mission: confirmingWork && confirmingWork.organizationId === organizationId
+            ? { id: confirmingWork.id, objective: confirmingWork.objective }
+            : undefined,
+          wording: typeof entry.title === "string" ? entry.title : undefined,
+          mergedAt: typeof entry.mergedAt === "string" ? entry.mergedAt : undefined,
+        };
+      }),
+    );
 
     return {
       knowledge,
@@ -392,7 +416,9 @@ export class CompanyBrainService {
           .map((entry) => ({ knowledge: entry.memory, relevance: Math.round(entry.score * 1_000) / 1_000, reasons: entry.reasons })),
         supersedes: supersedes[0],
         supersededBy,
+        mergedInto,
       },
+      confirmations,
       usage,
       conflicts: conflicts.map((conflict) => ({
         conflict,

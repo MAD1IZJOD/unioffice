@@ -170,7 +170,7 @@ function setup(options: { embeddings?: boolean } = {}) {
     });
   }
 
-  return { store, brain, seed, learned, events };
+  return { store, brain, recall, seed, learned, events };
 }
 
 test("each lesson is shown with its evidence, next to the knowledge it restates", async () => {
@@ -307,4 +307,71 @@ test("without embeddings, only an identical title counts as a restatement", asyn
   assert.equal(relations.get(same.id)!.relation, "restates");
   assert.equal(relations.get(same.id)!.similarity, undefined);
   assert.equal(relations.get(similar.id)?.relation, "related", "wording alone is not proof of a restatement");
+});
+
+/* --------------------------------------------------------------------------
+   The loop: what a debrief decides is what the next plan is handed
+   -------------------------------------------------------------------------- */
+
+test("after a merge, the next mission's planning is handed the knowledge once, confirmed by the mission that re-learned it", async () => {
+  const { brain, recall, store, seed, learned } = setup();
+  const known = await seed({ title: "Starter churn peaks in month two", content: "Churn on Starter is highest in month two.", reviewedAt: now });
+  const lesson = await learned({});
+
+  const next: Work = {
+    id: "d0000000-0000-4000-8000-000000000001" as WorkId,
+    organizationId: orgA,
+    requesterId: "user" as Work["requesterId"],
+    objective: "Plan a retention campaign for Starter churn.",
+    status: "planning",
+    priority: "normal",
+    createdAt: now,
+    updatedAt: now,
+    metadata: {},
+  };
+
+  // Before anyone decides, planning is handed the same finding twice.
+  const before = await recall.recallForPlanning(next);
+  assert.deepEqual(new Set(before.items.map((item) => item.id)), new Set([known.id, lesson.id]));
+
+  const { review } = await brain.getMissionKnowledge(orgA, missionId);
+  const restatement = review[0]!.related.find((relation) => relation.relation === "restates")!;
+  assert.equal(restatement.knowledge.id, known.id);
+
+  await brain.mergeKnowledge(orgA, lesson.id, restatement.knowledge.id, "user:reviewer");
+
+  const after = await recall.recallForPlanning(next);
+  assert.deepEqual(
+    after.items.map((item) => [item.id, item.status, item.reviewed]),
+    [[known.id, "active", true]],
+    "one current, reviewed entry instead of an unreviewed restatement beside it",
+  );
+  assert.ok(
+    store.recalls.some((entry) => entry.workId === next.id && entry.memoryId === known.id && entry.stage === "planning"),
+    "the next mission's record says what its plan was given",
+  );
+
+  const detail = await brain.getDetail(orgA, known.id);
+  assert.deepEqual(
+    detail.confirmations.map((entry) => [entry.mission?.id, entry.wording]),
+    [[missionId, lesson.title]],
+  );
+  assert.equal((await brain.getDetail(orgA, lesson.id)).related.mergedInto?.id, known.id);
+});
+
+test("a confirmation never names a mission from outside the organization", async () => {
+  const { brain, store, seed } = setup();
+  const known = await seed({
+    title: "Starter churn peaks in month two",
+    content: "Churn on Starter is highest in month two.",
+    metadata: {
+      reinforcements: [{ knowledgeId: "x", workId: "e0000000-0000-4000-8000-00000000000e", title: "Their wording", mergedAt: now.toISOString() }],
+    },
+  });
+
+  const detail = await brain.getDetail(orgA, known.id);
+
+  assert.equal(detail.confirmations.length, 1);
+  assert.equal(detail.confirmations[0]!.mission, undefined);
+  assert.ok(await store.findById(known.id));
 });
