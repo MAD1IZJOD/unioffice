@@ -21,6 +21,11 @@ import type {
   EventRecorder,
 } from "./event-recorder.js";
 
+import type {
+  KnowledgeRecallService,
+  RecallResult,
+} from "./knowledge-recall-service.js";
+
 export interface PlanWorkResult {
   work: Work;
 
@@ -45,6 +50,12 @@ export class WorkService {
 
     /** The real, registered tools the planner may request by id. */
     private readonly availableTools: PlanningToolDescriptor[] = [],
+
+    /**
+     * What the company already knows, recalled before the plan is written.
+     * Absent, planning works exactly as it did before knowledge existed.
+     */
+    private readonly knowledgeRecall?: Pick<KnowledgeRecallService, "recallForPlanning">,
   ) {}
 
   async planWork(
@@ -118,6 +129,15 @@ export class WorkService {
         availableAgents.flatMap((agent) => agent.capabilities),
       )];
 
+      // Objective, then recall, then plan. The orchestrator is the actor the
+      // recall is governed and recorded for - it is the one reading it.
+      const recalled = await this.recallForPlanning(
+        updatedWork,
+        agents.find(
+          (agent) => agent.type === "orchestrator" && agent.status === "active",
+        ),
+      );
+
       const plan =
         await this.planner.plan({
           workId: updatedWork.id,
@@ -135,6 +155,8 @@ export class WorkService {
           availableCapabilities,
 
           briefing: briefingOf(updatedWork),
+
+          knowledge: recalled?.items,
 
           context: {
             organizationId:
@@ -270,6 +292,17 @@ export class WorkService {
             plan: {
               taskCount: tasks.length,
               createdAt: new Date().toISOString(),
+              knowledge: recalled && recalled.items.length > 0
+                ? {
+                    recalled: recalled.items.map((item) => ({
+                      ref: item.ref,
+                      id: item.id,
+                      title: item.title,
+                      status: item.status,
+                    })),
+                    withheldByPolicy: recalled.withheldCount,
+                  }
+                : undefined,
             },
           },
         });
@@ -314,6 +347,25 @@ export class WorkService {
       });
 
       throw error;
+    }
+  }
+
+  /**
+   * Recall for the planner, best-effort. A knowledge failure is never allowed
+   * to become a planning failure: the plan proceeds from the objective alone.
+   */
+  private async recallForPlanning(
+    work: Work,
+    orchestrator: Parameters<KnowledgeRecallService["recallForPlanning"]>[1],
+  ): Promise<RecallResult | undefined> {
+    if (!this.knowledgeRecall) {
+      return undefined;
+    }
+
+    try {
+      return await this.knowledgeRecall.recallForPlanning(work, orchestrator);
+    } catch {
+      return undefined;
     }
   }
 }
