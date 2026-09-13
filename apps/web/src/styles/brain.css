@@ -1,0 +1,998 @@
+/* ==========================================================================
+   The Company Brain
+
+   The collective memory of an AI company, drawn as accumulated strata rather
+   than as a table. What the company currently stands on sits at the top, what
+   it is still deciding sits below it, and what it disagrees with is marked in
+   red because a contradiction is the one thing here that needs a person.
+
+   Colour keeps its product-wide meaning. Blue is knowledge in use and the
+   system reasoning over it. Red is a person being needed: a conflict, or text
+   that tried to instruct an agent. Everything else is ink on black.
+   ========================================================================== */
+
+.brain {
+  --brain-gutter: 22px;
+  --brain-top: 24px;
+}
+
+/* --------------------------------------------------------------------------
+   Opening
+   -------------------------------------------------------------------------- */
+
+.brain-open {
+  position: relative;
+  margin: calc(var(--brain-top) * -1) calc(var(--brain-gutter) * -1) 0;
+  padding: 46px var(--brain-gutter) 40px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-0);
+}
+
+/* Strata: faint horizontal bands that deepen toward the bottom, the page's one
+   decorative gesture - layers of what has been learned. */
+.brain-open::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 27px,
+      rgba(255, 255, 255, 0.022) 27px,
+      rgba(255, 255, 255, 0.022) 28px
+    );
+  mask-image: linear-gradient(to bottom, transparent 10%, #000 100%);
+}
+
+/* Only when semantic recall is genuinely running does the room light up. */
+.brain-open-semantic::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: radial-gradient(
+    60% 90% at 92% 0%,
+    rgba(59, 130, 246, 0.1),
+    transparent 62%
+  );
+  animation: brain-breathe 9s ease-in-out infinite;
+}
+
+@keyframes brain-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.brain-open-inner {
+  position: relative;
+  max-width: 1340px;
+  margin: 0 auto;
+}
+
+.brain-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-bottom: 26px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.brain-eyebrow-live {
+  color: var(--blue-ink);
+}
+
+.brain-statement {
+  max-width: 14ch;
+  margin: 0;
+  font-size: clamp(34px, 5.2vw, 72px);
+  font-weight: 640;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+.brain-statement-line {
+  display: block;
+  color: var(--ink-primary);
+}
+
+.brain-statement-quiet {
+  color: var(--ink-faint);
+}
+
+.brain-lead {
+  max-width: 64ch;
+  margin: 24px 0 0;
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+
+.brain-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 34px;
+  margin-top: 34px;
+}
+
+.brain-reading {
+  min-width: 84px;
+}
+
+.brain-reading-value {
+  color: var(--ink-primary);
+  font-size: 26px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.brain-reading-label {
+  margin-top: 7px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.brain-reading-blue .brain-reading-value {
+  color: var(--blue-ink);
+}
+
+.brain-reading-red .brain-reading-value {
+  color: var(--red-ink);
+}
+
+.brain-reading-amber .brain-reading-value {
+  color: var(--warning);
+}
+
+/* --------------------------------------------------------------------------
+   The question
+   -------------------------------------------------------------------------- */
+
+.brain-body {
+  max-width: 1340px;
+  margin: 0 auto;
+  padding-top: 30px;
+}
+
+.brain-query {
+  position: relative;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brain-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.brain-mode {
+  padding: 6px 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 560;
+  background: transparent;
+  cursor: pointer;
+}
+
+.brain-mode:hover {
+  color: var(--ink-secondary);
+}
+
+.brain-mode[aria-pressed="true"] {
+  border-color: var(--blue-line);
+  color: var(--blue-ink);
+  background: var(--blue-soft);
+}
+
+.brain-query-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.brain-query-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--line-strong);
+  transition: border-color 160ms ease;
+}
+
+.brain-query-field:focus-within {
+  border-color: var(--blue);
+}
+
+.brain-query-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  color: var(--ink-primary);
+  font-size: clamp(17px, 2.1vw, 24px);
+  font-weight: 520;
+  letter-spacing: -0.02em;
+  background: transparent;
+}
+
+.brain-query-field input::placeholder {
+  color: var(--ink-faint);
+}
+
+.brain-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.brain-select {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-secondary);
+  font-size: 11px;
+  background: var(--surface-1);
+}
+
+.brain-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 14px;
+}
+
+.brain-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.brain-filter-label {
+  margin-right: 4px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.brain-filter {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  font-size: 10.5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.brain-filter:hover {
+  color: var(--ink-secondary);
+  border-color: var(--line-strong);
+}
+
+.brain-filter[aria-pressed="true"] {
+  border-color: var(--blue-line);
+  color: var(--blue-ink);
+  background: var(--blue-soft);
+}
+
+.brain-answer-note {
+  max-width: 76ch;
+  margin: 16px 0 0;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+/* --------------------------------------------------------------------------
+   A piece of knowledge, in a list
+   -------------------------------------------------------------------------- */
+
+.knowledge-list {
+  border-top: 1px solid var(--line-subtle);
+}
+
+.knowledge-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 0 22px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.knowledge-row-weight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 3px;
+}
+
+.knowledge-relevance {
+  color: var(--blue-ink);
+  font-family: var(--mono);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.knowledge-relevance-label {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.knowledge-relevance-track {
+  width: 3px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.knowledge-relevance-fill {
+  width: 100%;
+  background: linear-gradient(to top, var(--blue), var(--blue-ink));
+  transform-origin: bottom;
+}
+
+.knowledge-row-title {
+  color: var(--ink-primary);
+  font-size: 15px;
+  font-weight: 580;
+  letter-spacing: -0.015em;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.knowledge-row-title:hover {
+  color: var(--blue-ink);
+}
+
+.knowledge-row-content {
+  display: -webkit-box;
+  max-width: 82ch;
+  margin: 7px 0 0;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.knowledge-why {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 11px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-why li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-secondary);
+  font-size: 10.5px;
+}
+
+.knowledge-why li::before {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  content: "";
+  background: var(--blue);
+}
+
+.knowledge-why li.knowledge-why-warn::before {
+  background: var(--warning);
+}
+
+.knowledge-row-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 12px;
+}
+
+.knowledge-marker {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+}
+
+.knowledge-marker-stale {
+  color: var(--warning);
+}
+
+.knowledge-marker-flag {
+  color: var(--red-ink);
+}
+
+.knowledge-row-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Strata: the Brain when no question has been asked
+   -------------------------------------------------------------------------- */
+
+.brain-strata {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 0 48px;
+  padding-top: 8px;
+}
+
+.stratum {
+  padding-top: 34px;
+}
+
+.stratum-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.stratum-name {
+  color: var(--ink-primary);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.stratum-count {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.stratum-note {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+}
+
+.stratum-red .stratum-head {
+  border-color: var(--red-line);
+}
+
+.stratum-red .stratum-name {
+  color: var(--red-ink);
+}
+
+.stratum-blue .stratum-name {
+  color: var(--blue-ink);
+}
+
+.stratum-amber .stratum-name {
+  color: var(--warning);
+}
+
+/* Two statements that disagree, facing each other. */
+.conflict-pair {
+  padding: 18px 0 20px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.conflict-reason {
+  margin: 0 0 14px;
+  color: var(--red-ink);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.conflict-sides {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.conflict-side {
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.conflict-side-title {
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  font-weight: 580;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.conflict-side-title:hover {
+  color: var(--blue-ink);
+}
+
+.conflict-side-meta {
+  margin-top: 8px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1.6;
+}
+
+.conflict-versus {
+  align-self: center;
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* A line in the record of what was learned. */
+.learned-line {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.learned-when {
+  padding-top: 2px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  text-align: right;
+}
+
+.learned-title {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.learned-title:hover {
+  color: var(--blue-ink);
+}
+
+.learned-source {
+  margin-top: 4px;
+  color: var(--ink-faint);
+  font-size: 10px;
+}
+
+.in-use-count {
+  color: var(--blue-ink);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+/* What the Brain is made of, counted. */
+.kind-bars {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kind-bar {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 28px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.kind-bar-label {
+  color: var(--ink-secondary);
+  font-size: 11px;
+}
+
+.kind-bar-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line-subtle);
+}
+
+.kind-bar-fill {
+  height: 100%;
+  background: var(--line-strong);
+}
+
+.kind-bar-value {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-align: right;
+}
+
+/* --------------------------------------------------------------------------
+   What an agent would be handed
+   -------------------------------------------------------------------------- */
+
+.recall-list {
+  margin-top: 18px;
+}
+
+.recall-item {
+  position: relative;
+  padding: 16px 0 16px 46px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.recall-ref {
+  position: absolute;
+  top: 17px;
+  left: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--radius-sm);
+  color: var(--blue-ink);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.recall-standing {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+.recall-warning {
+  margin-top: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius-sm);
+  color: var(--red-ink);
+  font-size: 11px;
+  line-height: 1.6;
+  background: var(--red-soft);
+}
+
+/* --------------------------------------------------------------------------
+   One piece of knowledge, opened
+   -------------------------------------------------------------------------- */
+
+.entry {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.entry-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 26px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.entry-back:hover {
+  color: var(--ink-primary);
+}
+
+.entry-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 18px;
+}
+
+.entry-title {
+  max-width: 26ch;
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: clamp(26px, 3.6vw, 46px);
+  font-weight: 620;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.entry-content {
+  max-width: 70ch;
+  margin: 20px 0 0;
+  color: var(--ink-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.entry-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 0 52px;
+  margin-top: 34px;
+}
+
+.entry-section {
+  padding-top: 28px;
+}
+
+.entry-label {
+  margin-bottom: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.entry-facts {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 9px 14px;
+  margin: 0;
+}
+
+.entry-facts dt {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+}
+
+.entry-facts dd {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.entry-meter {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 36px;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.entry-meter-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--line-subtle);
+}
+
+.entry-meter-fill {
+  height: 100%;
+  background: var(--blue);
+}
+
+.entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+/* The trail back to where knowledge came from. Every node is a real row. */
+.provenance-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.provenance-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 240px;
+  padding: 12px 34px 12px 0;
+}
+
+.provenance-node::after {
+  position: absolute;
+  top: 26px;
+  right: 10px;
+  width: 14px;
+  height: 1px;
+  content: "";
+  background: var(--line-strong);
+}
+
+.provenance-node:last-child::after {
+  display: none;
+}
+
+.provenance-kind {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.provenance-name {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+a.provenance-name:hover {
+  color: var(--blue-ink);
+}
+
+.provenance-node-self .provenance-name {
+  color: var(--blue-ink);
+}
+
+.entry-flag {
+  margin-top: 22px;
+  padding: 12px 14px;
+  border: 1px solid var(--red-line);
+  border-left: 2px solid var(--red);
+  border-radius: var(--radius-sm);
+  color: var(--red-ink);
+  font-size: 11.5px;
+  line-height: 1.65;
+  background: var(--red-soft);
+}
+
+.entry-stale {
+  margin-top: 14px;
+  color: var(--warning);
+  font-size: 11.5px;
+}
+
+.entry-input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  background: var(--surface-1);
+}
+
+.entry-input:focus {
+  outline: none;
+  border-color: var(--blue-line);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1080px) {
+  .brain-strata,
+  .entry-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .brain-open {
+    padding-top: 34px;
+    padding-bottom: 30px;
+  }
+
+  .brain-readout {
+    gap: 16px 22px;
+  }
+
+  .brain-reading-value {
+    font-size: 21px;
+  }
+
+  .brain-query-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .knowledge-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .knowledge-row-weight {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-start;
+  }
+
+  .knowledge-relevance-track {
+    display: none;
+  }
+
+  .knowledge-row-actions {
+    margin-left: 0;
+  }
+
+  .conflict-sides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .conflict-versus {
+    justify-self: center;
+  }
+
+  .learned-line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .learned-when {
+    text-align: left;
+  }
+
+  .provenance-trail {
+    flex-direction: column;
+  }
+
+  .provenance-node {
+    max-width: none;
+    padding: 8px 0 8px 16px;
+    border-left: 1px solid var(--line-strong);
+  }
+
+  .provenance-node::after {
+    display: none;
+  }
+
+  .entry-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .entry-facts dd {
+    margin-bottom: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brain-open-semantic::after {
+    animation: none;
+  }
+}
