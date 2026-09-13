@@ -345,11 +345,23 @@ export function buildApiServer(
 
     instance.post("/work", async (request, reply) => {
       const body = objectBody(request.body);
+      const organizationId = requiredOrganizationId(
+        services,
+        body.organizationId,
+      );
+      const workspaceId = optionalUuid(body.workspaceId, "workspaceId") as
+        | WorkspaceId
+        | undefined;
+
+      // A workspace id from the caller is only a claim. Filing work under a
+      // workspace that belongs to another organization would let it route to
+      // that workspace's agents, so it has to be ours before it is used.
+      if (workspaceId) {
+        await services.workspaceService.getWorkspace(organizationId, workspaceId);
+      }
+
       const input: CreateWorkInput = {
-        organizationId: requiredOrganizationId(
-          services,
-          body.organizationId,
-        ),
+        organizationId,
         // The requester is the authenticated caller, not a field they get to
         // fill in. There is no auth yet, so it is the seeded development
         // requester; a caller-supplied requesterId used to be honoured, which
@@ -357,9 +369,7 @@ export function buildApiServer(
         requesterId: developmentRequesterId,
         objective: requiredText(body.objective, "objective", 4_000),
         priority: parsePriority(body.priority),
-        workspaceId: optionalText(body.workspaceId) as
-          | CreateWorkInput["workspaceId"]
-          | undefined,
+        workspaceId,
         // The only context a caller may attach is the briefing, which is
         // parsed and length-bounded on its own. A free-form metadata object
         // used to be accepted verbatim here, which let a request seed the

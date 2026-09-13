@@ -789,3 +789,71 @@ test("drops a caller-supplied work metadata object, keeping only the briefing", 
   assert.equal(response.statusCode, 201);
   assert.deepEqual(created?.metadata, { briefing: "some context" });
 });
+
+test("work cannot be filed under another organization's workspace", async () => {
+  const foreignWorkspace = "33333333-3333-4333-8333-333333333333";
+  let created = false;
+  let askedFor: unknown[] = [];
+
+  const app = buildApiServer(baseServices({
+    applicationService: {
+      createWork: async () => {
+        created = true;
+        return { id: "w1" } as never;
+      },
+    } as unknown as ApiServices["applicationService"],
+    workspaceService: {
+      getWorkspace: async (...args: unknown[]) => {
+        askedFor = args;
+        throw new WorkspaceNotFoundError("Workspace not found.");
+      },
+    } as unknown as ApiServices["workspaceService"],
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/work",
+    payload: { objective: "do the thing", workspaceId: foreignWorkspace },
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.deepEqual(askedFor, ["org-1", foreignWorkspace]);
+  assert.equal(created, false);
+});
+
+test("work filed under one of our workspaces keeps it, and a malformed id is refused", async () => {
+  const ownWorkspace = "44444444-4444-4444-8444-444444444444";
+  const created: CreateWorkInput[] = [];
+
+  const app = buildApiServer(baseServices({
+    applicationService: {
+      createWork: async (input: CreateWorkInput) => {
+        created.push(input);
+        return { id: "w1" } as never;
+      },
+    } as unknown as ApiServices["applicationService"],
+    workspaceService: {
+      getWorkspace: async () => ({ id: ownWorkspace, organizationId: "org-1" }),
+    } as unknown as ApiServices["workspaceService"],
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const accepted = await app.inject({
+    method: "POST",
+    url: "/work",
+    payload: { objective: "do the thing", workspaceId: ownWorkspace },
+  });
+
+  assert.equal(accepted.statusCode, 201);
+  assert.equal(created[0]?.workspaceId, ownWorkspace);
+
+  const malformed = await app.inject({
+    method: "POST",
+    url: "/work",
+    payload: { objective: "do the thing", workspaceId: "../../other-org" },
+  });
+
+  assert.equal(malformed.statusCode, 400);
+  assert.equal(created.length, 1);
+});
