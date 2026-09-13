@@ -51,7 +51,19 @@ export type EventType =
   | "policy.archived"
   | "governance.allowed"
   | "governance.approval_required"
-  | "governance.denied";
+  | "governance.denied"
+  // Company knowledge. Recorded here for the same reason governance is: what
+  // the company learned, and what it handed an agent, belong beside the work
+  // that produced or used it.
+  | "knowledge.created"
+  | "knowledge.updated"
+  | "knowledge.approved"
+  | "knowledge.archived"
+  | "knowledge.restored"
+  | "knowledge.recalled"
+  | "knowledge.extraction_rejected"
+  | "knowledge.conflict_detected"
+  | "knowledge.conflict_resolved";
 
 export type EventActorType =
   | "user"
