@@ -49,3 +49,11 @@ export type ExecutionJobId = string & {
 export type PolicyId = string & {
   readonly __brand: "PolicyId";
 };
+
+export type KnowledgeRecallId = string & {
+  readonly __brand: "KnowledgeRecallId";
+};
+
+export type KnowledgeConflictId = string & {
+  readonly __brand: "KnowledgeConflictId";
+};
