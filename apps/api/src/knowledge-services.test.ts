@@ -422,6 +422,30 @@ test("with no policy, extracted knowledge is a proposal kept inside the work's w
   assert.equal(report.created[0]!.createdBy, "agent:harvey");
 });
 
+test("knowledge re-extracted with the same claim in other detail is not stored twice", async () => {
+  const context = setup({ extractionReply });
+  const harvey = context.agents.get("harvey")!;
+  const mission = work("w-dup", orgA);
+  const task: Task = { id: "t-dup" as TaskId, workId: mission.id, title: "Analyze pricing", description: "", status: "completed", dependsOn: [], createdAt: now, updatedAt: now, metadata: {} };
+
+  const first = await context.capture.captureFromTask({ work: mission, task, agent: harvey, output: analysisOutput });
+  assert.equal(first.created.length, 1);
+
+  // A later mission's output says the same thing with different surrounding
+  // detail, so the content hash differs but the claim - the title - does not.
+  const reworded = `${analysisOutput} University partnerships again produced the highest conversion of any launch channel in the pilot, ahead of paid search, in a second review.`;
+  const second = await context.capture.captureFromTask({
+    work: work("w-dup-2", orgA),
+    task: { ...task, id: "t-dup-2" as TaskId, workId: "w-dup-2" as WorkId },
+    agent: harvey,
+    output: reworded,
+  });
+
+  assert.equal(second.created.length, 0);
+  assert.deepEqual(second.duplicates, ["University partnerships converted best in the pilot"]);
+  assert.equal(context.store.memories.size, 1);
+});
+
 test("an allow policy lets extraction record active knowledge; deny discards it", async () => {
   const allowed = await captureOnce([capturePolicy("allow")]);
   assert.equal(allowed.report.created[0]!.status, "active");
