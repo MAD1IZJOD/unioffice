@@ -156,27 +156,33 @@ export class KnowledgeCaptureService {
   ): Promise<Memory> {
     const created = await this.memories.create(memory);
 
-    await this.eventRecorder.record({
-      organizationId: created.organizationId,
-      workId: created.workId,
-      taskId: created.taskId,
-      agentId: created.agentId,
-      actorType: audit.actorType,
-      actorId: audit.actorId,
-      type: "knowledge.created",
-      payload: {
-        knowledgeId: created.id,
-        title: created.title,
-        type: created.type,
-        status: created.status,
-        sourceType: created.sourceType,
-        workspaceId: created.workspaceId,
-        artifactId: created.artifactId,
-        reason: audit.reason,
-      },
-    });
-
-    await this.index(created);
+    try {
+      await this.eventRecorder.record({
+        organizationId: created.organizationId,
+        workId: created.workId,
+        taskId: created.taskId,
+        agentId: created.agentId,
+        actorType: audit.actorType,
+        actorId: audit.actorId,
+        type: "knowledge.created",
+        payload: {
+          knowledgeId: created.id,
+          title: created.title,
+          type: created.type,
+          status: created.status,
+          sourceType: created.sourceType,
+          workspaceId: created.workspaceId,
+          artifactId: created.artifactId,
+          reason: audit.reason,
+        },
+      });
+    } finally {
+      // The row exists either way. If the audit write fails, the failure still
+      // reaches the caller - but the knowledge is not also left unindexed and
+      // unchecked for contradictions, which is what happened when this ran
+      // only after a successful audit line.
+      await this.index(created);
+    }
 
     return created;
   }
