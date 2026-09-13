@@ -45,6 +45,7 @@ import { EventRecorder } from "./event-recorder.js";
 import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
 import { KnowledgeGovernance } from "./knowledge-governance.js";
 import { KnowledgeRecallService } from "./knowledge-recall-service.js";
+import { MissionTemplateService } from "./mission-template-service.js";
 import { ExecutionJobRunner } from "./execution-job-runner.js";
 import { ExecutionQueueService } from "./execution-queue-service.js";
 import { ExecutionRoomService } from "./execution-room-service.js";
@@ -171,6 +172,15 @@ export function createExecutionRuntime(config: ApiConfig) {
   const applicationService = new WorkApplicationService(
     workRepository,
     eventRecorder,
+  );
+
+  // Templates brief a mission and hand it to the same application service;
+  // they own no execution of their own.
+  const missionTemplateService = new MissionTemplateService(
+    applicationService,
+    agentRepository,
+    workspaceRepository,
+    policyRepository,
   );
 
   const workService = new WorkService(
@@ -351,6 +361,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRecorder,
     toolRegistry,
     applicationService,
+    missionTemplateService,
     workService,
     taskExecutionService,
     workApprovalService,

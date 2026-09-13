@@ -78,6 +78,7 @@ export async function createApiServer() {
     governanceOverviewService: runtime.governanceOverviewService,
     workspaceService: runtime.workspaceService,
     agentDirectoryService: runtime.agentDirectoryService,
+    missionTemplateService: runtime.missionTemplateService,
     toolRegistry: runtime.toolRegistry,
     developmentOrganizationId: developmentOrganization?.organization.id,
     corsOrigins: config.corsOrigins,

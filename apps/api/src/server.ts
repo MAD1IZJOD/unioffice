@@ -118,6 +118,15 @@ import type {
   AgentDirectoryService,
 } from "./agent-directory-service.js";
 
+import type {
+  MissionTemplateService,
+} from "./mission-template-service.js";
+
+import {
+  MissionTemplateNotFoundError,
+  MissionTemplateValidationError,
+} from "./mission-template-service.js";
+
 import {
   AgentNotFoundError,
   AgentValidationError,
@@ -147,6 +156,7 @@ export interface ApiServices {
   governanceOverviewService: GovernanceOverviewService;
   workspaceService: WorkspaceService;
   agentDirectoryService: AgentDirectoryService;
+  missionTemplateService: MissionTemplateService;
   toolRegistry: ToolRegistry;
   healthCheck: () => Promise<Record<string, unknown>>;
   developmentOrganizationId?: OrganizationId;
@@ -774,6 +784,60 @@ export function buildApiServer(
     });
 
     // ---------------------------------------------------------------------
+    // Mission templates.
+    //
+    // A template only briefs a mission. Starting one creates ordinary work
+    // through the same application service as POST /work, and everything
+    // after that - planning, governance, approvals, the queue - happens on the
+    // one path every mission takes, driven from the execution room exactly as
+    // it is for a mission typed from scratch.
+    // ---------------------------------------------------------------------
+
+    instance.get("/mission-templates", async (request) => {
+      const query = objectBody(request.query);
+      const templates = await services.missionTemplateService.listTemplates(
+        requiredOrganizationId(services, query.organizationId),
+      );
+
+      return { templates };
+    });
+
+    instance.get("/mission-templates/:templateId", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.missionTemplateService.getTemplate(
+        requiredOrganizationId(services, query.organizationId),
+        parameterTemplateId(request.params),
+      );
+    });
+
+    instance.post(
+      "/mission-templates/:templateId/missions",
+      { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } },
+      async (request, reply) => {
+        const body = objectBody(request.body);
+
+        // Only these fields are read. Anything else in the body - a status,
+        // agents, tasks, approval state, another requester - never reaches the
+        // service.
+        const work = await services.missionTemplateService.startMission({
+          organizationId: requiredOrganizationId(services, body.organizationId),
+          requesterId: developmentRequesterId,
+          templateId: parameterTemplateId(request.params),
+          name: templateText(body.name, "name"),
+          objective: templateText(body.objective, "objective") ?? "",
+          context: templateText(body.context, "context"),
+          desiredOutcome: templateText(body.desiredOutcome, "desiredOutcome") ?? "",
+          constraints: templateText(body.constraints, "constraints"),
+          priority: parsePriority(body.priority),
+          workspaceId: optionalUuid(body.workspaceId, "workspaceId") as WorkspaceId | undefined,
+        });
+
+        return reply.status(201).send({ work });
+      },
+    );
+
+    // ---------------------------------------------------------------------
     // Company knowledge.
     //
     // Reads, authoring and review. Recall into an agent is not reachable from
@@ -1019,6 +1083,38 @@ const KNOWLEDGE_DERIVE_LIMIT = { max: 5, timeWindow: "1 minute" };
  */
 function actorOf(): string {
   return `user:${developmentRequesterId}`;
+}
+
+const TEMPLATE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * A template id is a short slug. Anything else cannot name a template, and is
+ * answered the same way as a slug that names none.
+ */
+function parameterTemplateId(params: unknown): string {
+  const value = typeof params === "object" && params !== null
+    ? (params as Record<string, unknown>).templateId
+    : undefined;
+
+  if (typeof value !== "string" || value.length > 64 || !TEMPLATE_ID_PATTERN.test(value)) {
+    throw new MissionTemplateNotFoundError();
+  }
+
+  return value;
+}
+
+/**
+ * A template answer: text or nothing. Length and content are the service's to
+ * judge, so the same rules apply however a mission is started.
+ */
+function templateText(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  if (typeof value !== "string") {
+    throw new ApiError(400, `${field} must be text.`);
+  }
+
+  return value;
 }
 
 function parseKnowledgeType(value: unknown): MemoryType {
@@ -1590,7 +1686,8 @@ function statusForError(error: Error): number {
   if (
     error instanceof WorkspaceNotFoundError ||
     error instanceof AgentNotFoundError ||
-    error instanceof KnowledgeNotFoundError
+    error instanceof KnowledgeNotFoundError ||
+    error instanceof MissionTemplateNotFoundError
   ) {
     return 404;
   }
@@ -1599,7 +1696,8 @@ function statusForError(error: Error): number {
     error instanceof WorkspaceValidationError ||
     error instanceof AgentValidationError ||
     error instanceof PolicyValidationError ||
-    error instanceof KnowledgeValidationError
+    error instanceof KnowledgeValidationError ||
+    error instanceof MissionTemplateValidationError
   ) {
     return 400;
   }
