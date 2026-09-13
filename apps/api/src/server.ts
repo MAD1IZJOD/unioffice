@@ -1493,8 +1493,13 @@ function parameterApprovalId(params: unknown): ApprovalId {
   return parameterUuid(params) as ApprovalId;
 }
 
+/**
+ * Who decided an approval. The column is a uuid, and this used to accept any
+ * text - so a malformed value reached the database and came back as a 500
+ * rather than being refused at the edge like every other identifier.
+ */
 function resolverId(body: unknown): string {
-  return requiredText(objectBody(body).resolvedBy, "resolvedBy");
+  return requiredUuid(objectBody(body).resolvedBy, "resolvedBy");
 }
 
 /**
