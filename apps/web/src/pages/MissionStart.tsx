@@ -6,15 +6,18 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   createWork,
   fetchAgents,
+  fetchMissionTemplates,
   fetchWorkspaces,
   type AgentSummary,
+  type MissionTemplateView,
   type WorkItem,
   type WorkspaceSummary,
 } from "../lib/api";
 
 import { useResource } from "../lib/useResource";
 import { orchestratorOf } from "../lib/mission";
-import { Failure } from "../components/primitives";
+import { EmptyState, ErrorState, Failure, Skeleton } from "../components/primitives";
+import { TemplateCard } from "../components/templates/TemplateCard";
 import { WorkspaceMark } from "../components/WorkspaceMark";
 
 /**
@@ -32,17 +35,6 @@ const PRIORITIES: Array<{ id: WorkItem["priority"]; label: string; note: string 
   { id: "normal", label: "Normal", note: "The usual order of things." },
   { id: "high", label: "High", note: "Ahead of the ordinary queue." },
   { id: "critical", label: "Critical", note: "Before anything else." },
-];
-
-/**
- * Starters are real objectives this company can actually carry: two of them
- * exercise tools it genuinely has, and one is pure knowledge work. Nothing
- * here promises a capability the workforce does not hold.
- */
-const STARTERS = [
-  "Calculate our total monthly operating cost from salaries 48200, cloud 9350, lease 12500 and licences 3875, then explain what it means for runway.",
-  "Tell me what day of the week 25 December 2027 falls on and how many days away it is.",
-  "Draft a one-page competitor brief covering positioning, pricing and the gap we should attack.",
 ];
 
 export default function MissionStart() {
@@ -71,6 +63,10 @@ export default function MissionStart() {
 
   const workspaces = useResource<WorkspaceSummary[]>(
     useCallback(() => fetchWorkspaces(), []),
+  );
+
+  const templates = useResource<MissionTemplateView[]>(
+    useCallback(() => fetchMissionTemplates(), []),
   );
 
   const planner = orchestratorOf(roster.data ?? []);
@@ -283,21 +279,39 @@ export default function MissionStart() {
         </p>
       </div>
 
-      <div className="mission-starters">
-        <div className="t-eyebrow mb-2">Or start from one of these</div>
+      <section className="templates" id="templates" aria-labelledby="templates-title">
+        <div className="templates-head">
+          <span id="templates-title" className="templates-title">
+            Or start from a template
+          </span>
+          <span className="t-machine">
+            Kinds of mission the company knows how to brief
+          </span>
+        </div>
 
-        {STARTERS.map((starter) => (
-          <button
-            key={starter}
-            type="button"
-            disabled={opening}
-            onClick={() => setObjective(starter)}
-            className="mission-starter"
-          >
-            {starter}
-          </button>
-        ))}
-      </div>
+        {templates.loading ? (
+          <div className="py-5" aria-busy="true">
+            <Skeleton rows={4} />
+          </div>
+        ) : templates.error ? (
+          <ErrorState
+            message={templates.error.message}
+            offline={templates.error.isOffline}
+            onRetry={templates.reload}
+          />
+        ) : (templates.data?.length ?? 0) === 0 ? (
+          <EmptyState
+            title="No templates are available"
+            description="You can still describe the mission in your own words above."
+          />
+        ) : (
+          <div className="templates-grid">
+            {templates.data!.map((view, index) => (
+              <TemplateCard key={view.template.id} view={view} index={index} />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

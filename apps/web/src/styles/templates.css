@@ -1,0 +1,239 @@
+/* ==========================================================================
+   Mission templates
+
+   Kinds of work the company knows how to start. Drawn as a quiet index of
+   operations rather than a marketplace of tiles: a number, a name, what it
+   leaves behind and who is likely to do it. Colour keeps its meaning - amber
+   only where a rule may put a person in front of the work.
+   ========================================================================== */
+
+.templates {
+  margin-top: 40px;
+}
+
+.templates-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.templates-title {
+  color: var(--ink-primary);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-left: 1px solid var(--line-subtle);
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px 20px 18px;
+  border-right: 1px solid var(--line-subtle);
+  border-bottom: 1px solid var(--line-subtle);
+  background: transparent;
+  transition: background 160ms ease;
+}
+
+.template-card:hover,
+.template-card:focus-within {
+  background: var(--surface-1);
+}
+
+.template-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.template-card-index {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.template-card-name {
+  margin: 16px 0 0;
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.template-card-purpose {
+  margin: 10px 0 0;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.template-card-facts {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.template-card-facts dt {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.template-card-facts dd {
+  margin: 3px 0 0;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.template-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.template-card-start {
+  margin-left: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Configuring one
+   -------------------------------------------------------------------------- */
+
+.template-sheet {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.template-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 24px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.template-back:hover {
+  color: var(--ink-primary);
+}
+
+.template-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 0 56px;
+  margin-top: 8px;
+}
+
+.template-aside {
+  min-width: 0;
+  padding-top: 30px;
+}
+
+.template-aside-section {
+  padding: 16px 0 18px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.template-member {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 0;
+}
+
+.template-member-name {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 580;
+}
+
+.template-steps {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  line-height: 1.75;
+}
+
+.template-steps li::marker {
+  color: var(--blue-ink);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.template-required {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.template-input-invalid {
+  border-color: var(--red-line);
+}
+
+.template-hint-error {
+  color: var(--red-ink);
+}
+
+.template-count {
+  float: right;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+.template-count-over {
+  color: var(--red-ink);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1080px) {
+  .templates-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .template-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .templates-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .template-card-start {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
+}
