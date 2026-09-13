@@ -10,6 +10,7 @@ export * from "./repositories/event-tail-repository.js";
 export * from "./repositories/approval-repository.js";
 export * from "./repositories/artifact-repository.js";
 export * from "./repositories/memory-repository.js";
+export * from "./repositories/knowledge-repository.js";
 export * from "./repositories/execution-job-repository.js";
 export * from "./repositories/policy-repository.js";
 
@@ -24,4 +25,6 @@ export * from "./repositories/supabase-artifact-repository.js";
 export * from "./repositories/supabase-memory-repository.js";
 export * from "./repositories/supabase-execution-job-repository.js";
 export * from "./repositories/supabase-policy-repository.js";
+export * from "./repositories/supabase-knowledge-link-repository.js";
 export * from "./repositories/in-memory-execution-job-repository.js";
+export * from "./repositories/in-memory-knowledge-repository.js";
