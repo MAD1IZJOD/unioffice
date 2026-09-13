@@ -10,6 +10,10 @@ import type {
   WorkId,
 } from "@unioffice/core";
 
+import type {
+  RecalledKnowledgeItem,
+} from "./knowledge-context.js";
+
 export interface AgentExecutionContext {
   agentId: AgentId;
 
@@ -34,6 +38,14 @@ export interface AgentExecutionContext {
   };
 
   context: Record<string, unknown>;
+
+  /**
+   * Company knowledge recalled for this step. Kept out of `context` on
+   * purpose: that is operational data serialized as-is, while knowledge is
+   * untrusted text that must reach the model only through the delimited,
+   * escaped section the runtime builds for it.
+   */
+  knowledge?: RecalledKnowledgeItem[];
 }
 
 export interface AgentDependencyResult {
