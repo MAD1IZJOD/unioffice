@@ -7,6 +7,7 @@ import type {
   Artifact,
   ArtifactId,
   Event,
+  KnowledgeConflictId,
   Memory,
   MemoryId,
   OrganizationId,
@@ -364,6 +365,132 @@ test("a conflict belonging to another organization cannot be resolved", async ()
   const [conflict] = await store.findConflicts(orgA);
 
   await assert.rejects(brain.resolveConflict(orgB, conflict!.id, { kind: "dismiss" }, "user:x"), /Conflict not found/);
+});
+
+/* --------------------------------------------------------------------------
+   Consolidation: the same knowledge again, and newer knowledge replacing older
+   -------------------------------------------------------------------------- */
+
+function extracted(overrides: Partial<Memory>): Memory {
+  return {
+    id: crypto.randomUUID() as MemoryId,
+    organizationId: orgA,
+    workId: "w-later" as WorkId,
+    taskId: "t-later" as TaskId,
+    scope: "company",
+    type: "fact",
+    status: "proposed",
+    title: "Starter customers mostly churn in their second month",
+    content: "Most churn on the Starter plan happens in month two.",
+    sourceType: "task",
+    importance: 0.6,
+    confidence: 0.8,
+    createdBy: "agent:harvey",
+    createdAt: now,
+    updatedAt: now,
+    metadata: {},
+    ...overrides,
+  };
+}
+
+test("merging a restatement re-confirms the original, records the mission, and recall stops repeating it", async () => {
+  const { brain, recall, store, events } = setup();
+  const original = await write(brain, orgA, {
+    title: "Starter churn peaks in the second month",
+    content: "Starter plan churn is highest in the second month.",
+    type: "fact",
+  });
+  const restatement = await store.create(extracted({}));
+
+  assert.equal((await recall.previewRecall({ organizationId: orgA, text: "starter churn second month" })).items.length, 2);
+
+  const { kept, merged } = await brain.mergeKnowledge(orgA, restatement.id, original.id, "user:reviewer");
+
+  assert.equal(kept.id, original.id);
+  assert.equal(kept.status, "active");
+  assert.equal(kept.reviewedBy, "user:reviewer");
+  assert.deepEqual(
+    (kept.metadata.reinforcements as Array<Record<string, unknown>>).map((entry) => [entry.knowledgeId, entry.workId]),
+    [[restatement.id, "w-later"]],
+    "the mission that arrived at it again is recorded against it",
+  );
+
+  assert.equal(merged.status, "archived", "the restatement is kept as history, not deleted");
+  assert.equal(merged.metadata.mergedIntoId, original.id);
+  assert.equal(merged.metadata.supersededById, undefined, "a merge is not a replacement");
+
+  const after = await recall.previewRecall({ organizationId: orgA, text: "starter churn second month" });
+  assert.deepEqual(after.items.map((item) => item.id), [original.id]);
+  assert.ok(events.some((event) => event.type === "knowledge.merged"));
+});
+
+test("a merge is refused across organizations, into itself, from archived knowledge, or where it would narrow reach", async () => {
+  const { brain, store } = setup();
+  const companyWide = await write(brain, orgA);
+  const financeOnly = await store.create(extracted({ workspaceId: finance, title: "Finance starter note", content: "Starter pricing for finance." }));
+  const archived = await store.create(extracted({ status: "archived", title: "Old note", content: "Old starter note." }));
+
+  await assert.rejects(brain.mergeKnowledge(orgB, financeOnly.id, companyWide.id, "user:x"), KnowledgeNotFoundError);
+  await assert.rejects(brain.mergeKnowledge(orgA, companyWide.id, companyWide.id, "user:x"), /into itself/);
+  await assert.rejects(brain.mergeKnowledge(orgA, archived.id, companyWide.id, "user:x"), KnowledgeStateError);
+  await assert.rejects(
+    brain.mergeKnowledge(orgA, companyWide.id, financeOnly.id, "user:x"),
+    /applies more widely/,
+    "company-wide knowledge never disappears into one workspace's entry",
+  );
+
+  // The other direction widens nothing, so it is allowed.
+  const { kept } = await brain.mergeKnowledge(orgA, financeOnly.id, companyWide.id, "user:x");
+  assert.equal(kept.workspaceId, undefined);
+});
+
+test("newer knowledge replaces older: the older is archived as history and never recalled again", async () => {
+  const { brain, recall, store, events } = setup();
+  const older = await write(brain, orgA, {
+    title: "Product launches need manual finance sign-off",
+    content: "Every product launch waits for a person in finance to sign off the budget.",
+  });
+  const newer = await write(brain, orgA, {
+    title: "Finance sign-off for product launches is automated",
+    content: "Launch budgets under the approved envelope are signed off automatically.",
+  });
+  await store.createConflict({
+    id: crypto.randomUUID() as KnowledgeConflictId,
+    organizationId: orgA,
+    memoryId: newer.id,
+    conflictingMemoryId: older.id,
+    reason: "One says manual, the other automated.",
+    signals: {},
+    status: "open",
+    detectedAt: now,
+  });
+
+  const { current, replaced } = await brain.supersedeKnowledge(orgA, newer.id, older.id, "user:reviewer");
+
+  assert.equal(current.status, "active");
+  assert.equal(current.supersedesId, older.id);
+  assert.equal(replaced.status, "archived");
+  assert.equal(replaced.metadata.supersededById, newer.id);
+  assert.ok(await store.findById(older.id), "the older decision is still readable");
+  assert.equal((await store.findConflicts(orgA, { status: "open" })).length, 0, "the disagreement is settled by the replacement");
+
+  const recalled = await recall.previewRecall({ organizationId: orgA, text: "finance sign-off product launches" });
+  assert.deepEqual(recalled.items.map((item) => item.id), [newer.id]);
+  assert.ok(events.some((event) => event.type === "knowledge.superseded"));
+});
+
+test("a replacement is refused across organizations, workspaces, itself, or archived knowledge", async () => {
+  const { brain, store } = setup();
+  const financeNote = await store.create(extracted({ workspaceId: finance, status: "active", title: "Finance closes books on day 3", content: "Books close on the third working day." }));
+  const legalNote = await store.create(extracted({ workspaceId: legal, status: "active", title: "Legal closes books on day 5", content: "Books close on the fifth working day." }));
+  const archived = await store.create(extracted({ status: "archived", title: "Archived close note", content: "Books closed on day 7." }));
+
+  await assert.rejects(brain.supersedeKnowledge(orgB, financeNote.id, legalNote.id, "user:x"), KnowledgeNotFoundError);
+  await assert.rejects(brain.supersedeKnowledge(orgA, financeNote.id, financeNote.id, "user:x"), /replace itself/);
+  await assert.rejects(brain.supersedeKnowledge(orgA, financeNote.id, legalNote.id, "user:x"), /different workspaces/);
+  await assert.rejects(brain.supersedeKnowledge(orgA, financeNote.id, archived.id, "user:x"), KnowledgeStateError);
+
+  assert.equal((await store.findById(legalNote.id))!.status, "active", "a refused replacement changes nothing");
 });
 
 /* --------------------------------------------------------------------------

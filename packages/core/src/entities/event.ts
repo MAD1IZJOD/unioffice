@@ -63,7 +63,9 @@ export type EventType =
   | "knowledge.recalled"
   | "knowledge.extraction_rejected"
   | "knowledge.conflict_detected"
-  | "knowledge.conflict_resolved";
+  | "knowledge.conflict_resolved"
+  | "knowledge.merged"
+  | "knowledge.superseded";
 
 export type EventActorType =
   | "user"

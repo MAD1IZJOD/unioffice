@@ -644,7 +644,7 @@ export class CompanyBrainService {
   async archiveKnowledge(
     organizationId: OrganizationId,
     knowledgeId: MemoryId,
-    input: { by: string; reason?: string; supersededById?: MemoryId },
+    input: { by: string; reason?: string; supersededById?: MemoryId; mergedIntoId?: MemoryId },
   ): Promise<Memory> {
     const current = await this.requireKnowledge(organizationId, knowledgeId);
 
@@ -663,6 +663,7 @@ export class CompanyBrainService {
         archivedReason: input.reason,
         archivedBy: input.by,
         ...(input.supersededById ? { supersededById: input.supersededById } : {}),
+        ...(input.mergedIntoId ? { mergedIntoId: input.mergedIntoId } : {}),
       },
     });
 
@@ -760,26 +761,125 @@ export class CompanyBrainService {
 
     const dropId = sides.find((id) => id !== resolution.keepId)!;
     const kept = await this.requireKnowledge(organizationId, resolution.keepId);
+    const dropped = await this.requireKnowledge(organizationId, dropId);
 
     const closed = await this.closeConflict(conflict, "resolved", note ?? "Kept one side; the other was superseded.", by);
 
-    await this.archiveKnowledge(organizationId, dropId, {
-      by,
-      reason: `Superseded by “${kept.title}” when a conflict was resolved.`,
-      supersededById: kept.id,
-    });
+    await this.replace(kept, dropped, by, `Superseded by “${kept.title}” when a conflict was resolved.`);
+
+    return closed;
+  }
+
+  /**
+   * A person says two entries are the same knowledge.
+   *
+   * The duplicate is archived and the entry it restates is re-confirmed, with
+   * the duplicate's mission recorded against it - so knowledge that several
+   * missions arrived at independently says so, instead of being recalled four
+   * times in four wordings. Nothing is deleted.
+   */
+  async mergeKnowledge(
+    organizationId: OrganizationId,
+    duplicateId: MemoryId,
+    intoId: MemoryId,
+    by: string,
+  ): Promise<{ kept: Memory; merged: Memory }> {
+    if (duplicateId === intoId) {
+      throw new KnowledgeValidationError("Knowledge cannot be merged into itself.");
+    }
+
+    const duplicate = await this.requireKnowledge(organizationId, duplicateId);
+    const target = await this.requireKnowledge(organizationId, intoId);
+
+    if (duplicate.status === "archived" || target.status === "archived") {
+      throw new KnowledgeStateError("Archived knowledge cannot be merged. Restore it first.");
+    }
+
+    // Merging must never narrow where knowledge applies: company-wide knowledge
+    // folded into an entry that only one workspace can see would quietly
+    // disappear from every other workspace's work.
+    if (target.workspaceId && target.workspaceId !== duplicate.workspaceId) {
+      throw new KnowledgeValidationError(
+        "This knowledge applies more widely than the entry it would be merged into. Replace it instead, or widen that entry first.",
+      );
+    }
 
     const now = new Date();
-    await this.memories.update({
-      ...kept,
+    const reinforcements = [
+      ...reinforcementsOf(target),
+      {
+        knowledgeId: duplicate.id,
+        workId: duplicate.workId,
+        taskId: duplicate.taskId,
+        title: duplicate.title,
+        mergedAt: now.toISOString(),
+        mergedBy: by,
+      },
+    ].slice(-MAX_REINFORCEMENTS);
+
+    const kept = await this.memories.update({
+      ...target,
       status: "active",
-      supersedesId: dropId,
       reviewedBy: by,
       reviewedAt: now,
       updatedAt: now,
+      metadata: { ...target.metadata, reinforcements },
     });
 
-    return closed;
+    const merged = await this.archiveKnowledge(organizationId, duplicate.id, {
+      by,
+      reason: `Merged into “${kept.title}”: it says the same thing.`,
+      mergedIntoId: kept.id,
+    });
+
+    await this.eventRecorder.record({
+      organizationId,
+      workId: duplicate.workId,
+      actorType: "user",
+      actorId: by,
+      type: "knowledge.merged",
+      payload: {
+        knowledgeId: kept.id,
+        title: kept.title,
+        mergedKnowledgeId: merged.id,
+        mergedTitle: merged.title,
+        confirmations: reinforcements.length,
+      },
+    });
+
+    return { kept, merged };
+  }
+
+  /**
+   * A person says newer knowledge replaces older knowledge - a decision that
+   * was revisited, a process that changed. The newer entry becomes current and
+   * names what it replaced; the older one is archived as history, never lost.
+   */
+  async supersedeKnowledge(
+    organizationId: OrganizationId,
+    newerId: MemoryId,
+    olderId: MemoryId,
+    by: string,
+    note?: string,
+  ): Promise<{ current: Memory; replaced: Memory }> {
+    if (newerId === olderId) {
+      throw new KnowledgeValidationError("Knowledge cannot replace itself.");
+    }
+
+    const newer = await this.requireKnowledge(organizationId, newerId);
+    const older = await this.requireKnowledge(organizationId, olderId);
+
+    if (newer.status === "archived" || older.status === "archived") {
+      throw new KnowledgeStateError("Archived knowledge cannot replace or be replaced. Restore it first.");
+    }
+
+    // Only knowledge that can be recalled into the same work can stand in for
+    // each other; one workspace's entry never retires another workspace's.
+    if (newer.workspaceId && older.workspaceId && newer.workspaceId !== older.workspaceId) {
+      throw new KnowledgeValidationError("Knowledge from different workspaces cannot replace one another.");
+    }
+
+    return this.replace(newer, older, by, note ?? `Replaced by “${newer.title}”.`);
   }
 
   async deriveFromArtifact(
@@ -918,9 +1018,61 @@ export class CompanyBrainService {
 
     return value;
   }
+
+  /** Newer knowledge becomes current and names what it replaced; the older is kept as history. */
+  private async replace(
+    newer: Memory,
+    older: Memory,
+    by: string,
+    reason: string,
+  ): Promise<{ current: Memory; replaced: Memory }> {
+    const replaced = await this.archiveKnowledge(older.organizationId, older.id, {
+      by,
+      reason,
+      supersededById: newer.id,
+    });
+
+    const now = new Date();
+    const current = await this.memories.update({
+      ...newer,
+      status: "active",
+      supersedesId: older.id,
+      reviewedBy: by,
+      reviewedAt: now,
+      updatedAt: now,
+    });
+
+    await this.eventRecorder.record({
+      organizationId: current.organizationId,
+      workId: current.workId,
+      actorType: "user",
+      actorId: by,
+      type: "knowledge.superseded",
+      payload: {
+        knowledgeId: current.id,
+        title: current.title,
+        replacedKnowledgeId: replaced.id,
+        replacedTitle: replaced.title,
+      },
+    });
+
+    return { current, replaced };
+  }
 }
+
+/** How many independent confirmations one entry keeps a record of. */
+const MAX_REINFORCEMENTS = 20;
 
 function bounded(value: number | undefined, fallback: number): number {
   const number = typeof value === "number" && Number.isFinite(value) ? value : fallback;
   return Math.min(1, Math.max(0, number));
+}
+
+/** The missions that arrived at this knowledge again, as merges recorded them. */
+function reinforcementsOf(memory: Memory): Array<Record<string, unknown>> {
+  const value = memory.metadata.reinforcements;
+
+  return Array.isArray(value)
+    ? value.filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    : [];
 }
