@@ -761,6 +761,50 @@ test("rejects a malformed work id before it reaches a query", async () => {
   assert.equal(touched, false);
 });
 
+test("an approval decision is recorded against the server's requester, whatever the body names", async () => {
+  const decided: Array<{ decision: string; resolvedBy: string; organizationId: string }> = [];
+  const approvalId = "55555555-5555-4555-8555-555555555555";
+
+  const app = buildApiServer(baseServices({
+    workApprovalService: {
+      approve: async (_id: string, resolvedBy: string, organizationId: string) => {
+        decided.push({ decision: "approve", resolvedBy, organizationId });
+        return { id: approvalId, workId: "w1" };
+      },
+      reject: async (_id: string, resolvedBy: string, organizationId: string) => {
+        decided.push({ decision: "reject", resolvedBy, organizationId });
+        return { id: approvalId, workId: "w1" };
+      },
+    } as unknown as ApiServices["workApprovalService"],
+    executionQueueService: {
+      enqueueWork: async () => ({ enqueued: true, job: { id: "j1" } }),
+    } as unknown as ApiServices["executionQueueService"],
+    developmentOrganizationId: "org-1" as OrganizationId,
+  }));
+
+  const spoofed = "99999999-9999-4999-8999-999999999999";
+
+  const approved = await app.inject({
+    method: "POST",
+    url: `/approvals/${approvalId}/approve`,
+    payload: { organizationId: "org-1", resolvedBy: spoofed },
+  });
+  const rejected = await app.inject({
+    method: "POST",
+    url: `/approvals/${approvalId}/reject`,
+    // A body with no decider at all is no longer an error: there is nothing
+    // in it the server needs.
+    payload: { organizationId: "org-1" },
+  });
+
+  assert.equal(approved.statusCode, 200);
+  assert.equal(rejected.statusCode, 200);
+  assert.deepEqual(decided, [
+    { decision: "approve", resolvedBy: "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09", organizationId: "org-1" },
+    { decision: "reject", resolvedBy: "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09", organizationId: "org-1" },
+  ]);
+});
+
 test("drops a caller-supplied work metadata object, keeping only the briefing", async () => {
   let created: CreateWorkInput | undefined;
   const applicationService = {

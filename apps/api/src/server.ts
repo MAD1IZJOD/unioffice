@@ -576,10 +576,15 @@ export function buildApiServer(
       return { approvals };
     });
 
+    // Who decided is the authenticated caller, never a field in the request.
+    // Until authentication exists that is the development requester - the
+    // same identity every other write is attributed to. A resolvedBy in the
+    // body used to be recorded as the decider, so any request could put any
+    // name on a decision.
     instance.post("/approvals/:id/approve", async (request) => {
       const approval = await services.workApprovalService.approve(
         parameterApprovalId(request.params),
-        resolverId(request.body),
+        developmentRequesterId,
         requiredOrganizationId(services, objectBody(request.body).organizationId),
       );
       // Resuming is a durable enqueue too, so an approval granted while no
@@ -595,7 +600,7 @@ export function buildApiServer(
     instance.post("/approvals/:id/reject", async (request) => {
       const approval = await services.workApprovalService.reject(
         parameterApprovalId(request.params),
-        resolverId(request.body),
+        developmentRequesterId,
         requiredOrganizationId(services, objectBody(request.body).organizationId),
       );
       return { approval };
@@ -1658,15 +1663,6 @@ function parameterId(params: unknown): WorkId {
 
 function parameterApprovalId(params: unknown): ApprovalId {
   return parameterUuid(params) as ApprovalId;
-}
-
-/**
- * Who decided an approval. The column is a uuid, and this used to accept any
- * text - so a malformed value reached the database and came back as a 500
- * rather than being refused at the edge like every other identifier.
- */
-function resolverId(body: unknown): string {
-  return requiredUuid(objectBody(body).resolvedBy, "resolvedBy");
 }
 
 /**
