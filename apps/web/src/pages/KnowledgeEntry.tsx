@@ -31,6 +31,7 @@ import {
   WRITABLE_KINDS,
 } from "../lib/knowledge";
 
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 
 import { Chip, Connecting, Failure } from "../components/primitives";
@@ -62,6 +63,10 @@ export default function KnowledgeEntry() {
   const workspaces = useResource<WorkspaceSummary[]>(useCallback(() => fetchWorkspaces(), []));
 
   const { reload } = detail;
+
+  // Approving, editing, archiving and restoring are offered only to someone
+  // who may curate knowledge where this entry lives.
+  const canCurate = useCan("knowledge.curate", detail.data?.knowledge.workspaceId ?? null);
 
   async function act(operation: () => Promise<unknown>) {
     setBusy(true);
@@ -152,7 +157,7 @@ export default function KnowledgeEntry() {
         </div>
       )}
 
-      {!editing && (
+      {!editing && canCurate && (
         <div className="entry-actions">
           {knowledge.status === "proposed" && (
             <button type="button" className="button-primary" disabled={busy} onClick={() => void act(() => approveKnowledge(knowledge.id))}>

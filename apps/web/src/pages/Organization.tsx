@@ -11,6 +11,7 @@ import {
   type WorkspaceSummary,
 } from "../lib/api";
 
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 import { describeEvent } from "../lib/events";
 import { toneClass, type Tone } from "../lib/tone";
@@ -44,6 +45,7 @@ function toneOf(summary: WorkspaceSummary): Tone {
 }
 
 export default function Organization() {
+  const canManageWorkspaces = useCan("workspaces.manage");
   const organization = useResource<OrganizationOverview>(
     useCallback(() => fetchOrganization(), []),
     { pollMs: 30_000 },
@@ -243,14 +245,16 @@ export default function Organization() {
             line="The company has no workspaces."
             detail="Everyone works on one undivided floor, and every agent is available to every mission. Create a workspace to scope a part of the company — who works there, and which missions run inside it."
             action={
-              <button
-                type="button"
-                className="button-primary"
-                onClick={() => setCreating(true)}
-              >
-                <Plus size={13} />
-                Create the first workspace
-              </button>
+              canManageWorkspaces ? (
+                <button
+                  type="button"
+                  className="button-primary"
+                  onClick={() => setCreating(true)}
+                >
+                  <Plus size={13} />
+                  Create the first workspace
+                </button>
+              ) : undefined
             }
           />
         ) : (
@@ -312,7 +316,7 @@ export default function Organization() {
               </Link>
             ))}
 
-            {!creating && (
+            {!creating && canManageWorkspaces && (
               <button
                 type="button"
                 className="plate plate-new"

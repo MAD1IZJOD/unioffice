@@ -14,6 +14,7 @@ import {
   type WorkspaceSummary,
 } from "../lib/api";
 
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 import { orchestratorOf } from "../lib/mission";
 import { EmptyState, ErrorState, Failure, Skeleton } from "../components/primitives";
@@ -55,6 +56,11 @@ export default function MissionStart() {
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string>();
 
+  // Whether this person may open a mission where it is about to go. A viewer,
+  // or a member without a working grant in the chosen workspace, is told so
+  // before typing an objective the API would refuse.
+  const canCreate = useCan("missions.create", workspaceId);
+
   // Only to name the agent that will do the planning, so the page can say who
   // picks the objective up rather than saying "the system".
   const roster = useResource<AgentSummary[]>(
@@ -70,7 +76,7 @@ export default function MissionStart() {
   );
 
   const planner = orchestratorOf(roster.data ?? []);
-  const ready = objective.trim().length > 0 && !opening;
+  const ready = objective.trim().length > 0 && !opening && canCreate;
 
   async function open() {
     if (!ready) return;
@@ -275,7 +281,11 @@ export default function MissionStart() {
         </Link>
 
         <p className="mission-launch-note">
-          Nothing runs until the plan exists. You will see it being written.
+          {canCreate
+            ? "Nothing runs until the plan exists. You will see it being written."
+            : workspaceId
+              ? "Your access to this workspace lets you see its missions, not open them."
+              : "Your role lets you see missions, not open them."}
         </p>
       </div>
 

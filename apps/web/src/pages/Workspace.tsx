@@ -17,6 +17,7 @@ import {
   type WorkspaceDetail,
 } from "../lib/api";
 
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 import { describeEvent, excerptOf } from "../lib/events";
 import { statusLabel, toneClass, workStatusTone } from "../lib/tone";
@@ -44,6 +45,8 @@ import { WorkspaceMark } from "../components/WorkspaceMark";
  */
 export default function Workspace() {
   const { workspaceId = "" } = useParams();
+  const canManage = useCan("workspaces.manage", workspaceId || null);
+  const canStartHere = useCan("missions.create", workspaceId || null);
 
   const detail = useResource<WorkspaceDetail>(
     useCallback(() => fetchWorkspace(workspaceId), [workspaceId]),
@@ -183,20 +186,24 @@ export default function Workspace() {
           </div>
 
           <div className="mt-7 flex flex-wrap items-center gap-2">
-            <Link
-              to={`/missions/new?workspace=${workspace.id}`}
-              className="button-primary"
-            >
-              <Zap size={13} />
-              Open a mission here
-            </Link>
+            {canStartHere && (
+              <Link
+                to={`/missions/new?workspace=${workspace.id}`}
+                className="button-primary"
+              >
+                <Zap size={13} />
+                Open a mission here
+              </Link>
+            )}
 
-            <button type="button" onClick={openEditor} className="button-quiet">
-              <Pencil size={12} />
-              Edit
-            </button>
+            {canManage && (
+              <button type="button" onClick={openEditor} className="button-quiet">
+                <Pencil size={12} />
+                Edit
+              </button>
+            )}
 
-            {workspace.status === "active" ? (
+            {canManage && (workspace.status === "active" ? (
               <button
                 type="button"
                 disabled={busy}
@@ -214,7 +221,7 @@ export default function Workspace() {
               >
                 Restore
               </button>
-            )}
+            ))}
           </div>
 
           {editing && (

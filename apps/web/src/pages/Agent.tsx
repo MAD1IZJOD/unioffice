@@ -23,6 +23,7 @@ import {
   type WorkspaceSummary,
 } from "../lib/api";
 
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 import { describeEvent, excerptOf } from "../lib/events";
 import { statusLabel, taskStatusTone, toneClass } from "../lib/tone";
@@ -49,6 +50,9 @@ import { WorkspaceMark } from "../components/WorkspaceMark";
  */
 export default function Agent() {
   const { agentId = "" } = useParams();
+  // Changing an agent - including which tools it holds - is offered only to
+  // the roles that configure the workforce. The API refuses anyone else.
+  const canConfigure = useCan("agents.configure");
 
   const detail = useResource<AgentDetail>(
     useCallback(() => fetchAgent(agentId), [agentId]),
@@ -237,7 +241,7 @@ export default function Agent() {
           </div>
 
           <div className="mt-7 flex flex-wrap items-center gap-2">
-            {!editing && (
+            {canConfigure && !editing && (
               <button type="button" onClick={openEditor} className="button-ghost">
                 <Pencil size={12} />
                 Configure

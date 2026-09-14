@@ -33,6 +33,7 @@ import {
   sourceLabel,
 } from "../lib/knowledge";
 
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 
 import { Connecting, Failure, Quiet } from "../components/primitives";
@@ -97,6 +98,7 @@ export default function Brain() {
   const [composeError, setComposeError] = useState<string>();
   const [actionError, setActionError] = useState<string>();
 
+  const canPropose = useCan("knowledge.propose");
   const overview = useResource<KnowledgeOverview>(
     useCallback(() => fetchKnowledgeOverview(), []),
     { pollMs: 30_000 },
@@ -242,15 +244,17 @@ export default function Brain() {
             <button type="button" className="brain-mode" aria-pressed={mode === "recall"} onClick={() => setMode("recall")}>
               What would an agent be handed?
             </button>
-            <button
-              type="button"
-              className="brain-mode ml-auto"
-              aria-pressed={composing}
-              onClick={() => setComposing((value) => !value)}
-            >
-              <Plus size={12} className="mr-1 inline" />
-              Record knowledge
-            </button>
+            {canPropose && (
+              <button
+                type="button"
+                className="brain-mode ml-auto"
+                aria-pressed={composing}
+                onClick={() => setComposing((value) => !value)}
+              >
+                <Plus size={12} className="mr-1 inline" />
+                Record knowledge
+              </button>
+            )}
           </div>
 
           <form
@@ -502,6 +506,8 @@ function SearchResults({
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
 }) {
+  const canCurate = useCan("knowledge.curate");
+
   if (results.loading) return <Connecting what="Searching what the company knows…" />;
 
   if (results.error) {
@@ -537,7 +543,7 @@ function SearchResults({
               animate={results.data?.mode === "relevance"}
               workspaceName={workspaceName(result.knowledge.workspaceId)}
               actions={
-                result.knowledge.status === "proposed" ? (
+                !canCurate ? undefined : result.knowledge.status === "proposed" ? (
                   <>
                     <button type="button" className="button-ghost" disabled={busy} onClick={() => onApprove(result.knowledge.id)}>Approve</button>
                     <button type="button" className="button-quiet" disabled={busy} onClick={() => onArchive(result.knowledge.id)}>Archive</button>
@@ -576,6 +582,7 @@ function Strata({
   onApprove: (id: string) => void;
   onArchive: (id: string) => void;
 }) {
+  const canCurate = useCan("knowledge.curate");
   const nothing = data.counts.active + data.counts.proposed + data.counts.archived === 0;
 
   if (nothing) {
@@ -608,7 +615,7 @@ function Strata({
                 conflict={entry.conflict}
                 left={entry.left}
                 right={entry.right}
-                busy={busy}
+                busy={busy || !canCurate}
                 onDecide={(decision) => onDecide(entry.conflict.id, decision)}
               />
             ))}
@@ -629,10 +636,12 @@ function Strata({
                   item={item}
                   workspaceName={workspaceName(item.workspaceId)}
                   actions={
-                    <>
-                      <button type="button" className="button-ghost" disabled={busy} onClick={() => onApprove(item.id)}>Approve</button>
-                      <button type="button" className="button-quiet" disabled={busy} onClick={() => onArchive(item.id)}>Archive</button>
-                    </>
+                    canCurate ? (
+                      <>
+                        <button type="button" className="button-ghost" disabled={busy} onClick={() => onApprove(item.id)}>Approve</button>
+                        <button type="button" className="button-quiet" disabled={busy} onClick={() => onArchive(item.id)}>Archive</button>
+                      </>
+                    ) : undefined
                   }
                 />
               ))}

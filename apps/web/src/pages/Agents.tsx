@@ -15,6 +15,7 @@ import {
   type WorkspaceSummary,
 } from "../lib/api";
 
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 import { presenceTone, toneClass } from "../lib/tone";
 import { spellOut } from "../lib/statement";
@@ -41,6 +42,7 @@ import { WorkspaceMark } from "../components/WorkspaceMark";
  * hard-coded list of six names anywhere in this file.
  */
 export default function Agents() {
+  const canConfigure = useCan("agents.configure");
   const overview = useResource<CompanyOverview>(
     useCallback(() => fetchOverview(60), []),
     { pollMs: 15_000 },
@@ -142,7 +144,7 @@ export default function Agents() {
         detail="Each holds a different set of capabilities and a different set of tools, and the delegator routes on exactly those two facts."
         tone={working.length > 0 ? "moving" : "quiet"}
         action={
-          !hiring && (
+          canConfigure && !hiring && (
             <button
               type="button"
               className="button-primary"
@@ -437,14 +439,16 @@ export default function Agents() {
           line="No one has been hired."
           detail="Add an agent, or run the API with SEED_DEVELOPMENT_WORKFORCE=true and the starting workforce is created on boot."
           action={
-            <button
-              type="button"
-              className="button-primary"
-              onClick={() => setHiring(true)}
-            >
-              <Plus size={13} />
-              Add the first agent
-            </button>
+            canConfigure ? (
+              <button
+                type="button"
+                className="button-primary"
+                onClick={() => setHiring(true)}
+              >
+                <Plus size={13} />
+                Add the first agent
+              </button>
+            ) : undefined
           }
         />
       ) : (

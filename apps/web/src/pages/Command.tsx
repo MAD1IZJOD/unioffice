@@ -25,6 +25,7 @@ import {
   type MissionControl,
 } from "../lib/api";
 
+import { useCan } from "../lib/access";
 import { attentionTime, attentionTone } from "../lib/attention";
 
 import {
@@ -427,6 +428,7 @@ function AttentionEntry({
   onMarkSeen: () => void;
 }) {
   const Icon = ATTENTION_ICON[item.kind];
+  const canOperate = useCan("missions.operate");
 
   return (
     <div className={`attention-row needs-row ${toneClass[attentionTone(item)]}`} role="article" aria-label={item.label}>
@@ -453,7 +455,7 @@ function AttentionEntry({
           <ArrowRight size={11} />
         </Link>
 
-        {item.acknowledgeable && item.workId && (
+        {canOperate && item.acknowledgeable && item.workId && (
           <button type="button" className="button-quiet" disabled={Boolean(busy)} onClick={onMarkSeen}>
             {busy === item.id ? "Marking…" : "Mark as seen"}
           </button>

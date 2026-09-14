@@ -29,6 +29,7 @@ import {
 import { kindLabel, knowledgeStatusLabel } from "../lib/knowledge";
 import { MissionDebrief } from "../components/room/MissionDebrief";
 import { useLiveResource } from "../lib/live";
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 import { excerptOf } from "../lib/events";
 
@@ -131,6 +132,11 @@ export default function Room() {
     },
     [reload],
   );
+
+  // The controls that start, run and stop this mission are offered only to
+  // someone who may operate it in its workspace. The server checks again
+  // either way; this only avoids offering what would be refused.
+  const canOperate = useCan("missions.operate", room.data?.work.workspaceId ?? null);
 
   // A mission opened from the composer starts itself: planned, then queued,
   // here - so the wait happens where the mission will keep happening and you
@@ -325,7 +331,7 @@ export default function Room() {
               </span>
             )}
 
-            {!opening && plan.totalCount === 0 && work.status === "queued" && (
+            {canOperate && !opening && plan.totalCount === 0 && work.status === "queued" && (
               <button
                 type="button"
                 disabled={busy}
@@ -353,7 +359,8 @@ export default function Room() {
               </span>
             )}
 
-            {!opening &&
+            {canOperate &&
+              !opening &&
               plan.totalCount > 0 &&
               !executionJob &&
               (work.status === "queued" || work.status === "executing") && (
@@ -372,7 +379,7 @@ export default function Room() {
                 </button>
               )}
 
-            {work.status === "failed" && (
+            {canOperate && work.status === "failed" && (
               <button
                 type="button"
                 disabled={busy}
@@ -400,7 +407,8 @@ export default function Room() {
                 worker is running the mission or its plan is being written.
                 The server decides either way; this only avoids offering a
                 button that would be refused. */}
-            {!opening &&
+            {canOperate &&
+              !opening &&
               executionJob?.status !== "running" &&
               ["queued", "executing", "waiting_approval", "failed"].includes(work.status) &&
               (confirmingCancel ? (

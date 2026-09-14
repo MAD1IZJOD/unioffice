@@ -8,6 +8,7 @@ import {
   type ApprovalItem,
 } from "../lib/api";
 
+import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 
 import {
@@ -22,6 +23,11 @@ import {
 import { spellOut } from "../lib/statement";
 
 export default function Approvals() {
+  // Deciding is offered to whoever may decide; a step a governance policy
+  // requires is offered only to owners and admins. The server rules either way.
+  const canDecide = useCan("approvals.decide");
+  const canDecideGoverned = useCan("policies.manage");
+
   const approvals = useResource<ApprovalItem[]>(
     useCallback(() => fetchPendingApprovals(), []),
     { pollMs: 15_000 },
@@ -181,25 +187,33 @@ export default function Approvals() {
 
                 <span className="flex-1" />
 
-                <button
-                  type="button"
-                  disabled={resolving === approval.id}
-                  onClick={() => decide(approval, "reject")}
-                  className="button-ghost button-reject"
-                >
-                  Reject
-                </button>
+                {!canDecide ? (
+                  <span className="t-meta">Your role can see this step but not decide it.</span>
+                ) : typeof approval.metadata.policyId === "string" && !canDecideGoverned ? (
+                  <span className="t-meta">A governance policy requires an owner or admin to decide this step.</span>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={resolving === approval.id}
+                      onClick={() => decide(approval, "reject")}
+                      className="button-ghost button-reject"
+                    >
+                      Reject
+                    </button>
 
-                <button
-                  type="button"
-                  disabled={resolving === approval.id}
-                  onClick={() => decide(approval, "approve")}
-                  className="button-primary button-approve-strong"
-                >
-                  {resolving === approval.id
-                    ? "Working…"
-                    : "Approve and continue"}
-                </button>
+                    <button
+                      type="button"
+                      disabled={resolving === approval.id}
+                      onClick={() => decide(approval, "approve")}
+                      className="button-primary button-approve-strong"
+                    >
+                      {resolving === approval.id
+                        ? "Working…"
+                        : "Approve and continue"}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}

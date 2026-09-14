@@ -11,6 +11,7 @@ import {
   type MissionDebriefRelation,
 } from "../../lib/api";
 
+import { useCan } from "../../lib/access";
 import { kindLabel } from "../../lib/knowledge";
 
 import { Chip, Failure } from "../primitives";
@@ -45,6 +46,10 @@ export function MissionDebrief({
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState<{ id: string; title: string; content: string }>();
+
+  // Deciding what the company keeps is curation: offered to owners and admins,
+  // and refused by the API for anyone else.
+  const canCurate = useCan("knowledge.curate");
 
   const pending = review.filter((item) => item.outcome === "pending");
   const decided = review.filter((item) => item.outcome !== "pending");
@@ -183,7 +188,7 @@ export function MissionDebrief({
                         {relation.knowledge.status === "active" ? "current" : "proposed"}
                       </span>
 
-                      {relation.relation === "restates" ? (
+                      {!canCurate ? null : relation.relation === "restates" ? (
                         <button
                           type="button"
                           className="button-quiet"
@@ -212,6 +217,7 @@ export function MissionDebrief({
                 </ul>
               )}
 
+              {canCurate && (
               <div className="debrief-actions">
                 <button
                   type="button"
@@ -250,6 +256,7 @@ export function MissionDebrief({
                   Discard
                 </button>
               </div>
+              )}
             </div>
           </article>
         );

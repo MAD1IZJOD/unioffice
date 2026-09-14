@@ -18,6 +18,7 @@ import {
   type WorkspaceSummary,
 } from "../lib/api";
 
+import { useCan } from "../lib/access";
 import { useLiveResource } from "../lib/live";
 import { useResource } from "../lib/useResource";
 
@@ -52,6 +53,9 @@ import {
  * written no rules yet.
  */
 export default function Governance() {
+  // Everyone may read the rules; only the roles that run the organization are
+  // offered writing or moving them. The API refuses anyone else regardless.
+  const canManagePolicies = useCan("policies.manage");
   const [composing, setComposing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [composeError, setComposeError] = useState<string>();
@@ -237,7 +241,7 @@ export default function Governance() {
           index="01"
           title="The rules"
           action={
-            !composing && (
+            canManagePolicies && !composing && (
               <button
                 type="button"
                 onClick={() => {
@@ -289,7 +293,7 @@ export default function Governance() {
                 key={policy.id}
                 policy={policy}
                 agentNames={agentNames}
-                busy={busy}
+                busy={busy || !canManagePolicies}
                 onChangeStatus={(status) => move(policy.id, status)}
               />
             ))}
