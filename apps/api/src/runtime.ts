@@ -57,6 +57,7 @@ import { WorkApprovalService } from "./work-approval-service.js";
 import { WorkExecutionService } from "./work-execution-service.js";
 import { WorkQueryService } from "./work-query-service.js";
 import { WorkRecoveryService } from "./work-recovery-service.js";
+import { WorkCancellationService } from "./work-cancellation-service.js";
 import { WorkService } from "./work-service.js";
 import { WorkspaceService } from "./workspace-service.js";
 
@@ -289,6 +290,17 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRecorder,
   );
 
+  // A plan older than the same window startup uses to call a run abandoned is
+  // no longer being written, so a mission stuck there can be cancelled.
+  const workCancellationService = new WorkCancellationService(
+    workRepository,
+    taskRepository,
+    executionJobRepository,
+    approvalRepository,
+    eventRecorder,
+    { planningStaleAfterMs: config.staleRunAfterMs },
+  );
+
   // The company's operational state, and what needs a person, from one set of
   // lean reads. A mission sitting untouched past the same window startup uses
   // to call a run abandoned is reported as stalled rather than as in flight.
@@ -383,6 +395,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     executionStream,
     executionJobRunner,
     workRecoveryService,
+    workCancellationService,
     companyBrainService,
     knowledgeRecallService,
     knowledgeCaptureService,

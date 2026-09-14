@@ -61,6 +61,11 @@ import type {
   WorkRecoveryService,
 } from "./work-recovery-service.js";
 
+import {
+  WorkCancellationError,
+  type WorkCancellationService,
+} from "./work-cancellation-service.js";
+
 import type {
   MissionControlService,
 } from "./mission-control-service.js";
@@ -151,6 +156,7 @@ export interface ApiServices {
   workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
   workRecoveryService: WorkRecoveryService;
+  workCancellationService: WorkCancellationService;
   missionControlService: MissionControlService;
   executionQueueService: ExecutionQueueService;
   executionRoomService: ExecutionRoomService;
@@ -534,6 +540,19 @@ export function buildApiServer(
       }
 
       return retried;
+    });
+
+    // Only the reason is read from the body. Who cancelled is the server's
+    // requester, and whether the mission can be cancelled - not while a worker
+    // or the planner is on it - is the service's decision.
+    instance.post("/work/:id/cancel", async (request) => {
+      const workId = await authorizedWorkId(services, request);
+      const body = objectBody(request.body);
+
+      return services.workCancellationService.cancelWork(workId, {
+        actorId: developmentRequesterId,
+        reason: optionalBoundedText(body.reason, "reason", 500),
+      });
     });
 
     instance.get("/work/:id/tasks", async (request) => {
@@ -1770,7 +1789,11 @@ function statusForError(error: Error): number {
     return 400;
   }
 
-  if (error instanceof KnowledgeStateError || error instanceof MissionStateError) {
+  if (
+    error instanceof KnowledgeStateError ||
+    error instanceof MissionStateError ||
+    error instanceof WorkCancellationError
+  ) {
     return 409;
   }
 

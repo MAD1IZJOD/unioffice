@@ -26,6 +26,7 @@ function baseServices(overrides: Partial<ApiServices> = {}): ApiServices {
     agentDirectoryService: {} as ApiServices["agentDirectoryService"],
     missionTemplateService: {} as ApiServices["missionTemplateService"],
     workRecoveryService: {} as ApiServices["workRecoveryService"],
+    workCancellationService: {} as ApiServices["workCancellationService"],
     executionQueueService: {} as ApiServices["executionQueueService"],
     missionControlService: {} as ApiServices["missionControlService"],
     governanceService: {} as ApiServices["governanceService"],

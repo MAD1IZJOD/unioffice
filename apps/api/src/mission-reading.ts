@@ -223,6 +223,7 @@ export const MEANINGFUL_EVENT_TYPES: EventType[] = [
   "work.retried",
   "work.completed",
   "work.failed",
+  "work.cancelled",
   "work.acknowledged",
   "task.started",
   "task.completed",
@@ -262,6 +263,8 @@ export function describeEvent(event: Event, agents: Map<AgentId, Agent>): string
       return "Finished";
     case "work.failed":
       return "Stopped";
+    case "work.cancelled":
+      return "Cancelled";
     case "work.acknowledged":
       return "Marked as seen";
     case "task.started":

@@ -15,6 +15,7 @@ export type EventType =
   | "work.failed"
   | "work.cancelled"
   | "work.retried"
+  | "work.cancelled"
   | "work.queued"
   | "task.created"
   | "task.ready"
