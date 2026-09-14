@@ -21,10 +21,6 @@ import {
 
 import { spellOut } from "../lib/statement";
 
-// No auth yet, so decisions are attributed to the seeded development
-// requester rather than inventing an identity the backend cannot verify.
-const RESOLVER_ID = "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09";
-
 export default function Approvals() {
   const approvals = useResource<ApprovalItem[]>(
     useCallback(() => fetchPendingApprovals(), []),
@@ -45,7 +41,7 @@ export default function Approvals() {
     setError(undefined);
 
     try {
-      await resolveApproval(approval.id, decision, RESOLVER_ID);
+      await resolveApproval(approval.id, decision);
       setResolved((current) => ({
         ...current,
         [approval.id]: { decision, at: new Date().toISOString() },

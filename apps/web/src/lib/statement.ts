@@ -1,4 +1,4 @@
-import type { CompanyOverview } from "./api";
+import type { CompanyOverview, MissionControl } from "./api";
 
 export interface CompanyStatement {
   /** The oversized line. Short, declarative, all caps at display size. */
@@ -102,6 +102,56 @@ export function describeCompany(
   return {
     headline: ["NOTHING HAS", "BEEN ASKED."],
     detail: "Give the company its first objective.",
+    mood: "quiet",
+  };
+}
+
+/**
+ * The same account, read from Mission Control.
+ *
+ * The principle is that a person should not have to watch the company to know
+ * it is fine: the headline only raises its voice for something that is
+ * stopped until someone acts. Work in progress is stated calmly, and a company
+ * with nothing moving and nothing wrong says exactly that.
+ */
+export function describeControl(view: MissionControl): CompanyStatement {
+  const { needsYou, running, total, finishedToday } = view.summary;
+  const decisions = view.attention.items.filter((item) => item.kind === "decision").length;
+
+  if (needsYou > 0) {
+    const others = needsYou - decisions;
+
+    return {
+      headline: needsYou === 1 ? ["ONE THING", "NEEDS YOU."] : [`${spellOut(needsYou)} THINGS`, "NEED YOU."],
+      detail:
+        decisions > 0
+          ? `${countOf(decisions, "decision")} waiting${others > 0 ? `, and ${countOf(others, "mission")} stopped or stalled` : ""}. Everything else is running on its own.`
+          : `${countOf(needsYou, "mission")} stopped or stalled until someone acts. Everything else is running on its own.`,
+      mood: decisions > 0 ? "waiting" : "broken",
+    };
+  }
+
+  if (running > 0) {
+    const working = view.workforce.working;
+
+    return {
+      headline: ["THE COMPANY", "IS MOVING."],
+      detail: `${countOf(running, "mission")} in flight${working > 0 ? `, ${countOf(working, "agent")} working` : ""}. Nothing needs you.`,
+      mood: "moving",
+    };
+  }
+
+  if (total > 0) {
+    return {
+      headline: ["EVERYTHING", "IS QUIET."],
+      detail: `Nothing is running and nothing needs you.${finishedToday > 0 ? ` ${countOf(finishedToday, "mission")} finished today.` : ""}`,
+      mood: "quiet",
+    };
+  }
+
+  return {
+    headline: ["NOTHING HAS", "BEEN ASKED."],
+    detail: "Start the company's first mission.",
     mood: "quiet",
   };
 }

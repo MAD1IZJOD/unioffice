@@ -613,16 +613,21 @@ export interface AgentPresenceSummary extends AgentSummary {
 
 export type AttentionKind =
   | "decision"
+  | "governance"
   | "failure"
+  | "stalled"
+  | "agent_unavailable"
   | "interrupted"
+  | "conflict"
+  | "lessons"
   | "recovering";
 
 /**
- * `action` is stopped until a person does something. `watch` is the system
- * recovering on its own. The backend draws this line; nothing here re-decides
- * it.
+ * `action` is stopped until a person does something. `review` blocks nothing
+ * but wants a person's look. `watch` is the system recovering on its own. The
+ * backend draws these lines; nothing here re-decides them.
  */
-export type AttentionSeverity = "action" | "watch";
+export type AttentionSeverity = "action" | "review" | "watch";
 
 /* --------------------------------------------------------------------------
    Governance.
@@ -774,15 +779,33 @@ export interface PolicyChanges {
   approvalPrompt?: string | null;
 }
 
+export type AttentionLevel = "critical" | "high" | "normal" | "low";
+
+export type AttentionSource =
+  | "approval"
+  | "governance"
+  | "execution"
+  | "planning"
+  | "queue"
+  | "workforce"
+  | "knowledge";
+
 export interface AttentionItem {
   id: string;
   kind: AttentionKind;
   severity: AttentionSeverity;
+  level: AttentionLevel;
+  /** Which part of the system raised it. */
+  source: AttentionSource;
   label: string;
   detail: string;
   consequence: string;
-  workId: string;
-  objective: string;
+  /** The one thing to do about it, and where it is done. */
+  action: { label: string; path: string };
+  /** Whether a person can mark it as seen. */
+  acknowledgeable: boolean;
+  workId?: string;
+  objective?: string;
   taskId?: string;
   agentId?: string;
   at: string;
@@ -790,9 +813,125 @@ export interface AttentionItem {
 
 export interface AttentionQueue {
   items: AttentionItem[];
+  /** Stopped until a person acts. */
   actionCount: number;
+  /** Worth a person's look; nothing is blocked. */
+  reviewCount: number;
+  /** The system saying what it is handling itself. */
   watchCount: number;
   total: number;
+}
+
+/* --------------------------------------------------------------------------
+   Mission Control.
+
+   The company's operational state in one read. Every value is shaped on the
+   server for a person: failure reasons are cleaned, events are described in
+   words, and nothing raw - plans, briefings, tool inputs - is included.
+   -------------------------------------------------------------------------- */
+
+export type MissionPhase =
+  | "planning"
+  | "queued"
+  | "running"
+  | "waiting_approval"
+  | "stalled"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface MissionCard {
+  id: string;
+  objective: string;
+  name?: string;
+  template?: string;
+  status: WorkStatus;
+  phase: MissionPhase;
+  priority: "low" | "normal" | "high" | "critical";
+  workspaceId?: string;
+  stage: string;
+  currentSteps: string[];
+  progress: { total: number; completed: number; running: number; failed: number };
+  team: Array<{
+    agentId: string;
+    name: string;
+    state: "working" | "waiting" | "done" | "assigned" | "unavailable";
+  }>;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  lastActivityAt: string;
+  elapsedMs?: number;
+  blocked?: { kind: "approval" | "agent_unavailable" | "stalled"; reason: string };
+  failure?: string;
+  acknowledged: boolean;
+  latest?: { text: string; at: string };
+}
+
+export interface MissionOutcome {
+  id: string;
+  kind: "mission_completed" | "mission_failed" | "artifacts" | "decision" | "knowledge";
+  text: string;
+  detail?: string;
+  note?: string;
+  path?: string;
+  at: string;
+}
+
+export interface KnowledgeSignal {
+  id: string;
+  title: string;
+  type: KnowledgeType;
+  status: KnowledgeStatus;
+  createdAt: string;
+  workId?: string;
+}
+
+export interface MissionControl {
+  organizationId: string;
+  generatedAt: string;
+  summary: {
+    running: number;
+    blocked: number;
+    needsYou: number;
+    finishedToday: number;
+    failedToday: number;
+    setAside: number;
+    total: number;
+  };
+  running: MissionCard[];
+  blocked: MissionCard[];
+  finished: MissionCard[];
+  attention: AttentionQueue;
+  outcomes: MissionOutcome[];
+  signals: {
+    decisions: KnowledgeSignal[];
+    lessons: KnowledgeSignal[];
+    awaiting: {
+      total: number;
+      atLeast: boolean;
+      missions: Array<{ workId: string; objective: string; count: number }>;
+    };
+    conflicts: Array<{
+      id: string;
+      reason: string;
+      left: { id: string; title: string };
+      right: { id: string; title: string };
+    }>;
+  };
+  workforce: {
+    total: number;
+    active: number;
+    working: number;
+    unavailable: Array<{ agentId: string; name: string; status: "active" | "paused" | "disabled" }>;
+    roster: Array<{
+      agentId: string;
+      name: string;
+      type: "specialist" | "manager" | "orchestrator";
+      status: "active" | "paused" | "disabled";
+      capabilities: string[];
+    }>;
+  };
 }
 
 /** How far through its plan one mission is. */
@@ -1018,6 +1157,24 @@ export async function updatePolicy(
 
 export async function fetchAttention(limit = 25): Promise<AttentionQueue> {
   return get<AttentionQueue>(scoped("/attention", { limit }));
+}
+
+/** Several bounded reads against the database, so it gets a read budget of its own. */
+const MISSION_CONTROL_TIMEOUT_MS = 45_000;
+
+export async function fetchMissionControl(): Promise<MissionControl> {
+  return get<MissionControl>(scoped("/mission-control"), MISSION_CONTROL_TIMEOUT_MS);
+}
+
+/** Marks a stopped or stalled mission as seen. The server decides whether it can be. */
+export async function acknowledgeMission(
+  workId: string,
+): Promise<{ workId: string; acknowledgedAt: string }> {
+  return post(
+    `/work/${encodeURIComponent(workId)}/acknowledge`,
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
 }
 
 export async function fetchActivity(limit = 40): Promise<ActivityEvent[]> {
@@ -1530,12 +1687,15 @@ export async function retryWork(workId: string): Promise<RetryResult> {
   return post<RetryResult>(`/work/${workId}/retry`, {}, READ_TIMEOUT_MS);
 }
 
+/**
+ * Who decided is recorded by the server from the caller, so nothing about the
+ * decider is sent.
+ */
 export async function resolveApproval(
   approvalId: string,
   decision: "approve" | "reject",
-  resolvedBy: string,
 ): Promise<{ approval: ApprovalItem }> {
-  return post(`/approvals/${approvalId}/${decision}`, { resolvedBy });
+  return post(`/approvals/${approvalId}/${decision}`, { organizationId: organizationId() });
 }
 
 export function formatRelativeTime(iso: string | undefined): string {

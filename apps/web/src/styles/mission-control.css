@@ -1,0 +1,318 @@
+/* ==========================================================================
+   Mission Control
+
+   The Command Center's operational layer. Built on the existing dispatch,
+   attention band and ledger so it reads as the same instrument, extended:
+   exceptions carry colour and an action; running work stays calm.
+   ========================================================================== */
+
+.control-freshness {
+  margin-left: 14px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+}
+
+.control-freshness-stale {
+  color: #fcd34d;
+}
+
+.control-launch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.control-workforce {
+  margin: 16px 0 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.control-workforce a {
+  color: var(--ink-secondary);
+  text-decoration: none;
+}
+
+.control-workforce a:hover {
+  color: var(--blue-ink);
+}
+
+.control-workforce-unavailable {
+  color: var(--red-ink);
+}
+
+.control-stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 18px;
+}
+
+/* --------------------------------------------------------------------------
+   Needs you
+   -------------------------------------------------------------------------- */
+
+.needs-clear {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-bottom: 8px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.needs-clear-title {
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.needs-clear-detail {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+}
+
+.needs-row {
+  align-items: flex-start;
+}
+
+.needs-objective {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.needs-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 7px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.needs-tag-critical {
+  color: var(--red-ink);
+}
+
+.needs-error {
+  display: block;
+  margin-top: 6px;
+  color: var(--red-ink);
+  font-size: 11px;
+}
+
+.needs-actions {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.needs-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 4px;
+}
+
+.attention-band-review .attention-band-eyebrow {
+  color: var(--ink-muted);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Missions
+   -------------------------------------------------------------------------- */
+
+.control-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 36px;
+}
+
+.control-grid .section-head-title {
+  margin: 0;
+}
+
+.mission-row-objective {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mission-row-stage {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.mission-row-blocked {
+  display: block;
+  margin-top: 3px;
+  color: var(--tone, var(--ink-muted));
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.mission-row-failure {
+  color: #c9868a;
+}
+
+.mission-row-team {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px 9px;
+}
+
+.team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-muted);
+}
+
+.mission-row-latest {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   What happened, and what the company knows
+   -------------------------------------------------------------------------- */
+
+.outcome-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outcome-text {
+  display: block;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+a.outcome-text:hover {
+  color: var(--blue-ink);
+}
+
+.outcome-detail,
+.outcome-note {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outcome-detail {
+  color: var(--ink-faint);
+}
+
+.outcome-note {
+  color: var(--ink-muted);
+}
+
+.signal-group {
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.signal-group-title {
+  margin-bottom: 4px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.signal-group-warning .signal-group-title {
+  color: #fcd34d;
+}
+
+.signal-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 5px 0;
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.signal-line:hover {
+  color: var(--blue-ink);
+}
+
+.signal-vs,
+.signal-meta {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+@media (max-width: 1080px) {
+  .control-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .needs-row {
+    flex-wrap: wrap;
+  }
+
+  .needs-actions {
+    flex-direction: row;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .control-freshness {
+    display: block;
+    margin: 6px 0 0;
+  }
+}

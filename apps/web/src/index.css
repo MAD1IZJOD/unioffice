@@ -8,6 +8,7 @@
 @import "./styles/brain.css";
 @import "./styles/templates.css";
 @import "./styles/debrief.css";
+@import "./styles/mission-control.css";
 
 :root {
   font-family:

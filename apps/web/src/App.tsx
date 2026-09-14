@@ -5,6 +5,7 @@ import {
   Brain,
   ChevronRight,
   CircleAlert,
+  Clock,
   Command as CommandIcon,
   FileOutput,
   LayoutGrid,
@@ -15,6 +16,7 @@ import {
   Scale,
   Search,
   ShieldAlert,
+  UserX,
   Users,
   Wrench,
   X,
@@ -24,17 +26,14 @@ import type { LucideIcon } from "lucide-react";
 
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import type { AttentionItem, MissionControl } from "./lib/api";
 
 import {
-  fetchAttention,
-  fetchOverview,
-  type AttentionItem,
-  type AttentionQueue,
-  type CompanyOverview,
-} from "./lib/api";
-
-import { useLiveResource } from "./lib/live";
+  useMissionControlResource,
+  type ShellOutletContext,
+} from "./lib/missionControl";
 
 import {
   attentionPath,
@@ -55,8 +54,7 @@ interface NavEntry {
 }
 
 interface ShellContext {
-  overview?: CompanyOverview;
-  attention?: AttentionQueue;
+  missionControl?: MissionControl;
 }
 
 /**
@@ -86,7 +84,9 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
         label: "Missions",
         path: "/missions",
         icon: LayoutGrid,
-        badge: ({ overview }) => overview?.work.active.length ?? 0,
+        // Missions that are moving or stuck; finished ones need no badge.
+        badge: ({ missionControl }) =>
+          (missionControl?.summary.running ?? 0) + (missionControl?.summary.blocked ?? 0),
       },
       {
         label: "Approvals",
@@ -95,8 +95,8 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
         // The rail counts what needs a person, which is the same number the
         // drawer and the Command Center show, because all three now read it
         // from the same place.
-        badge: ({ attention }) =>
-          attention?.items.filter((item) => item.kind === "decision").length ??
+        badge: ({ missionControl }) =>
+          missionControl?.attention.items.filter((item) => item.kind === "decision").length ??
           0,
       },
     ],
@@ -127,8 +127,13 @@ const ALL_ENTRIES = NAV_GROUPS.flatMap((group) => group.entries);
 
 const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   decision: ShieldAlert,
+  governance: Scale,
   failure: CircleAlert,
+  stalled: Clock,
+  agent_unavailable: UserX,
   interrupted: RotateCcw,
+  conflict: Brain,
+  lessons: Brain,
   recovering: RotateCcw,
 };
 
@@ -243,28 +248,19 @@ export default function App() {
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
 
-  // The shell reads the same overview every page reads, so the counts in the
-  // rail can never disagree with the surface they point at. Both reads are
-  // kept current by the live channel, so a decision raised by a worker
-  // appears in the rail without anyone touching the page.
-  const overview = useLiveResource<CompanyOverview>(
-    useCallback(() => fetchOverview(12), []),
-    { fallbackPollMs: 20_000 },
-  );
+  // One read of the company's operational state for the whole shell. The rail
+  // badges, the attention drawer, the palette and the Command Center all show
+  // this same answer, and the live channel refreshes it once per burst of
+  // activity rather than once per surface.
+  const missionControl = useMissionControlResource();
 
-  // Ranked by the backend across the whole company, rather than recomputed
-  // here from whichever slice the overview happened to carry.
-  const attention = useLiveResource<AttentionQueue>(
-    useCallback(() => fetchAttention(25), []),
-    { fallbackPollMs: 20_000 },
-  );
-
-  const queue = attention.data;
+  const queue = missionControl.data?.attention;
   const attentionItems = useMemo(() => queue?.items ?? [], [queue]);
   const context = useMemo<ShellContext>(
-    () => ({ overview: overview.data, attention: queue }),
-    [overview.data, queue],
+    () => ({ missionControl: missionControl.data }),
+    [missionControl.data],
   );
+  const outletContext: ShellOutletContext = { missionControl };
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -312,7 +308,7 @@ export default function App() {
   // a decision genuinely waiting. Nothing is listed to fill the list out.
   const paletteResults = useMemo(() => {
     const needle = paletteQuery.trim().toLowerCase();
-    const data = overview.data;
+    const data = missionControl.data;
 
     const actions = [
       {
@@ -324,18 +320,18 @@ export default function App() {
       },
     ];
 
-    const active = (data?.work.active ?? []).map((item) => ({
+    const active = [...(data?.running ?? []), ...(data?.blocked ?? [])].map((item) => ({
       key: `mission:${item.id}`,
-      label: item.objective,
+      label: item.name ?? item.objective,
       path: `/missions/${item.id}`,
       icon: LayoutGrid,
       kind: "Active mission",
     }));
 
-    const recent = (data?.work.recentlyCompleted ?? []).slice(0, 10).map(
+    const recent = (data?.finished ?? []).slice(0, 10).map(
       (item) => ({
         key: `mission:${item.id}`,
-        label: item.objective,
+        label: item.name ?? item.objective,
         path: `/missions/${item.id}`,
         icon: LayoutGrid,
         kind: "Recent mission",
@@ -347,7 +343,7 @@ export default function App() {
       .map((item) => ({
         key: `attention:${item.id}`,
         label: item.label,
-        path: `/missions/${item.workId}`,
+        path: attentionPath(item),
         icon: ShieldAlert,
         kind: "Needs you",
       }));
@@ -360,7 +356,7 @@ export default function App() {
       kind: "Surface",
     }));
 
-    const agents = (data?.agents ?? []).map((agent) => ({
+    const agents = (data?.workforce.roster ?? []).map((agent) => ({
       key: `agent:${agent.agentId}`,
       label: `${agent.name} — ${profileOf(agent).label}`,
       path: `/agents/${agent.agentId}`,
@@ -376,7 +372,7 @@ export default function App() {
       ...agents,
       ...recent,
     ].filter((entry) => !needle || entry.label.toLowerCase().includes(needle));
-  }, [paletteQuery, overview.data, attentionItems]);
+  }, [paletteQuery, missionControl.data, attentionItems]);
 
   const { group, title } = locate(location.pathname);
   const attentionCount = queue?.actionCount ?? 0;
@@ -526,16 +522,16 @@ export default function App() {
             </div>
 
             <div
-              className={`system-status${overview.error ? " system-status-down" : ""}`}
-              title={overview.error?.message}
+              className={`system-status${missionControl.error ? " system-status-down" : ""}`}
+              title={missionControl.error?.message}
             >
               <span
-                className={`pill-dot ${overview.error ? "tone-error" : "tone-active"}`}
+                className={`pill-dot ${missionControl.error ? "tone-error" : "tone-active"}`}
               />
               <span>
-                {overview.error
+                {missionControl.error
                   ? "OFFLINE"
-                  : overview.loading
+                  : missionControl.loading
                     ? "CONNECTING"
                     : "OPERATIONAL"}
               </span>
@@ -546,7 +542,7 @@ export default function App() {
         {/* Keyed on the path so every navigation replays the page's entrance
             rather than swapping content inside a static frame. */}
         <section className="page-surface" key={location.pathname}>
-          <Outlet />
+          <Outlet context={outletContext} />
         </section>
       </main>
 
@@ -693,6 +689,9 @@ function AttentionPanel({
                   <span className="attention-item-consequence">
                     {item.severity === "watch" && (
                       <span className="attention-item-tag">no action</span>
+                    )}
+                    {item.severity === "review" && (
+                      <span className="attention-item-tag">worth a look</span>
                     )}
                     {item.consequence}
                   </span>

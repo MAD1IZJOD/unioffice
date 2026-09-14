@@ -69,10 +69,6 @@ import { RoomCast } from "../components/room/RoomCast";
  * wants the first two; a person who opens it afterwards wants the third.
  */
 
-// No auth yet, so a decision is attributed to the seeded development
-// requester rather than inventing an identity the backend cannot verify.
-const RESOLVER_ID = "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09";
-
 /** Used only when the live channel is unavailable. */
 const FALLBACK_POLL_MS = 4_000;
 
@@ -430,7 +426,7 @@ export default function Room() {
         busy={busy}
         onDecide={(approvalId, decision) =>
           run(decision, () =>
-            resolveApproval(approvalId, decision, RESOLVER_ID),
+            resolveApproval(approvalId, decision),
           )
         }
       />

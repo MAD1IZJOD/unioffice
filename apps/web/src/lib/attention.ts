@@ -5,15 +5,12 @@ import type { Tone } from "./tone";
 /**
  * Reading the attention queue.
  *
- * Deciding what needs a person used to happen here, over whatever slice of
- * the company the overview payload happened to carry. It happens in the
- * service layer now, across every row, which is why this file is down to
- * presentation: which colour an entry wears, where acting on it happens, and
- * how to say the whole queue in one line.
+ * What needs a person, how badly, and where to act on it are all decided by
+ * the backend across every row. This file only chooses the colour an entry
+ * wears and how to say the whole queue in one line.
  *
  * Nothing here re-ranks or re-classifies. If the backend called something
- * information rather than an action, the drawer does not get a second
- * opinion about it.
+ * information rather than an action, no surface gets a second opinion.
  */
 
 export function attentionTone(item: AttentionItem): Tone {
@@ -21,24 +18,24 @@ export function attentionTone(item: AttentionItem): Tone {
     case "decision":
       return "warning";
     case "failure":
+    case "governance":
+    case "stalled":
+    case "agent_unavailable":
+      // Red is for things that will not resolve themselves.
       return "error";
+    case "conflict":
+    case "lessons":
+      return "idle";
     default:
       // An interrupted run and a retrying job are both the system still
-      // holding the thread. Blue, not red: red is for things that are not
-      // going to resolve themselves.
+      // holding the thread.
       return "active";
   }
 }
 
-/**
- * Where the entry is acted on.
- *
- * Always the mission, never a list of decisions detached from what they are
- * holding up - approving something you cannot see the consequences of is the
- * failure mode this avoids.
- */
+/** Where acting on the entry happens, as the backend decided. */
 export function attentionPath(item: AttentionItem): string {
-  return `/missions/${item.workId}`;
+  return item.action.path;
 }
 
 export function attentionTime(item: AttentionItem): string {
@@ -49,25 +46,25 @@ export function attentionTime(item: AttentionItem): string {
 export function summarizeAttention(items: AttentionItem[]): string {
   if (items.length === 0) return "Nothing needs your decision.";
 
-  const count = (kind: AttentionItem["kind"]) =>
-    items.filter((item) => item.kind === kind).length;
-
-  const decisions = count("decision");
-  const failures = count("failure");
-  const interrupted = count("interrupted");
-  const recovering = count("recovering");
+  const count = (...kinds: AttentionItem["kind"][]) =>
+    items.filter((item) => kinds.includes(item.kind)).length;
 
   const parts: string[] = [];
 
-  if (decisions) {
-    parts.push(`${decisions} ${decisions === 1 ? "decision" : "decisions"}`);
-  }
+  const decisions = count("decision");
+  const stopped = count("failure", "governance");
+  const stalled = count("stalled");
+  const agents = count("agent_unavailable");
+  const interrupted = count("interrupted");
+  const review = count("conflict", "lessons");
+  const recovering = count("recovering");
 
-  if (failures) {
-    parts.push(`${failures} ${failures === 1 ? "failure" : "failures"}`);
-  }
-
+  if (decisions) parts.push(`${decisions} ${decisions === 1 ? "decision" : "decisions"}`);
+  if (stopped) parts.push(`${stopped} stopped`);
+  if (stalled) parts.push(`${stalled} stalled`);
+  if (agents) parts.push(`${agents} blocked on an agent`);
   if (interrupted) parts.push(`${interrupted} to resume`);
+  if (review) parts.push(`${review} to review`);
   if (recovering) parts.push(`${recovering} recovering`);
 
   return parts.join(" · ");
