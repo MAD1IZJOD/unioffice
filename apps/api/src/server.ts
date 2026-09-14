@@ -17,6 +17,7 @@ import type {
   KnowledgeConflictId,
   KnowledgeSourceType,
   KnowledgeStatus,
+  MemberId,
   MemoryId,
   MemoryType,
   OrganizationId,
@@ -150,6 +151,13 @@ import { AccessError, type AccessResolver } from "./access/access-resolver.js";
 import { bearerToken, type Authenticator, type Identity } from "./access/authenticator.js";
 import { permissionsOf, type Access } from "./access/permissions.js";
 import type { StreamTickets } from "./access/stream-tickets.js";
+import {
+  MemberNotFoundError,
+  MemberStateError,
+  MemberValidationError,
+  type MemberService,
+} from "./access/member-service.js";
+import { LastOwnerError, MemberConflictError } from "@unioffice/database";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -164,6 +172,7 @@ export interface ApiServices {
   authenticator: Authenticator;
   accessResolver: Pick<AccessResolver, "resolve" | "organizationsFor">;
   streamTickets: StreamTickets;
+  memberService: MemberService;
   applicationService: WorkApplicationService;
   workService: WorkService;
   workExecutionService: WorkExecutionService;
@@ -841,6 +850,63 @@ export function buildApiServer(
     // revisiting each handler.
     // ---------------------------------------------------------------------
 
+    // ---------------------------------------------------------------------
+    // Members.
+    //
+    // Who belongs, at what role, and in which workspaces. Whether the caller
+    // may make a change - and to whom - is decided in the service against
+    // their own membership, read fresh; these handlers only read the route
+    // and the few fields each change takes.
+    // ---------------------------------------------------------------------
+
+    instance.get("/members", async (request) => {
+      return { members: await services.memberService.listMembers(accessOf(request)) };
+    });
+
+    instance.post("/members", { config: { rateLimit: MEMBER_WRITE_LIMIT } }, async (request, reply) => {
+      const body = objectBody(request.body);
+      const member = await services.memberService.invite(accessOf(request), {
+        email: body.email,
+        role: body.role,
+      });
+
+      return reply.status(201).send({ member });
+    });
+
+    instance.post("/members/:id/role", { config: { rateLimit: MEMBER_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      return {
+        member: await services.memberService.changeRole(accessOf(request), parameterMemberId(request.params), {
+          role: body.role,
+        }),
+      };
+    });
+
+    instance.post("/members/:id/suspend", { config: { rateLimit: MEMBER_WRITE_LIMIT } }, async (request) => {
+      return { member: await services.memberService.suspend(accessOf(request), parameterMemberId(request.params)) };
+    });
+
+    instance.post("/members/:id/reactivate", { config: { rateLimit: MEMBER_WRITE_LIMIT } }, async (request) => {
+      return { member: await services.memberService.reactivate(accessOf(request), parameterMemberId(request.params)) };
+    });
+
+    instance.post("/members/:id/remove", { config: { rateLimit: MEMBER_WRITE_LIMIT } }, async (request) => {
+      return services.memberService.remove(accessOf(request), parameterMemberId(request.params));
+    });
+
+    // access is "member", "viewer", or null to take the grant away.
+    instance.post("/members/:id/workspaces", { config: { rateLimit: MEMBER_WRITE_LIMIT } }, async (request) => {
+      const body = objectBody(request.body);
+
+      return {
+        member: await services.memberService.setWorkspaceAccess(accessOf(request), parameterMemberId(request.params), {
+          workspaceId: body.workspaceId,
+          access: body.access === undefined ? "missing" : body.access,
+        }),
+      };
+    });
+
     instance.get("/organization", async (request) => {
       const query = objectBody(request.query);
 
@@ -1290,6 +1356,7 @@ const MAX_KNOWLEDGE_QUERY_CHARS = 500;
 const KNOWLEDGE_SEARCH_LIMIT = { max: 60, timeWindow: "1 minute" };
 const KNOWLEDGE_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
 const KNOWLEDGE_DERIVE_LIMIT = { max: 5, timeWindow: "1 minute" };
+const MEMBER_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
 
 /** The verified caller. Only the sign-in hook sets it. */
 function accessOf(request: { access?: Access }): Access {
@@ -1791,6 +1858,10 @@ function parameterApprovalId(params: unknown): ApprovalId {
   return parameterUuid(params) as ApprovalId;
 }
 
+function parameterMemberId(params: unknown): MemberId {
+  return parameterUuid(params) as MemberId;
+}
+
 /**
  * A required field, named in its own error. This used to defer to
  * optionalText, which meant an empty string was reported as the generic
@@ -1881,9 +1952,22 @@ function statusForError(error: Error): number {
     error instanceof AgentNotFoundError ||
     error instanceof KnowledgeNotFoundError ||
     error instanceof MissionTemplateNotFoundError ||
-    error instanceof MissionNotFoundError
+    error instanceof MissionNotFoundError ||
+    error instanceof MemberNotFoundError
   ) {
     return 404;
+  }
+
+  if (error instanceof MemberValidationError) {
+    return 400;
+  }
+
+  if (
+    error instanceof MemberStateError ||
+    error instanceof MemberConflictError ||
+    error instanceof LastOwnerError
+  ) {
+    return 409;
   }
 
   if (

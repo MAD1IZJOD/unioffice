@@ -36,6 +36,7 @@ import { createDefaultToolRegistry } from "@unioffice/tools";
 
 import { AccessResolver } from "./access/access-resolver.js";
 import { SupabaseAuthenticator } from "./access/authenticator.js";
+import { MemberService } from "./access/member-service.js";
 import { AgentDirectoryService } from "./agent-directory-service.js";
 import { GovernanceOverviewService } from "./governance-overview-service.js";
 import { GovernanceService } from "./governance-service.js";
@@ -98,6 +99,12 @@ export function createExecutionRuntime(config: ApiConfig) {
   const accessResolver = new AccessResolver(membershipRepository);
 
   const eventRecorder = new EventRecorder(eventRepository);
+
+  const memberService = new MemberService(
+    membershipRepository,
+    workspaceRepository,
+    eventRecorder,
+  );
 
   const toolRegistry = createDefaultToolRegistry();
 
@@ -392,6 +399,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     membershipRepository,
     authenticator,
     accessResolver,
+    memberService,
     eventRecorder,
     toolRegistry,
     applicationService,

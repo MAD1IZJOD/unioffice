@@ -68,6 +68,7 @@ export async function createApiServer() {
     // In memory: tickets live for a minute and are only ever redeemed by the
     // process that issued them.
     streamTickets: new StreamTickets(),
+    memberService: runtime.memberService,
     applicationService: runtime.applicationService,
     workService: runtime.workService,
     workExecutionService: runtime.workExecutionService,
