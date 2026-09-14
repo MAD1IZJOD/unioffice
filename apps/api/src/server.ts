@@ -28,6 +28,7 @@ import type {
   RiskLevel,
   ApprovalId,
   UserId,
+  Work,
   WorkId,
   WorkPriority,
   WorkspaceId,
@@ -149,7 +150,8 @@ import type {
 
 import { AccessError, type AccessResolver } from "./access/access-resolver.js";
 import { bearerToken, type Authenticator, type Identity } from "./access/authenticator.js";
-import { permissionsOf, type Access } from "./access/permissions.js";
+import { permissionsOf, type Access, type Permission } from "./access/permissions.js";
+import { authorize, authorizeRead } from "./access/authorize.js";
 import type { StreamTickets } from "./access/stream-tickets.js";
 import {
   MemberNotFoundError,
@@ -500,13 +502,14 @@ export function buildApiServer(
         await services.workspaceService.getWorkspace(organizationId, workspaceId);
       }
 
+      const access = await confirmAllowed(services, request, "missions.create", workspaceId);
+
       const input: CreateWorkInput = {
         organizationId,
-        // The requester is the authenticated caller, not a field they get to
-        // fill in. There is no auth yet, so it is the seeded development
-        // requester; a caller-supplied requesterId used to be honoured, which
-        // is authorship spoofing waiting to matter the day identity lands.
-        requesterId: accessOf(request).userId,
+        // The requester is the signed-in caller, not a field they get to fill
+        // in. A caller-supplied requesterId used to be honoured, which was
+        // authorship spoofing.
+        requesterId: access.userId,
         objective: requiredText(body.objective, "objective", 4_000),
         priority: parsePriority(body.priority),
         workspaceId,
@@ -575,11 +578,12 @@ export function buildApiServer(
     // the organization is read: who marked it is the server's requester, and
     // the service decides whether the mission is in a state that can be marked.
     instance.post("/work/:id/acknowledge", async (request) => {
-      const body = objectBody(request.body);
+      const work = await visibleWork(services, request);
+      await confirmAllowed(services, request, "missions.operate", work.workspaceId);
 
       return services.missionControlService.acknowledge(
         organizationOf(request),
-        parameterUuid(request.params) as WorkId,
+        work.id,
         actorOf(request),
       );
     });
@@ -630,16 +634,11 @@ export function buildApiServer(
     });
 
     instance.get("/work/:id", async (request) => {
-      const work = await services.workQueryService.assertWorkInOrganization(
-        parameterId(request.params),
-        organizationOf(request),
-      );
-
-      return { work };
+      return { work: await visibleWork(services, request) };
     });
 
     instance.post("/work/:id/plan", async (request) => {
-      const workId = await authorizedWorkId(services, request);
+      const workId = await operableWorkId(services, request);
       return services.workService.planWork(workId);
     });
 
@@ -648,12 +647,12 @@ export function buildApiServer(
     // alive. Callers watch progress through /work/:id/detail, which reads the
     // same rows the worker is writing.
     instance.post("/work/:id/execute", async (request) => {
-      const workId = await authorizedWorkId(services, request);
+      const workId = await operableWorkId(services, request);
       return services.executionQueueService.enqueueWork(workId, "requested");
     });
 
     instance.post("/work/:id/retry", async (request) => {
-      const workId = await authorizedWorkId(services, request);
+      const workId = await operableWorkId(services, request);
       const retried = await services.workRecoveryService.retryWork(workId);
 
       // A retry that only reset rows would sit there until someone pressed
@@ -675,7 +674,7 @@ export function buildApiServer(
     // requester, and whether the mission can be cancelled - not while a worker
     // or the planner is on it - is the service's decision.
     instance.post("/work/:id/cancel", async (request) => {
-      const workId = await authorizedWorkId(services, request);
+      const workId = await operableWorkId(services, request);
       const body = objectBody(request.body);
 
       return services.workCancellationService.cancelWork(workId, {
@@ -1066,13 +1065,15 @@ export function buildApiServer(
       { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } },
       async (request, reply) => {
         const body = objectBody(request.body);
+        const workspaceId = optionalUuid(body.workspaceId, "workspaceId") as WorkspaceId | undefined;
+        const access = await confirmAllowed(services, request, "missions.create", workspaceId);
 
         // Only these fields are read. Anything else in the body - a status,
         // agents, tasks, approval state, another requester - never reaches the
         // service.
         const work = await services.missionTemplateService.startMission({
-          organizationId: organizationOf(request),
-          requesterId: accessOf(request).userId,
+          organizationId: access.organizationId,
+          requesterId: access.userId,
           templateId: parameterTemplateId(request.params),
           name: templateText(body.name, "name"),
           objective: templateText(body.objective, "objective") ?? "",
@@ -1080,7 +1081,7 @@ export function buildApiServer(
           desiredOutcome: templateText(body.desiredOutcome, "desiredOutcome") ?? "",
           constraints: templateText(body.constraints, "constraints"),
           priority: parsePriority(body.priority),
-          workspaceId: optionalUuid(body.workspaceId, "workspaceId") as WorkspaceId | undefined,
+          workspaceId,
         });
 
         return reply.status(201).send({ work });
@@ -1817,15 +1818,67 @@ async function authorizedWorkId(
   services: ApiServices,
   request: { params: unknown; access?: Access },
 ): Promise<WorkId> {
-  const workId = parameterId(request.params);
-  const organizationId = organizationOf(request);
+  return (await visibleWork(services, request)).id;
+}
 
-  await services.workQueryService.assertWorkInOrganization(
+/**
+ * The work in the route, as something the caller may see: in their
+ * organization, and in a workspace they reach. A mission in a workspace they
+ * were never given reads exactly like one that does not exist.
+ */
+async function visibleWork(
+  services: ApiServices,
+  request: { params: unknown; access?: Access },
+): Promise<Work> {
+  const workId = parameterId(request.params);
+  const access = accessOf(request);
+  const work = await services.workQueryService.assertWorkInOrganization(
     workId,
-    organizationId,
+    access.organizationId,
   );
 
-  return workId;
+  authorizeRead(access, work.workspaceId, () => new Error(`Work not found: ${workId}`));
+
+  return work;
+}
+
+/** The work in the route, confirmed as something the caller may operate right now. */
+async function operableWorkId(
+  services: ApiServices,
+  request: { params: unknown; access?: Access; identity?: Identity },
+): Promise<WorkId> {
+  const work = await visibleWork(services, request);
+  await confirmAllowed(services, request, "missions.operate", work.workspaceId);
+  return work.id;
+}
+
+/**
+ * Checks the caller may do this here - then checks again against their
+ * membership as it stands now.
+ *
+ * Reads use the membership resolved when the request arrived. A change that
+ * starts work, stops it or decides a step re-reads it immediately before
+ * acting, so a role change, suspension or removed workspace grant that landed
+ * while the request was in flight is honoured rather than outrun.
+ */
+async function confirmAllowed(
+  services: ApiServices,
+  request: { access?: Access; identity?: Identity },
+  permission: Permission,
+  workspaceId?: WorkspaceId | null,
+): Promise<Access> {
+  const current = accessOf(request);
+
+  authorize(current, permission, workspaceId);
+
+  if (!request.identity) throw new ApiError(401, "Sign in to continue.");
+
+  const fresh = await services.accessResolver.resolve(request.identity, current.organizationId);
+
+  authorize(fresh, permission, workspaceId);
+  request.access = fresh;
+
+  return fresh;
 }
 
 /**

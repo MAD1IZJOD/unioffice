@@ -17,6 +17,15 @@ const developmentRequester = "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09";
 function serve(fixture: ReturnType<typeof missionControlFixture>) {
   return buildTestServer({
     missionControlService: fixture.service,
+    // The route finds the mission in the caller's organization and workspaces
+    // before the service is asked to mark it.
+    workQueryService: {
+      assertWorkInOrganization: async (id: string, organizationId: string) => {
+        const work = fixture.works.find((entry) => entry.id === id);
+        if (!work || work.organizationId !== organizationId) throw new Error(`Work not found: ${id}`);
+        return work;
+      },
+    },
     developmentOrganizationId: orgA,
     corsOrigins: [],
     healthCheck: async () => ({}),
@@ -85,7 +94,7 @@ test("another organization's mission, a malformed id, and a mission that is stil
 
   const foreign = await app.inject({ method: "POST", url: `/work/${theirs.id}/acknowledge`, payload: { organizationId: orgA } });
   assert.equal(foreign.statusCode, 404);
-  assert.equal(foreign.json().error.message, "Mission not found.");
+  assert.match(foreign.json().error.message, /not found/i);
 
   const asThem = await app.inject({ method: "POST", url: `/work/${theirs.id}/acknowledge`, payload: { organizationId: orgB } });
   assert.equal(asThem.statusCode, 404);

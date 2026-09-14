@@ -222,7 +222,7 @@ test("the route records the server's requester, reads only the reason, and maps 
 
   const app = buildTestServer({
     workCancellationService: f.service,
-    workQueryService: { assertWorkInOrganization: async () => undefined },
+    workQueryService: { assertWorkInOrganization: async (id: string) => f.works.get(id as never) },
     developmentOrganizationId: organizationId,
     corsOrigins: [],
     healthCheck: async () => ({}),
