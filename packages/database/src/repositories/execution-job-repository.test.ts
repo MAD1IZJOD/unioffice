@@ -26,6 +26,34 @@ function enqueue(
   });
 }
 
+test("a queued job can be cancelled, and the work can be queued again afterwards", async () => {
+  const jobs = repository();
+  const job = await enqueue(jobs);
+
+  const cancelled = await jobs.cancel(job.id, "Cancelled by a person.");
+
+  assert.equal(cancelled?.status, "cancelled");
+  assert.equal(cancelled?.lastError, "Cancelled by a person.");
+  assert.equal(await jobs.findActiveByWork(workId), null, "a cancelled job no longer owns the work");
+  assert.equal(await jobs.claimNext({ workerId: "worker-a", leaseMs: 1000 }), null, "no worker can pick it up");
+
+  const again = await enqueue(jobs);
+  assert.notEqual(again.id, job.id);
+});
+
+test("cancelling never takes a job away from the worker running it", async () => {
+  const jobs = repository();
+  const job = await enqueue(jobs);
+  await jobs.claimNext({ workerId: "worker-a", leaseMs: 1000 });
+
+  assert.equal(await jobs.cancel(job.id, "Too late."), null);
+  assert.equal((await jobs.findById(job.id))?.status, "running");
+
+  await jobs.complete(job.id);
+  assert.equal(await jobs.cancel(job.id, "Already done."), null);
+  assert.equal((await jobs.findById(job.id))?.status, "completed");
+});
+
 test("enqueue puts work on the queue ready to run", async () => {
   const jobs = repository();
   const job = await enqueue(jobs);

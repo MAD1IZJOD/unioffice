@@ -70,6 +70,17 @@ export interface ExecutionJobRepository {
   ): Promise<ExecutionJob | null>;
 
   /**
+   * Takes a job off the queue before any worker has claimed it. Returns null
+   * when the job is no longer queued - already claimed, finished or gone - so
+   * a cancellation can never pull a job out from under a worker running it.
+   */
+  cancel(
+    id: ExecutionJobId,
+    reason: string,
+    now?: Date,
+  ): Promise<ExecutionJob | null>;
+
+  /**
    * Finds jobs whose lease expired because the worker holding them died, and
    * returns them to the queue so another worker can finish the job. Only jobs
    * that have exhausted their attempts are failed outright.

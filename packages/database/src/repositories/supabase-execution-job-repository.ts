@@ -280,6 +280,34 @@ export class SupabaseExecutionJobRepository
     });
   }
 
+  async cancel(
+    id: ExecutionJobId,
+    reason: string,
+    now = new Date(),
+  ): Promise<ExecutionJob | null> {
+    // Compare-and-swap on queued, the same guard claiming uses: whichever of a
+    // worker's claim and this cancellation lands first wins, and the other
+    // matches no row.
+    const { data, error } = await this.client
+      .from("execution_jobs")
+      .update({
+        status: "cancelled",
+        completed_at: now.toISOString(),
+        last_error: reason,
+        updated_at: now.toISOString(),
+      })
+      .eq("id", id)
+      .eq("status", "queued")
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to cancel execution job: ${error.message}`);
+    }
+
+    return data ? fromRow(data as ExecutionJobRow) : null;
+  }
+
   /** Transitions a job out of running; a job already settled is left alone. */
   private async settle(
     id: ExecutionJobId,

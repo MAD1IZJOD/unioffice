@@ -191,6 +191,30 @@ export class InMemoryExecutionJobRepository
     }));
   }
 
+  async cancel(
+    id: ExecutionJobId,
+    reason: string,
+    now = new Date(),
+  ): Promise<ExecutionJob | null> {
+    const job = this.jobs.get(id);
+
+    // Only a job no worker holds can be cancelled, as in the database.
+    if (!job || job.status !== "queued") {
+      return null;
+    }
+
+    const cancelled: ExecutionJob = {
+      ...job,
+      status: "cancelled",
+      completedAt: now,
+      lastError: reason,
+      updatedAt: now,
+    };
+
+    this.jobs.set(id, cancelled);
+    return cancelled;
+  }
+
   private settle(
     id: ExecutionJobId,
     transition: (job: ExecutionJob) => ExecutionJob,
