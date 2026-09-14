@@ -57,3 +57,11 @@ export type KnowledgeRecallId = string & {
 export type KnowledgeConflictId = string & {
   readonly __brand: "KnowledgeConflictId";
 };
+
+export type MemberId = string & {
+  readonly __brand: "MemberId";
+};
+
+export type WorkspaceMemberId = string & {
+  readonly __brand: "WorkspaceMemberId";
+};
