@@ -43,12 +43,19 @@ const LINGER_MS = 400;
 export type LiveStatus = "connecting" | "live" | "offline";
 
 interface Channel {
-  source: EventSource;
+  /** Absent while a ticket is being bought or a reconnect is waiting. */
+  source?: EventSource;
   events: Set<(events: ActivityEvent[]) => void>;
   status: Set<(status: LiveStatus) => void>;
   current: LiveStatus;
   closing?: ReturnType<typeof setTimeout>;
+  retry?: ReturnType<typeof setTimeout>;
+  attempts: number;
+  closed: boolean;
 }
+
+/** The longest a dropped channel waits before trying again. */
+const MAX_RECONNECT_MS = 30_000;
 
 /**
  * One connection per thing being watched, shared by everything watching it.
@@ -71,13 +78,12 @@ function join(
     clearTimeout(channel.closing);
     channel.closing = undefined;
   } else {
-    const source = new EventSource(streamUrl({ workId }));
-
     const created: Channel = {
-      source,
       events: new Set(),
       status: new Set(),
       current: "connecting",
+      attempts: 0,
+      closed: false,
     };
 
     const announce = (status: LiveStatus) => {
@@ -85,39 +91,81 @@ function join(
       created.status.forEach((listener) => listener(status));
     };
 
-    source.addEventListener("open", () => announce("live"));
+    const reconnect = () => {
+      created.source?.close();
+      created.source = undefined;
 
-    source.addEventListener("activity", (message) => {
-      let batch: unknown;
-
-      try {
-        batch = (
-          JSON.parse((message as MessageEvent<string>).data) as {
-            events: unknown;
-          }
-        ).events;
-      } catch {
-        // A frame this build cannot read is not a reason to tear the
-        // connection down; the next one is probably fine.
-        return;
-      }
-
-      if (!Array.isArray(batch) || batch.length === 0) return;
-
-      announce("live");
-      created.events.forEach((listener) =>
-        listener(batch as ActivityEvent[]),
-      );
-    });
-
-    // EventSource reconnects on its own. This only records that the channel
-    // is not carrying anything right now, which is what decides whether the
-    // surfaces behind it fall back to polling quickly.
-    source.onerror = () => {
-      announce(
-        source.readyState === EventSource.CLOSED ? "offline" : "connecting",
-      );
+      const delay = Math.min(MAX_RECONNECT_MS, 1_000 * 2 ** created.attempts);
+      created.attempts += 1;
+      created.retry = setTimeout(open, delay);
     };
+
+    // Each connection is opened with a fresh single-use ticket, so the
+    // browser's own reconnect - which replays the same URL - is refused once
+    // the first connection drops. When that leaves the source closed, a new
+    // ticket is bought and the channel opened again, backing off while the
+    // API is unreachable.
+    function open() {
+      if (created.closed) return;
+
+      streamUrl({ workId }).then(
+        (url) => {
+          if (created.closed) return;
+
+          const source = new EventSource(url);
+          created.source = source;
+
+          source.addEventListener("open", () => {
+            created.attempts = 0;
+            announce("live");
+          });
+
+          source.addEventListener("activity", (message) => {
+            let batch: unknown;
+
+            try {
+              batch = (
+                JSON.parse((message as MessageEvent<string>).data) as {
+                  events: unknown;
+                }
+              ).events;
+            } catch {
+              // A frame this build cannot read is not a reason to tear the
+              // connection down; the next one is probably fine.
+              return;
+            }
+
+            if (!Array.isArray(batch) || batch.length === 0) return;
+
+            announce("live");
+            created.events.forEach((listener) =>
+              listener(batch as ActivityEvent[]),
+            );
+          });
+
+          // Still reconnecting on its own: the channel is not carrying
+          // anything right now, which is what decides whether the surfaces
+          // behind it fall back to polling quickly.
+          source.onerror = () => {
+            if (source.readyState !== EventSource.CLOSED) {
+              announce("connecting");
+              return;
+            }
+
+            announce("offline");
+            reconnect();
+          };
+        },
+        () => {
+          if (created.closed) return;
+
+          announce("offline");
+          reconnect();
+        },
+      );
+    }
+
+    open();
 
     channel = created;
     channels.set(key, created);
@@ -143,7 +191,9 @@ function join(
     active.closing = setTimeout(() => {
       if (active.events.size > 0) return;
 
-      active.source.close();
+      active.closed = true;
+      clearTimeout(active.retry);
+      active.source?.close();
 
       if (channels.get(key) === active) {
         channels.delete(key);

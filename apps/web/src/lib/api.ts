@@ -5,6 +5,8 @@
 // Every type here mirrors a real API response. Nothing in the web app should
 // invent a shape the backend does not actually return.
 
+import { accessToken, reportUnauthorized } from "./session";
+
 export type WorkStatus =
   | "queued"
   | "planning"
@@ -981,10 +983,10 @@ export interface RetryResult {
   mode: "replan" | "resume";
 }
 
-// No auth/org-selection UI exists yet, so the client targets the seeded
-// development organization by default. Override with VITE_ORGANIZATION_ID
-// once real organization selection lands.
-const DEFAULT_ORGANIZATION_ID = "2f6b579a-f0f8-45a5-868a-21c08bde1314";
+// The organization calls act in. Which organizations someone belongs to is the
+// server's answer (from /me); this only remembers the one being shown. Left
+// unset, the server uses the caller's oldest active membership.
+let activeOrganizationId: string | undefined;
 
 // Planning and execution both run a local model to completion, which takes
 // minutes rather than seconds. A default fetch has no timeout at all, so a
@@ -1001,26 +1003,36 @@ function apiBaseUrl(): string {
 }
 
 /**
- * The live channel's URL.
+ * A URL that opens the live channel once.
  *
- * EventSource takes a URL and nothing else - no headers, no body - so the
- * organization travels in the query string like it does on every read, and
- * the work id narrows the stream server-side so a mission's tab is not sent
- * the whole company's log.
+ * EventSource takes a URL and nothing else - no headers, no body - and an
+ * access token does not belong in a URL. So a signed-in request buys a
+ * single-use ticket first, and the ticket goes in the URL instead. The work
+ * id narrows the stream server-side so a mission's tab is not sent the whole
+ * company's log.
  */
-export function streamUrl(options: { workId?: string } = {}): string {
-  const search = new URLSearchParams({ organizationId: organizationId() });
+export async function streamUrl(options: { workId?: string } = {}): Promise<string> {
+  const { ticket } = await post<{ ticket: string; expiresAt: string }>(
+    "/stream/tickets",
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
 
+  const search = new URLSearchParams({ ticket });
+  const organization = organizationId();
+
+  if (organization) search.set("organizationId", organization);
   if (options.workId) search.set("workId", options.workId);
 
   return `${apiBaseUrl()}/stream?${search.toString()}`;
 }
 
-export function organizationId(): string {
-  return (
-    (import.meta.env.VITE_ORGANIZATION_ID as string | undefined) ??
-    DEFAULT_ORGANIZATION_ID
-  );
+export function organizationId(): string | undefined {
+  return activeOrganizationId;
+}
+
+export function setActiveOrganization(id: string | undefined): void {
+  activeOrganizationId = id;
 }
 
 export class ApiError extends Error {
@@ -1048,8 +1060,16 @@ async function request<T>(
   let response: Response;
 
   try {
+    // Every call carries the signed-in user's token. Who they are and what
+    // they may do is decided by the API from that, never from this client.
+    const token = await accessToken();
+
     response = await fetch(`${apiBaseUrl()}${path}`, {
       ...init,
+      headers: {
+        ...(init.headers as Record<string, string> | undefined),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
       signal: controller.signal,
     });
   } catch (error) {
@@ -1064,6 +1084,8 @@ async function request<T>(
   }
 
   if (!response.ok) {
+    if (response.status === 401) reportUnauthorized();
+
     const body = (await response.json().catch(() => null)) as
       | { error?: { message?: string } }
       | null;
@@ -1098,13 +1120,58 @@ function post<T>(
 }
 
 function scoped(path: string, params: Record<string, string | number | undefined> = {}): string {
-  const search = new URLSearchParams({ organizationId: organizationId() });
+  const search = new URLSearchParams();
+  const organization = organizationId();
+
+  if (organization) search.set("organizationId", organization);
 
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) search.set(key, String(value));
   }
 
-  return `${path}?${search.toString()}`;
+  const query = search.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+export type OrganizationRole = "owner" | "admin" | "member" | "viewer";
+
+export type Permission =
+  | "organization.read"
+  | "organization.manage"
+  | "members.manage"
+  | "owners.manage"
+  | "workspaces.manage"
+  | "agents.configure"
+  | "policies.manage"
+  | "missions.create"
+  | "missions.operate"
+  | "approvals.decide"
+  | "knowledge.propose"
+  | "knowledge.curate";
+
+/** Who is signed in and where they stand, as the API resolved it. */
+export interface Me {
+  user: { id: string; email: string };
+  /** "none": signed in but not a member of the organization asked about. */
+  standing: "active" | "suspended" | "none";
+  organization: {
+    id: string;
+    memberId: string;
+    role: OrganizationRole;
+    permissions: Permission[];
+    workspaces: Array<{ workspaceId: string; access: "member" | "viewer" }>;
+  } | null;
+  memberships: Array<{
+    organizationId: string;
+    role: OrganizationRole;
+    status: "invited" | "active" | "suspended";
+  }>;
+}
+
+export async function fetchMe(organization?: string): Promise<Me> {
+  return get<Me>(
+    organization ? `/me?organizationId=${encodeURIComponent(organization)}` : "/me",
+  );
 }
 
 export async function fetchOverview(activityLimit = 40): Promise<CompanyOverview> {
