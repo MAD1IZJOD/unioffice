@@ -27,6 +27,51 @@ pnpm web      # web app on http://localhost:5173
 
 Ollama must be running with the model named by `OLLAMA_MODEL`.
 
+## Signing in, members and roles
+
+Everyone signs in through Supabase Auth - with Google, or with a one-time link
+sent by email. No password is ever set or asked for by the app. Signing in only
+says who someone is; what they may see and do comes from their membership in an
+organization, which only the API reads and writes.
+
+To turn on Google sign-in, create an OAuth client in Google Cloud (type "Web
+application") and add Supabase's callback URL,
+`https://<project-ref>.supabase.co/auth/v1/callback`, as an authorized redirect
+URI. Then in Supabase, under Authentication -> Sign In / Providers -> Google,
+paste the client id and secret, and add `http://localhost:5173` under
+Authentication -> URL Configuration -> Redirect URLs.
+
+The first owner of an organization is made from a terminal:
+
+```
+pnpm owner:claim you@company.com                        # the development organization
+pnpm owner:claim you@company.com --organization <slug>
+```
+
+If that address has already signed in, it becomes the owner at once; if not,
+the owner role waits for it and turns into access the first time someone signs
+in with that confirmed address. It refuses an organization that already has an
+active owner - from then on, owners add people from the Members page.
+
+| Role | May |
+| --- | --- |
+| Owner | Everything, including making and removing other owners |
+| Admin | Run the organization: members and viewers, workspaces, agents and their tool grants, policies, knowledge curation. Never owners or other admins |
+| Member | Open, run, retry and cancel missions; decide steps the planner raised; propose knowledge (it waits for review) |
+| Viewer | See what they are given. Change nothing |
+
+Owners and admins reach every workspace. Members and viewers see company-wide
+missions and knowledge, plus the workspaces they are granted - as "can see" or
+"can work". A mission, approval or entry in a workspace someone was not given
+reads as not found. A step a governance policy requires a person for is decided
+by an owner or admin; a member decides only the steps the planner itself raised.
+
+Every role check happens in the API against the membership as it is at that
+moment: a role change, suspension or removed grant applies to the very next
+request, changes that start, stop or decide something re-read it immediately
+before acting, and the live channel re-checks it every twenty seconds. The web
+app hides what a role cannot do, but that is only presentation.
+
 ## How execution works
 
 The API never executes work itself. Creating, approving or retrying an
@@ -121,14 +166,14 @@ These are real gaps, listed so the UI does not have to pretend otherwise.
 - **Agents have no internet access.** The only tools that exist are the three
   in the registry, so "research" means working over supplied context and
   company memory.
-- **There is no auth.** Approval decisions are attributed to a seeded requester
-  id, and there is no organization switcher - the web app targets the seeded
-  development organization unless `VITE_ORGANIZATION_ID` says otherwise.
-- **A failure stays in the attention queue until it is retried.** There is no
-  "acknowledged" state on a work row, so a failure you have decided to ignore
-  cannot be dismissed.
-- **Organization and Governance have no backend.** Both routes deliberately
-  show what belongs there instead of a convincing mock.
+- **There is no organization switcher yet.** Someone who belongs to several
+  organizations opens the oldest one they are active in; the choice is kept in
+  the browser but there is no control to change it.
+- **Invitations send no email.** An invited person gets in the next time they
+  sign in with that address; telling them is up to whoever invited them.
+- **Narrowed lists can come back short.** For a member or viewer, activity and
+  artifacts are narrowed to their workspaces after a bounded read, so a page of
+  them can hold fewer rows than asked for.
 
 ## Checks
 
@@ -142,4 +187,17 @@ pnpm --filter web build
 ## Security
 
 Supabase service-role credentials are used by the API and worker only. The web
-app talks to the API over HTTP and never receives them.
+app holds the public anon key, uses it only to sign people in, and talks to the
+API over HTTP with the signed-in user's access token.
+
+- Every table has row-level security enabled and forced with no policies, so
+  the anon key can read and write nothing - including memberships.
+- The API verifies each token with the Supabase auth server, so a signed-out or
+  deleted user stops working. It never trusts an organization, role, requester
+  or decider named in a request.
+- The browser's live channel is opened with a single-use ticket that expires in
+  a minute, so no access token is ever put in a URL.
+- An organization can never be left without an active owner: the database
+  refuses the change, whatever order concurrent requests land in.
+- Membership changes are recorded in the event log as `member.*` and
+  `workspace.access_*` events, naming the member rather than their address.
