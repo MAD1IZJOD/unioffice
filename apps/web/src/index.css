@@ -10,6 +10,7 @@
 @import "./styles/debrief.css";
 @import "./styles/mission-control.css";
 @import "./styles/session.css";
+@import "./styles/members.css";
 
 :root {
   font-family:

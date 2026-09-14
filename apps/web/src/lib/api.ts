@@ -1174,6 +1174,86 @@ export async function fetchMe(organization?: string): Promise<Me> {
   );
 }
 
+/* --------------------------------------------------------------------------
+   Members.
+
+   Who belongs to the organization, at what role, in which workspaces. The
+   API decides who may change whom; these calls only ask.
+   -------------------------------------------------------------------------- */
+
+export type MemberStatus = "invited" | "active" | "suspended";
+
+export interface MemberItem {
+  id: string;
+  email: string;
+  role: OrganizationRole;
+  status: MemberStatus;
+  /** This row is the signed-in person. */
+  you: boolean;
+  joinedAt: string;
+  updatedAt: string;
+  workspaces: Array<{ workspaceId: string; access: "member" | "viewer" }>;
+}
+
+export async function fetchMembers(): Promise<MemberItem[]> {
+  const { members } = await get<{ members: MemberItem[] }>(scoped("/members"));
+  return members;
+}
+
+export async function inviteMember(email: string, role: OrganizationRole): Promise<MemberItem> {
+  const { member } = await post<{ member: MemberItem }>(
+    "/members",
+    { organizationId: organizationId(), email, role },
+    READ_TIMEOUT_MS,
+  );
+  return member;
+}
+
+export async function changeMemberRole(memberId: string, role: OrganizationRole): Promise<MemberItem> {
+  const { member } = await post<{ member: MemberItem }>(
+    `/members/${memberId}/role`,
+    { organizationId: organizationId(), role },
+    READ_TIMEOUT_MS,
+  );
+  return member;
+}
+
+export async function suspendMember(memberId: string): Promise<MemberItem> {
+  const { member } = await post<{ member: MemberItem }>(
+    `/members/${memberId}/suspend`,
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
+  return member;
+}
+
+export async function reactivateMember(memberId: string): Promise<MemberItem> {
+  const { member } = await post<{ member: MemberItem }>(
+    `/members/${memberId}/reactivate`,
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
+  return member;
+}
+
+export async function removeMember(memberId: string): Promise<void> {
+  await post(`/members/${memberId}/remove`, { organizationId: organizationId() }, READ_TIMEOUT_MS);
+}
+
+/** access null takes the grant away. */
+export async function setMemberWorkspaceAccess(
+  memberId: string,
+  workspaceId: string,
+  access: "member" | "viewer" | null,
+): Promise<MemberItem> {
+  const { member } = await post<{ member: MemberItem }>(
+    `/members/${memberId}/workspaces`,
+    { organizationId: organizationId(), workspaceId, access },
+    READ_TIMEOUT_MS,
+  );
+  return member;
+}
+
 export async function fetchOverview(activityLimit = 40): Promise<CompanyOverview> {
   return get<CompanyOverview>(scoped("/overview", { activityLimit }), 60_000);
 }

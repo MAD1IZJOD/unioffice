@@ -11,6 +11,7 @@ import Brain from "../pages/Brain";
 import Command from "../pages/Command";
 import Governance from "../pages/Governance";
 import KnowledgeEntry from "../pages/KnowledgeEntry";
+import Members from "../pages/Members";
 import MissionStart from "../pages/MissionStart";
 import Missions from "../pages/Missions";
 import Room from "../pages/Room";
@@ -56,6 +57,7 @@ export const router = createBrowserRouter([
       { path: "approvals", element: <Approvals /> },
       { path: "activity", element: <Activity /> },
       { path: "organization", element: <Organization /> },
+      { path: "members", element: <Members /> },
       { path: "workspaces/:workspaceId", element: <Workspace /> },
       { path: "governance", element: <Governance /> },
     ],
