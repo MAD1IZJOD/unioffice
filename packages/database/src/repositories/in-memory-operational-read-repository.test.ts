@@ -101,6 +101,19 @@ test("stored text is bounded, and only a real true counts as interrupted", () =>
   assert.equal(summary.acknowledgedAt, undefined);
 });
 
+test("a run closed out by startup reconciliation counts as interrupted, in the shape reconciliation records", () => {
+  const reconciled = summarizeWork(work("w1", {
+    status: "failed",
+    metadata: {
+      executionError: "Execution was interrupted by an API restart. Retry to resume from where it stopped.",
+      interrupted: { detectedAt: at(3).toISOString(), taskCount: 0 },
+    },
+  }));
+
+  assert.equal(reconciled.interrupted, true);
+  assert.equal(summarizeWork(work("w2", { metadata: { interrupted: ["yes"] } })).interrupted, false);
+});
+
 test("mission summaries stay inside the organization, newest change first, within the limit", async () => {
   const repository = new InMemoryOperationalReadRepository([
     work("old", { updatedAt: at(1) }),

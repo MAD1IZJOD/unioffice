@@ -123,11 +123,21 @@ export function summarizeWork(work: Work): WorkSummary {
     completedAt: work.completedAt,
     planningError: boundedText(work.metadata.planningError),
     executionError: boundedText(work.metadata.executionError),
-    interrupted: work.metadata.interrupted === true,
+    interrupted: isInterruptedFlag(work.metadata.interrupted),
     acknowledgedAt: dateOf(acknowledged?.at),
     missionName: boundedText(work.metadata.missionName),
     templateName: boundedText(template?.name),
   };
+}
+
+/**
+ * Whether a run was cut short by its process stopping. Recorded two ways: the
+ * worker writes `true`, and startup reconciliation writes an object saying
+ * when it noticed and how many steps were caught mid-flight. Both mean the
+ * same thing; a string or a number is not a flag.
+ */
+export function isInterruptedFlag(value: unknown): boolean {
+  return value === true || (typeof value === "object" && value !== null && !Array.isArray(value));
 }
 
 export function boundedObjective(objective: string): string {

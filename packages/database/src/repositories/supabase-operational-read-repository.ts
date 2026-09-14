@@ -201,8 +201,9 @@ function toWorkSummary(row: WorkSummaryRow): WorkSummary {
     completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
     planningError: boundedText(row.planning_error),
     executionError: boundedText(row.execution_error),
-    // ->> renders a JSON true as the text "true"; anything else is not a flag.
-    interrupted: row.interrupted === "true",
+    // ->> renders a JSON true as the text "true" and an object as its JSON
+    // text. Reconciliation at startup records an object; both are the flag.
+    interrupted: row.interrupted === "true" || (row.interrupted?.trimStart().startsWith("{") ?? false),
     acknowledgedAt: dateOf(row.acknowledged_at),
     missionName: boundedText(row.mission_name),
     templateName: boundedText(row.template_name),
