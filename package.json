@@ -11,7 +11,8 @@
     "test": "turbo test",
     "worker": "pnpm --filter @unioffice/worker dev",
     "api": "pnpm --filter @unioffice/api dev",
-    "web": "pnpm --filter web dev"
+    "web": "pnpm --filter web dev",
+    "owner:claim": "pnpm --filter @unioffice/api owner:claim"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
