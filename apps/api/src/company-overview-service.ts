@@ -8,6 +8,7 @@ import type {
   Task,
   Work,
   WorkId,
+  WorkspaceId,
   WorkStatus,
 } from "@unioffice/core";
 
@@ -129,9 +130,13 @@ export class CompanyOverviewService {
 
   async getOverview(
     organizationId: OrganizationId,
-    options: { activityLimit?: number } = {},
+    options: {
+      activityLimit?: number;
+      /** Which workspaces the caller sees. Absent: all of them. */
+      reach?: (workspaceId: WorkspaceId | undefined) => boolean;
+    } = {},
   ): Promise<CompanyOverview> {
-    const [allWork, agents, approvals, artifacts, activity] = await Promise.all([
+    const [everyWork, agents, pendingApprovals, recentArtifacts, recentActivity] = await Promise.all([
       this.workRepository.findByOrganization(organizationId),
       this.agentRepository.findByOrganization(organizationId),
       this.approvalRepository.findPendingByOrganization(organizationId),
@@ -141,6 +146,17 @@ export class CompanyOverviewService {
         options.activityLimit ?? 40,
       ),
     ]);
+
+    // Someone who reaches only some workspaces sees only those missions, and
+    // only the approvals, artifacts and activity that belong to them.
+    const { reach } = options;
+    const allWork = reach ? everyWork.filter((work) => reach(work.workspaceId)) : everyWork;
+    const visible = new Set(allWork.map((work) => work.id));
+    const belongs = (item: { workId?: WorkId }) => !reach || !item.workId || visible.has(item.workId);
+
+    const approvals = pendingApprovals.filter(belongs);
+    const artifacts = recentArtifacts.filter(belongs);
+    const activity = recentActivity.filter(belongs);
 
     const byCreatedDescending = (left: Work, right: Work) =>
       right.createdAt.getTime() - left.createdAt.getTime();

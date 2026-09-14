@@ -10,6 +10,7 @@ import type {
   MemoryId,
   OrganizationId,
   WorkId,
+  WorkspaceId,
 } from "@unioffice/core";
 
 import { isExecutionJobActive } from "@unioffice/core";
@@ -241,6 +242,9 @@ interface OperationalState {
   conflicts: AttentionInput["conflicts"];
 }
 
+/** Which workspaces a caller sees. Absent: all of them. */
+export type Reach = (workspaceId: WorkspaceId | undefined) => boolean;
+
 export class MissionControlService {
   private readonly stalledAfterMs: number;
   private readonly now: () => Date;
@@ -256,20 +260,32 @@ export class MissionControlService {
   /** What needs a person, ranked. The shell's badge and drawer read this. */
   async getAttention(
     organizationId: OrganizationId,
-    options: { limit?: number } = {},
+    options: { limit?: number; reach?: Reach } = {},
   ): Promise<AttentionQueue> {
-    const state = await this.load(organizationId);
+    const state = await this.load(organizationId, options.reach);
 
     return buildAttentionQueue(state.attentionInput, Math.min(options.limit ?? DEFAULT_ATTENTION_LIMIT, 100));
   }
 
-  async getMissionControl(organizationId: OrganizationId): Promise<MissionControlView> {
-    const [state, decisions, lessons, outcomeEvents] = await Promise.all([
-      this.load(organizationId),
-      this.deps.memories.query({ organizationId, types: ["decision"], statuses: ["active"], limit: 4 }),
-      this.deps.memories.query({ organizationId, types: ["lesson"], statuses: ["active", "proposed"], limit: 4 }),
+  async getMissionControl(
+    organizationId: OrganizationId,
+    options: { reach?: Reach } = {},
+  ): Promise<MissionControlView> {
+    const { reach } = options;
+    const [state, allDecisions, allLessons, allOutcomeEvents] = await Promise.all([
+      this.load(organizationId, reach),
+      this.deps.memories.query({ organizationId, types: ["decision"], statuses: ["active"], limit: reach ? 40 : 4 }),
+      this.deps.memories.query({ organizationId, types: ["lesson"], statuses: ["active", "proposed"], limit: reach ? 40 : 4 }),
       this.deps.reads.findEventsByTypes(organizationId, { types: OUTCOME_EVENT_TYPES, limit: OUTCOME_EVENTS_READ }),
     ]);
+
+    // Narrowed the same way the missions were: what the company decided and
+    // learned in a workspace the caller was not given is not theirs to read.
+    const decisions = reach ? allDecisions.filter((memory) => reach(memory.workspaceId)).slice(0, 4) : allDecisions;
+    const lessons = reach ? allLessons.filter((memory) => reach(memory.workspaceId)).slice(0, 4) : allLessons;
+    const outcomeEvents = reach
+      ? allOutcomeEvents.filter((event) => !event.workId || state.worksById.has(event.workId))
+      : allOutcomeEvents;
 
     const { now } = state;
     const card = (entry: { work: WorkSummary; reading: MissionReading }) =>
@@ -409,7 +425,7 @@ export class MissionControlService {
      One consistent read of the company
      ---------------------------------------------------------------------- */
 
-  private async load(organizationId: OrganizationId): Promise<OperationalState> {
+  private async load(organizationId: OrganizationId, reach?: Reach): Promise<OperationalState> {
     const now = this.now();
 
     const [works, approvals, jobs, agents, openConflicts, proposed] = await Promise.all([
@@ -423,12 +439,19 @@ export class MissionControlService {
 
     // Repositories already scope by organization. These filters are the second
     // line: nothing from another tenant is classified even if a store slips.
-    const ownWorks = works.filter((work) => work.organizationId === organizationId);
-    const ownApprovals = approvals.filter((approval) => approval.organizationId === organizationId);
-    const ownJobs = jobs.filter((job) => job.organizationId === organizationId);
+    const orgWorks = works.filter((work) => work.organizationId === organizationId);
+    const orgApprovals = approvals.filter((approval) => approval.organizationId === organizationId);
+    const orgJobs = jobs.filter((job) => job.organizationId === organizationId);
     const ownAgents = agents.filter((agent) => agent.organizationId === organizationId);
 
+    // Someone who reaches only some workspaces is shown only those missions,
+    // and only the approvals, jobs and knowledge that belong to them. The
+    // counts are theirs too: a total including missions they cannot open would
+    // still say something about work they were not given.
+    const ownWorks = reach ? orgWorks.filter((work) => reach(work.workspaceId)) : orgWorks;
     const worksById = new Map(ownWorks.map((work) => [work.id, work]));
+    const ownApprovals = reach ? orgApprovals.filter((approval) => worksById.has(approval.workId)) : orgApprovals;
+    const ownJobs = reach ? orgJobs.filter((job) => worksById.has(job.workId)) : orgJobs;
     const agentsById = new Map(ownAgents.map((agent) => [agent.id, agent]));
 
     const open = ownWorks.filter((work) => !isTerminal(work.status)).slice(0, OPEN_MISSIONS_READ);
@@ -513,6 +536,10 @@ export class MissionControlService {
     const sideById = new Map(sides.filter((memory) => memory.organizationId === organizationId).map((memory) => [memory.id, memory]));
     const conflicts = openConflicts
       .filter((conflict) => conflict.organizationId === organizationId)
+      .filter((conflict) => !reach || [conflict.memoryId, conflict.conflictingMemoryId].every((id) => {
+        const side = sideById.get(id);
+        return side !== undefined && reach(side.workspaceId);
+      }))
       .map((conflict) => ({
         conflict,
         left: sideOf(sideById.get(conflict.memoryId)),
@@ -520,7 +547,9 @@ export class MissionControlService {
       }));
 
     const ownProposed = proposed.filter((memory) =>
-      memory.organizationId === organizationId && memory.type !== "experience");
+      memory.organizationId === organizationId &&
+      memory.type !== "experience" &&
+      (!reach || reach(memory.workspaceId)));
 
     return {
       organizationId,
