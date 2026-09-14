@@ -930,6 +930,17 @@ test("records the governing policy on the approval request, and nothing for plan
   assert.equal(isGovernedByPolicy(plannedRequest, plannedTask), false);
   // An older request without the policy still reads as governed through its task.
   assert.equal(isGovernedByPolicy({ ...governedRequest, metadata: {} }, governedTask), true);
+
+  // What deciding depends on, read before the decision: the workspace and
+  // whether a policy raised it - and nothing at all for another organization.
+  const context = await approvalService.getDecisionContext(governedRequest.id, organizationId);
+  assert.equal(context.governedByPolicy, true);
+  assert.equal(context.workspaceId, work.workspaceId);
+  assert.equal((await approvalService.getDecisionContext(plannedRequest.id, organizationId)).governedByPolicy, false);
+  await assert.rejects(
+    approvalService.getDecisionContext(governedRequest.id, "some-other-organization" as OrganizationId),
+    /Approval not found/,
+  );
 });
 
 test("refuses to resolve an approval from another organization", async () => {

@@ -769,6 +769,10 @@ test("an approval decision is recorded against the server's requester, whatever 
 
   const app = buildTestServer(baseServices({
     workApprovalService: {
+      getDecisionContext: async (id: string) => ({
+        approval: { id, organizationId: "org-1", workId: "w1" },
+        governedByPolicy: false,
+      }),
       approve: async (_id: string, resolvedBy: string, organizationId: string) => {
         decided.push({ decision: "approve", resolvedBy, organizationId });
         return { id: approvalId, workId: "w1" };

@@ -150,7 +150,14 @@ import type {
 
 import { AccessError, type AccessResolver } from "./access/access-resolver.js";
 import { bearerToken, type Authenticator, type Identity } from "./access/authenticator.js";
-import { permissionsOf, type Access, type Permission } from "./access/permissions.js";
+import {
+  canDecideApproval,
+  permissionsOf,
+  reachableWorkspaces,
+  reaches,
+  type Access,
+  type Permission,
+} from "./access/permissions.js";
 import { authorize, authorizeRead } from "./access/authorize.js";
 import type { StreamTickets } from "./access/stream-tickets.js";
 import {
@@ -715,22 +722,21 @@ export function buildApiServer(
     });
 
     instance.get("/approvals", async (request) => {
-      const query = objectBody(request.query);
+      const access = accessOf(request);
       const approvals = await services.workApprovalService.getPendingApprovals(
-        organizationOf(request),
+        access.organizationId,
       );
 
-      return { approvals };
+      return { approvals: await reachableByWork(services, access, approvals) };
     });
 
-    // Who decided is the authenticated caller, never a field in the request.
-    // Until authentication exists that is the development requester - the
-    // same identity every other write is attributed to. A resolvedBy in the
-    // body used to be recorded as the decider, so any request could put any
-    // name on a decision.
+    // Who decided is the signed-in caller, never a field in the request. A
+    // resolvedBy in the body used to be recorded as the decider, so any
+    // request could put any name on a decision.
     instance.post("/approvals/:id/approve", async (request) => {
+      const approvalId = await decidableApproval(services, request);
       const approval = await services.workApprovalService.approve(
-        parameterApprovalId(request.params),
+        approvalId,
         accessOf(request).userId,
         organizationOf(request),
       );
@@ -745,8 +751,9 @@ export function buildApiServer(
     });
 
     instance.post("/approvals/:id/reject", async (request) => {
+      const approvalId = await decidableApproval(services, request);
       const approval = await services.workApprovalService.reject(
-        parameterApprovalId(request.params),
+        approvalId,
         accessOf(request).userId,
         organizationOf(request),
       );
@@ -1840,6 +1847,56 @@ async function visibleWork(
   authorizeRead(access, work.workspaceId, () => new Error(`Work not found: ${workId}`));
 
   return work;
+}
+
+/**
+ * The approval in the route, confirmed as one the caller may decide right now.
+ *
+ * In order: it must be in their organization and a workspace they reach (or
+ * it reads as not found); their role and grant there must allow deciding,
+ * checked against their membership as it stands at this moment; and a step a
+ * governance policy put in front of a person needs an owner or an admin. The
+ * one governance model decides which steps wait; this only decides who may
+ * answer them.
+ */
+async function decidableApproval(
+  services: ApiServices,
+  request: { params: unknown; access?: Access; identity?: Identity },
+): Promise<ApprovalId> {
+  const approvalId = parameterApprovalId(request.params);
+  const access = accessOf(request);
+  const context = await services.workApprovalService.getDecisionContext(
+    approvalId,
+    access.organizationId,
+  );
+
+  authorizeRead(access, context.workspaceId, () => new Error(`Approval not found: ${approvalId}`));
+
+  const current = await confirmAllowed(services, request, "approvals.decide", context.workspaceId);
+
+  if (!canDecideApproval(current, context)) {
+    throw new AccessError(403, "Only an owner or admin can decide a step a governance policy requires.");
+  }
+
+  return approvalId;
+}
+
+/**
+ * Narrows anything tied to a mission to the missions the caller reaches.
+ * Owners and admins reach everything, so they cost no extra read. An item
+ * naming a mission that cannot be placed is left out rather than shown.
+ */
+async function reachableByWork<T extends { workId?: WorkId }>(
+  services: ApiServices,
+  access: Access,
+  items: T[],
+): Promise<T[]> {
+  if (reachableWorkspaces(access) === "all") return items;
+
+  const index = await services.workQueryService.workspaceIndex(access.organizationId);
+
+  return items.filter((item) =>
+    !item.workId || (index.has(item.workId) && reaches(access, index.get(item.workId))));
 }
 
 /** The work in the route, confirmed as something the caller may operate right now. */

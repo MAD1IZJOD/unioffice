@@ -9,6 +9,7 @@ import type {
   Task,
   Work,
   WorkId,
+  WorkspaceId,
   WorkStatus,
 } from "@unioffice/core";
 
@@ -53,6 +54,15 @@ export class WorkQueryService {
     private readonly approvalRepository: ApprovalRepository,
     private readonly memoryRepository: MemoryRepository,
   ) {}
+
+  /**
+   * The workspace every mission in the organization is filed under, in one
+   * read, for narrowing a list to what a caller may see.
+   */
+  async workspaceIndex(organizationId: OrganizationId): Promise<Map<WorkId, WorkspaceId | undefined>> {
+    const works = await this.workRepository.findByOrganization(organizationId);
+    return new Map(works.map((work) => [work.id, work.workspaceId]));
+  }
 
   async getWork(workId: WorkId): Promise<Work> {
     const work = await this.workRepository.findById(workId);

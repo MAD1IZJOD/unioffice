@@ -5,6 +5,7 @@ import {
   type OrganizationId,
   type Task,
   type Work,
+  type WorkspaceId,
 } from "@unioffice/core";
 
 import type {
@@ -103,6 +104,38 @@ export class WorkApprovalService implements ApprovalCoordinator {
     const approval = await this.approvalRepository.findById(id);
     if (!approval) throw new Error(`Approval not found: ${id}`);
     return approval;
+  }
+
+  /**
+   * What deciding an approval depends on, read before anyone decides it: the
+   * workspace its mission is filed under, and whether a governance policy
+   * rather than the planner put the step in front of a person. Another
+   * organization's approval reads as not found.
+   */
+  async getDecisionContext(
+    approvalId: ApprovalId,
+    organizationId: OrganizationId,
+  ): Promise<{ approval: ApprovalRequest; workspaceId?: WorkspaceId; governedByPolicy: boolean }> {
+    const approval = await this.getApproval(approvalId);
+
+    if (approval.organizationId !== organizationId) {
+      throw new Error(`Approval not found: ${approvalId}`);
+    }
+
+    const [task, work] = await Promise.all([
+      this.taskRepository.findById(approval.taskId),
+      this.workRepository.findById(approval.workId),
+    ]);
+
+    if (!work || work.organizationId !== organizationId) {
+      throw new Error(`Approval not found: ${approvalId}`);
+    }
+
+    return {
+      approval,
+      workspaceId: work.workspaceId,
+      governedByPolicy: isGovernedByPolicy(approval, task),
+    };
   }
 
   async getWorkApprovals(workId: Work["id"]): Promise<ApprovalRequest[]> {
