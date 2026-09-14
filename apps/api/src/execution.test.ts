@@ -55,6 +55,7 @@ import {
 
 import {
   ApprovalConflictError,
+  isGovernedByPolicy,
   WorkApprovalService,
 } from "./work-approval-service.js";
 
@@ -893,6 +894,42 @@ test("fails work when an approval is rejected", async () => {
   assert.equal(rejected.status, "rejected");
   assert.equal((await taskRepository.findById(task.id))?.status, "failed");
   assert.equal((await workRepository.findById(work.id))?.status, "failed");
+});
+
+test("records the governing policy on the approval request, and nothing for planner approvals", async () => {
+  const workRepository = new MemoryWorkRepository();
+  const taskRepository = new MemoryTaskRepository();
+  const approvalRepository = new MemoryApprovalRepository();
+  const { recorder } = createRecorder();
+  const work = makeWork();
+  const governed = makeTask("task-governed" as TaskId, {
+    metadata: {
+      approval: { required: true, reason: "Payments need a person", policyId: "policy-1", policyName: "Payments", risk: "high" },
+    },
+  });
+  const planned = makeTask("task-planned" as TaskId, {
+    metadata: { approval: { required: true, reason: "Check the draft" } },
+  });
+  await workRepository.create(work);
+  await taskRepository.create(governed);
+  await taskRepository.create(planned);
+  const approvalService = new WorkApprovalService(approvalRepository, taskRepository, workRepository, recorder);
+
+  const governedTask = await approvalService.requestApproval(work, governed);
+  const plannedTask = await approvalService.requestApproval(work, planned);
+  const governedRequest = await approvalService.getApproval(
+    (governedTask.metadata.approval as { requestId: ApprovalId }).requestId,
+  );
+  const plannedRequest = await approvalService.getApproval(
+    (plannedTask.metadata.approval as { requestId: ApprovalId }).requestId,
+  );
+
+  assert.deepEqual(governedRequest.metadata, { policyId: "policy-1", policyName: "Payments", risk: "high" });
+  assert.deepEqual(plannedRequest.metadata, {});
+  assert.equal(isGovernedByPolicy(governedRequest), true);
+  assert.equal(isGovernedByPolicy(plannedRequest, plannedTask), false);
+  // An older request without the policy still reads as governed through its task.
+  assert.equal(isGovernedByPolicy({ ...governedRequest, metadata: {} }, governedTask), true);
 });
 
 test("refuses to resolve an approval from another organization", async () => {

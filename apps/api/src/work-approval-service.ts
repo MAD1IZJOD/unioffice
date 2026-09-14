@@ -64,7 +64,7 @@ export class WorkApprovalService implements ApprovalCoordinator {
       reason: approval.reason ?? "Human approval is required before this task can execute.",
       status: "pending",
       createdAt: now,
-      metadata: {},
+      metadata: governingPolicy(approval),
     });
 
     const waitingTask = await this.taskRepository.update({
@@ -274,6 +274,28 @@ export class WorkApprovalService implements ApprovalCoordinator {
     if (!work) throw new Error(`Work not found: ${approval.workId}`);
     return { approval, task, work };
   }
+}
+
+/**
+ * Whether a governance policy, rather than the planner, put this step in
+ * front of a person. Deciding those takes more authority than deciding a
+ * planner's own request. Approvals raised before the policy was recorded on
+ * the request fall back to the task, which has always carried it.
+ */
+export function isGovernedByPolicy(approval: ApprovalRequest, task?: Task | null): boolean {
+  if (typeof approval.metadata.policyId === "string") return true;
+  return task ? typeof approvalMetadata(task).policyId === "string" : false;
+}
+
+/** The policy fields worth keeping on the request itself; empty for planner-raised approvals. */
+function governingPolicy(approval: Record<string, unknown>): Record<string, unknown> {
+  if (typeof approval.policyId !== "string") return {};
+
+  return {
+    policyId: approval.policyId,
+    ...(typeof approval.policyName === "string" ? { policyName: approval.policyName } : {}),
+    ...(typeof approval.risk === "string" ? { risk: approval.risk } : {}),
+  };
 }
 
 function approvalMetadata(task: Task): {
