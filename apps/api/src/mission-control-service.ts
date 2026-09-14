@@ -184,6 +184,14 @@ export interface MissionControlView {
     active: number;
     working: number;
     unavailable: Array<{ agentId: AgentId; name: string; status: Agent["status"] }>;
+    /** Who is on the roster, for finding an agent from anywhere in the shell. */
+    roster: Array<{
+      agentId: AgentId;
+      name: string;
+      type: Agent["type"];
+      status: Agent["status"];
+      capabilities: string[];
+    }>;
   };
 }
 
@@ -316,6 +324,13 @@ export class MissionControlService {
         unavailable: state.agents
           .filter((agent) => agent.status !== "active")
           .map((agent) => ({ agentId: agent.id, name: agent.name, status: agent.status })),
+        roster: state.agents.map((agent) => ({
+          agentId: agent.id,
+          name: agent.name,
+          type: agent.type,
+          status: agent.status,
+          capabilities: agent.capabilities.slice(0, 20),
+        })),
       },
     };
   }

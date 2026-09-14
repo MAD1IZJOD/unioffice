@@ -51,6 +51,7 @@ test("a running mission shows its current step, its team, its progress and its l
   assert.ok((card!.elapsedMs ?? 0) >= 6 * 60_000);
   assert.equal(view.summary.running, 1);
   assert.equal(view.workforce.working, 1);
+  assert.deepEqual(view.workforce.roster.map((member) => [member.name, member.status]), [["Harvey", "active"], ["Mike", "active"]]);
   assert.equal(view.attention.total, 0, "normal execution stays quiet");
 });
 
