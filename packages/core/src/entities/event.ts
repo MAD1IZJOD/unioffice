@@ -68,7 +68,17 @@ export type EventType =
   | "knowledge.superseded"
   // A person said they have seen a stopped or stalled mission, so it stops
   // asking for attention until something about it changes.
-  | "work.acknowledged";
+  | "work.acknowledged"
+  // Membership. Who was let in, at what role, and by whom - kept beside the
+  // work those people went on to do rather than in a log of its own.
+  | "member.invited"
+  | "member.added"
+  | "member.role_changed"
+  | "member.suspended"
+  | "member.reactivated"
+  | "member.removed"
+  | "workspace.access_granted"
+  | "workspace.access_revoked";
 
 export type EventActorType =
   | "user"
