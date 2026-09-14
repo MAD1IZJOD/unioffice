@@ -1,6 +1,7 @@
 import { createBrowserRouter, redirect } from "react-router-dom";
 
 import App from "../App";
+import SessionGate from "./SessionGate";
 import Activity from "../pages/Activity";
 import Agent from "../pages/Agent";
 import Agents from "../pages/Agents";
@@ -29,7 +30,11 @@ import Workspace from "../pages/Workspace";
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <App />,
+    element: (
+      <SessionGate>
+        <App />
+      </SessionGate>
+    ),
     children: [
       { index: true, element: <Command /> },
       { path: "command", element: <Command /> },

@@ -9,6 +9,7 @@ import {
   Command as CommandIcon,
   FileOutput,
   LayoutGrid,
+  LogOut,
   Menu,
   Network,
   Plus,
@@ -42,6 +43,8 @@ import {
   summarizeAttention,
 } from "./lib/attention";
 
+import { useAccess } from "./lib/access";
+import { signOut } from "./lib/session";
 import { toneClass } from "./lib/tone";
 import { profileOf } from "./lib/workforce";
 
@@ -219,6 +222,36 @@ function Navigation({
   );
 }
 
+/** The signed-in person and their role, as the API reported them. */
+function UserCard() {
+  const access = useAccess();
+  const email = access?.me.user.email ?? "";
+  const role = access?.me.organization?.role;
+
+  return (
+    <div className="user-card">
+      <span className="user-avatar">{(email[0] ?? "?").toUpperCase()}</span>
+
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[11.5px] font-semibold text-[#a7b0bd]" title={email}>
+          {email || "Signed in"}
+        </span>
+        {role && <span className="t-machine block">{role.toUpperCase()}</span>}
+      </span>
+
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Sign out"
+        title="Sign out"
+        onClick={() => void signOut()}
+      >
+        <LogOut size={13} />
+      </button>
+    </div>
+  );
+}
+
 function Brand({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <NavLink
@@ -389,16 +422,7 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
-          <div className="user-card">
-            <span className="user-avatar">M</span>
-
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[11.5px] font-semibold text-[#a7b0bd]">
-                Madhavan
-              </span>
-              <span className="t-machine block">ADMINISTRATOR</span>
-            </span>
-          </div>
+          <UserCard />
         </div>
       </aside>
 

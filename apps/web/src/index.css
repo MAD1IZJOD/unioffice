@@ -9,6 +9,7 @@
 @import "./styles/templates.css";
 @import "./styles/debrief.css";
 @import "./styles/mission-control.css";
+@import "./styles/session.css";
 
 :root {
   font-family:
