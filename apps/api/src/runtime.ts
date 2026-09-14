@@ -12,6 +12,7 @@ import {
   SupabaseExecutionJobRepository,
   SupabaseKnowledgeLinkRepository,
   SupabaseMemoryRepository,
+  SupabaseOperationalReadRepository,
   SupabaseOrganizationRepository,
   SupabasePolicyRepository,
   SupabaseTaskRepository,
@@ -37,7 +38,7 @@ import { GovernanceOverviewService } from "./governance-overview-service.js";
 import { GovernanceService } from "./governance-service.js";
 import { GovernanceToolGuard } from "./governance-tool-guard.js";
 import { PolicyTaskGovernanceGate } from "./task-governance-gate.js";
-import { AttentionService } from "./attention-service.js";
+import { MissionControlService } from "./mission-control-service.js";
 import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
@@ -288,12 +289,21 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRecorder,
   );
 
-  // What needs a person, read across the whole company rather than across
-  // whichever slice a dashboard read happened to carry.
-  const attentionService = new AttentionService(
-    approvalRepository,
-    workRepository,
-    executionJobRepository,
+  // The company's operational state, and what needs a person, from one set of
+  // lean reads. A mission sitting untouched past the same window startup uses
+  // to call a run abandoned is reported as stalled rather than as in flight.
+  const missionControlService = new MissionControlService(
+    {
+      reads: new SupabaseOperationalReadRepository(supabase),
+      works: workRepository,
+      approvals: approvalRepository,
+      jobs: executionJobRepository,
+      agents: agentRepository,
+      memories: memoryRepository,
+      links: knowledgeLinkRepository,
+      eventRecorder,
+    },
+    { stalledAfterMs: config.staleRunAfterMs },
   );
 
   const companyOverviewService = new CompanyOverviewService(
@@ -367,7 +377,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workApprovalService,
     workExecutionService,
     workQueryService,
-    attentionService,
+    missionControlService,
     executionQueueService,
     executionRoomService,
     executionStream,

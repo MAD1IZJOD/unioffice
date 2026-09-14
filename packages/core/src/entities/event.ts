@@ -65,7 +65,10 @@ export type EventType =
   | "knowledge.conflict_detected"
   | "knowledge.conflict_resolved"
   | "knowledge.merged"
-  | "knowledge.superseded";
+  | "knowledge.superseded"
+  // A person said they have seen a stopped or stalled mission, so it stops
+  // asking for attention until something about it changes.
+  | "work.acknowledged";
 
 export type EventActorType =
   | "user"

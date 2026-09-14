@@ -62,8 +62,13 @@ import type {
 } from "./work-recovery-service.js";
 
 import type {
-  AttentionService,
-} from "./attention-service.js";
+  MissionControlService,
+} from "./mission-control-service.js";
+
+import {
+  MissionNotFoundError,
+  MissionStateError,
+} from "./mission-control-service.js";
 
 import type {
   ExecutionQueueService,
@@ -146,7 +151,7 @@ export interface ApiServices {
   workApprovalService: WorkApprovalService;
   workQueryService: WorkQueryService;
   workRecoveryService: WorkRecoveryService;
-  attentionService: AttentionService;
+  missionControlService: MissionControlService;
   executionQueueService: ExecutionQueueService;
   executionRoomService: ExecutionRoomService;
   executionStream: ExecutionStream;
@@ -413,9 +418,34 @@ export function buildApiServer(
     instance.get("/attention", async (request) => {
       const query = objectBody(request.query);
 
-      return services.attentionService.getQueue(
+      return services.missionControlService.getAttention(
         requiredOrganizationId(services, query.organizationId),
         { limit: parseOptionalLimit(query.limit) },
+      );
+    });
+
+    // The company's operational state in one read: what is running, what is
+    // blocked and why, what finished, what needs a person, and what the
+    // company recently decided and learned. Built from the same state the
+    // attention queue is, so the two cannot disagree.
+    instance.get("/mission-control", async (request) => {
+      const query = objectBody(request.query);
+
+      return services.missionControlService.getMissionControl(
+        requiredOrganizationId(services, query.organizationId),
+      );
+    });
+
+    // A person has seen a stopped or stalled mission. Nothing in the body but
+    // the organization is read: who marked it is the server's requester, and
+    // the service decides whether the mission is in a state that can be marked.
+    instance.post("/work/:id/acknowledge", async (request) => {
+      const body = objectBody(request.body);
+
+      return services.missionControlService.acknowledge(
+        requiredOrganizationId(services, body.organizationId),
+        parameterUuid(request.params) as WorkId,
+        actorOf(),
       );
     });
 
@@ -1728,7 +1758,8 @@ function statusForError(error: Error): number {
     error instanceof WorkspaceNotFoundError ||
     error instanceof AgentNotFoundError ||
     error instanceof KnowledgeNotFoundError ||
-    error instanceof MissionTemplateNotFoundError
+    error instanceof MissionTemplateNotFoundError ||
+    error instanceof MissionNotFoundError
   ) {
     return 404;
   }
@@ -1743,7 +1774,7 @@ function statusForError(error: Error): number {
     return 400;
   }
 
-  if (error instanceof KnowledgeStateError) {
+  if (error instanceof KnowledgeStateError || error instanceof MissionStateError) {
     return 409;
   }
 
