@@ -14,6 +14,7 @@ export * from "./repositories/knowledge-repository.js";
 export * from "./repositories/execution-job-repository.js";
 export * from "./repositories/policy-repository.js";
 export * from "./repositories/operational-read-repository.js";
+export * from "./repositories/membership-repository.js";
 
 export * from "./repositories/supabase-work-repository.js";
 export * from "./repositories/supabase-task-repository.js";
@@ -31,3 +32,5 @@ export * from "./repositories/in-memory-execution-job-repository.js";
 export * from "./repositories/in-memory-knowledge-repository.js";
 export * from "./repositories/supabase-operational-read-repository.js";
 export * from "./repositories/in-memory-operational-read-repository.js";
+export * from "./repositories/supabase-membership-repository.js";
+export * from "./repositories/in-memory-membership-repository.js";
