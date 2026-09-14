@@ -151,6 +151,7 @@ import type {
 import { AccessError, type AccessResolver } from "./access/access-resolver.js";
 import { bearerToken, type Authenticator, type Identity } from "./access/authenticator.js";
 import {
+  canActIn,
   canDecideApproval,
   permissionsOf,
   reachableWorkspaces,
@@ -852,9 +853,10 @@ export function buildApiServer(
 
     instance.post("/policies", async (request, reply) => {
       const body = objectBody(request.body);
+      const access = await confirmAllowed(services, request, "policies.manage");
 
       const policy = await services.governanceService.createPolicy({
-        organizationId: organizationOf(request),
+        organizationId: access.organizationId,
         name: requiredText(body.name, "name"),
         description: optionalText(body.description) ?? "",
         subject: parsePolicySubject(body.subject),
@@ -863,7 +865,9 @@ export function buildApiServer(
         status: parsePolicyStatus(body.status),
         scope: parsePolicyScope(body.scope),
         approvalPrompt: optionalText(body.approvalPrompt),
-        createdBy: optionalText(body.createdBy),
+        // The author is the signed-in caller. A createdBy in the body used to
+        // be recorded as the author of a governance rule.
+        createdBy: actorOf(request),
       });
 
       return reply.status(201).send({ policy });
@@ -871,9 +875,10 @@ export function buildApiServer(
 
     instance.post("/policies/:id", async (request) => {
       const body = objectBody(request.body);
+      const access = await confirmAllowed(services, request, "policies.manage");
 
       const policy = await services.governanceService.updatePolicy({
-        organizationId: organizationOf(request),
+        organizationId: access.organizationId,
         policyId: parameterId(request.params) as unknown as PolicyId,
         name: optionalText(body.name),
         description:
@@ -901,10 +906,11 @@ export function buildApiServer(
     // ---------------------------------------------------------------------
     // Organization, workspaces and the workforce.
     //
-    // Every one of these resolves the organization first and refuses to act
-    // on a workspace or agent belonging to another one. There is no
-    // authentication yet; this is the shape that lets one be added without
-    // revisiting each handler.
+    // Every one of these acts inside the caller's organization and refuses a
+    // workspace or agent belonging to another one. Changing workspaces,
+    // agents and their tool grants is for the roles that run the
+    // organization; which tools an agent may call stays the agent's grant and
+    // governance's decision, never the person's.
     // ---------------------------------------------------------------------
 
     // ---------------------------------------------------------------------
@@ -983,9 +989,10 @@ export function buildApiServer(
 
     instance.post("/workspaces", async (request, reply) => {
       const body = objectBody(request.body);
+      const access = await confirmAllowed(services, request, "workspaces.manage");
 
       const workspace = await services.workspaceService.createWorkspace({
-        organizationId: organizationOf(request),
+        organizationId: access.organizationId,
         name: requiredText(body.name, "name"),
         description: optionalText(body.description),
       });
@@ -994,20 +1001,23 @@ export function buildApiServer(
     });
 
     instance.get("/workspaces/:id", async (request) => {
-      const query = objectBody(request.query);
+      const access = accessOf(request);
+      const workspaceId = parameterId(request.params) as unknown as WorkspaceId;
 
-      return services.workspaceService.getWorkspaceDetail(
-        organizationOf(request),
-        parameterId(request.params) as unknown as WorkspaceId,
-      );
+      // A workspace the caller was not given reads as one that does not exist.
+      authorizeRead(access, workspaceId, () => new ApiError(404, "Workspace not found."));
+
+      return services.workspaceService.getWorkspaceDetail(access.organizationId, workspaceId);
     });
 
     instance.post("/workspaces/:id", async (request) => {
       const body = objectBody(request.body);
+      const workspaceId = parameterId(request.params) as unknown as WorkspaceId;
+      const access = await confirmAllowed(services, request, "workspaces.manage", workspaceId);
 
       const workspace = await services.workspaceService.updateWorkspace({
-        organizationId: organizationOf(request),
-        workspaceId: parameterId(request.params) as unknown as WorkspaceId,
+        organizationId: access.organizationId,
+        workspaceId,
         name: optionalText(body.name),
         description: nullableText(body.description),
         status: parseWorkspaceStatus(body.status),
@@ -1027,9 +1037,10 @@ export function buildApiServer(
 
     instance.post("/agents", async (request, reply) => {
       const body = objectBody(request.body);
+      const access = await confirmAllowed(services, request, "agents.configure");
 
       const agent = await services.agentDirectoryService.createAgent({
-        organizationId: organizationOf(request),
+        organizationId: access.organizationId,
         name: requiredText(body.name, "name"),
         description: requiredText(body.description, "description"),
         type: parseAgentType(body.type),
@@ -1045,9 +1056,10 @@ export function buildApiServer(
 
     instance.post("/agents/:id", async (request) => {
       const body = objectBody(request.body);
+      const access = await confirmAllowed(services, request, "agents.configure");
 
       const agent = await services.agentDirectoryService.updateAgent({
-        organizationId: organizationOf(request),
+        organizationId: access.organizationId,
         agentId: parameterId(request.params) as unknown as AgentId,
         description: optionalText(body.description),
         capabilities:
@@ -1169,6 +1181,7 @@ export function buildApiServer(
           query: optionalBoundedText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
           limit: parseOptionalLimit(query.limit),
         },
+        reachOf(accessOf(request)),
       );
 
       return { memories: result.items.map((item) => item.knowledge) };
@@ -1176,14 +1189,20 @@ export function buildApiServer(
 
     instance.get("/knowledge", { config: { rateLimit: KNOWLEDGE_SEARCH_LIMIT } }, async (request) => {
       const query = objectBody(request.query);
+      const access = accessOf(request);
+      const workspaceId = parseWorkspaceFilter(query.workspaceId);
+
+      if (workspaceId) {
+        authorizeRead(access, workspaceId, () => new KnowledgeNotFoundError("Workspace not found."));
+      }
 
       return services.companyBrainService.search(
-        organizationOf(request),
+        access.organizationId,
         {
           query: optionalBoundedText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
           types: parseKnowledgeTypes(query.types),
           statuses: parseKnowledgeStatuses(query.statuses),
-          workspaceId: parseWorkspaceFilter(query.workspaceId),
+          workspaceId,
           sourceType: parseKnowledgeSourceType(query.sourceType),
           minImportance: parseUnitNumber(query.minImportance, "minImportance"),
           createdAfter: parseOptionalDate(query.createdAfter, "createdAfter"),
@@ -1191,51 +1210,63 @@ export function buildApiServer(
           limit: parseOptionalLimit(query.limit),
           offset: parseOptionalOffset(query.offset),
         },
+        reachOf(access),
       );
     });
 
     instance.get("/knowledge/overview", async (request) => {
-      const query = objectBody(request.query);
-
       return services.companyBrainService.getOverview(
         organizationOf(request),
+        reachOf(accessOf(request)),
       );
     });
 
     instance.get("/knowledge/recall-preview", { config: { rateLimit: KNOWLEDGE_SEARCH_LIMIT } }, async (request) => {
       const query = objectBody(request.query);
+      const access = accessOf(request);
+      const workspaceId = optionalUuid(query.workspaceId, "workspaceId") as WorkspaceId | undefined;
+
+      authorizeRead(access, workspaceId, () => new KnowledgeNotFoundError("Workspace not found."));
 
       return services.companyBrainService.previewRecall(
-        organizationOf(request),
+        access.organizationId,
         {
           query: requiredText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
-          workspaceId: optionalUuid(query.workspaceId, "workspaceId") as WorkspaceId | undefined,
+          workspaceId,
           agentId: optionalUuid(query.agentId, "agentId") as AgentId | undefined,
         },
+        reachOf(access),
       );
     });
 
     instance.get("/knowledge/:id", async (request) => {
-      const query = objectBody(request.query);
+      const access = accessOf(request);
+      const knowledgeId = parameterUuid(request.params) as MemoryId;
+      const workspaceId = await services.companyBrainService.locateKnowledge(access.organizationId, knowledgeId);
 
-      return services.companyBrainService.getDetail(
-        organizationOf(request),
-        parameterUuid(request.params) as MemoryId,
-      );
+      authorizeRead(access, workspaceId, () => new KnowledgeNotFoundError());
+
+      return services.companyBrainService.getDetail(access.organizationId, knowledgeId, reachOf(access));
     });
 
+    // Anyone who may propose knowledge may write it; only someone who may
+    // curate it there has it count straight away. Everyone else's waits for
+    // review, however it was phrased.
     instance.post("/knowledge", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request, reply) => {
       const body = objectBody(request.body);
+      const workspaceId = optionalUuid(body.workspaceId, "workspaceId") as WorkspaceId | undefined;
+      const access = await confirmAllowed(services, request, "knowledge.propose", workspaceId);
 
       const knowledge = await services.companyBrainService.createKnowledge({
-        organizationId: organizationOf(request),
+        organizationId: access.organizationId,
         title: requiredText(body.title, "title", 200),
         content: requiredText(body.content, "content", 4_000),
         type: parseKnowledgeType(body.type),
         importance: parseUnitNumber(body.importance, "importance"),
         confidence: parseUnitNumber(body.confidence, "confidence"),
-        workspaceId: optionalUuid(body.workspaceId, "workspaceId") as WorkspaceId | undefined,
+        workspaceId,
         createdBy: actorOf(request),
+        proposeOnly: !canActIn(access, "knowledge.curate", workspaceId),
       });
 
       return reply.status(201).send({ knowledge });
@@ -1243,10 +1274,16 @@ export function buildApiServer(
 
     instance.post("/knowledge/:id", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
       const body = objectBody(request.body);
+      const knowledgeId = parameterUuid(request.params) as MemoryId;
+      const movingTo = typeof body.workspaceId === "string"
+        ? (requiredUuid(body.workspaceId, "workspaceId") as WorkspaceId)
+        : undefined;
+
+      await curatableKnowledge(services, request, [knowledgeId], movingTo);
 
       const knowledge = await services.companyBrainService.updateKnowledge({
         organizationId: organizationOf(request),
-        knowledgeId: parameterUuid(request.params) as MemoryId,
+        knowledgeId,
         title: body.title === undefined ? undefined : requiredText(body.title, "title", 200),
         content: body.content === undefined ? undefined : requiredText(body.content, "content", 4_000),
         type: body.type === undefined ? undefined : parseKnowledgeType(body.type),
@@ -1266,11 +1303,12 @@ export function buildApiServer(
     });
 
     instance.post("/knowledge/:id/approve", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
-      const body = objectBody(request.body);
+      const knowledgeId = parameterUuid(request.params) as MemoryId;
+      await curatableKnowledge(services, request, [knowledgeId]);
 
       const knowledge = await services.companyBrainService.approveKnowledge(
         organizationOf(request),
-        parameterUuid(request.params) as MemoryId,
+        knowledgeId,
         actorOf(request),
       );
 
@@ -1279,10 +1317,12 @@ export function buildApiServer(
 
     instance.post("/knowledge/:id/archive", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
       const body = objectBody(request.body);
+      const knowledgeId = parameterUuid(request.params) as MemoryId;
+      await curatableKnowledge(services, request, [knowledgeId]);
 
       const knowledge = await services.companyBrainService.archiveKnowledge(
         organizationOf(request),
-        parameterUuid(request.params) as MemoryId,
+        knowledgeId,
         {
           by: actorOf(request),
           reason: optionalBoundedText(body.reason, "reason", 500),
@@ -1293,11 +1333,12 @@ export function buildApiServer(
     });
 
     instance.post("/knowledge/:id/restore", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
-      const body = objectBody(request.body);
+      const knowledgeId = parameterUuid(request.params) as MemoryId;
+      await curatableKnowledge(services, request, [knowledgeId]);
 
       const knowledge = await services.companyBrainService.restoreKnowledge(
         organizationOf(request),
-        parameterUuid(request.params) as MemoryId,
+        knowledgeId,
         actorOf(request),
       );
 
@@ -1308,11 +1349,14 @@ export function buildApiServer(
     // says the same as. Both ids are resolved inside the caller's organization.
     instance.post("/knowledge/:id/merge", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
       const body = objectBody(request.body);
+      const duplicateId = parameterUuid(request.params) as MemoryId;
+      const intoId = requiredUuid(body.intoId, "intoId") as MemoryId;
+      await curatableKnowledge(services, request, [duplicateId, intoId]);
 
       const { kept, merged } = await services.companyBrainService.mergeKnowledge(
         organizationOf(request),
-        parameterUuid(request.params) as MemoryId,
-        requiredUuid(body.intoId, "intoId") as MemoryId,
+        duplicateId,
+        intoId,
         actorOf(request),
       );
 
@@ -1323,11 +1367,14 @@ export function buildApiServer(
     // one it retires.
     instance.post("/knowledge/:id/supersede", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
       const body = objectBody(request.body);
+      const newerId = parameterUuid(request.params) as MemoryId;
+      const olderId = requiredUuid(body.replacesId, "replacesId") as MemoryId;
+      await curatableKnowledge(services, request, [newerId, olderId]);
 
       const { current, replaced } = await services.companyBrainService.supersedeKnowledge(
         organizationOf(request),
-        parameterUuid(request.params) as MemoryId,
-        requiredUuid(body.replacesId, "replacesId") as MemoryId,
+        newerId,
+        olderId,
         actorOf(request),
         optionalBoundedText(body.note, "note", 500),
       );
@@ -1337,10 +1384,19 @@ export function buildApiServer(
 
     instance.post("/knowledge/conflicts/:id/resolve", { config: { rateLimit: KNOWLEDGE_WRITE_LIMIT } }, async (request) => {
       const body = objectBody(request.body);
+      const conflictId = parameterUuid(request.params) as KnowledgeConflictId;
+      const access = accessOf(request);
+      const sides = await services.companyBrainService.locateConflict(access.organizationId, conflictId);
+
+      for (const side of sides) {
+        authorizeRead(access, side, () => new KnowledgeNotFoundError("Conflict not found."));
+      }
+
+      await confirmCurating(services, request, sides);
 
       const conflict = await services.companyBrainService.resolveConflict(
         organizationOf(request),
-        parameterUuid(request.params) as KnowledgeConflictId,
+        conflictId,
         parseConflictResolution(body),
         actorOf(request),
         optionalBoundedText(body.note, "note", 500),
@@ -1352,12 +1408,13 @@ export function buildApiServer(
     // Asks a model to read the artifact, so it is the most expensive write
     // here and limited accordingly.
     instance.post("/artifacts/:id/knowledge", { config: { rateLimit: KNOWLEDGE_DERIVE_LIMIT } }, async (request) => {
-      const body = objectBody(request.body);
+      const access = await confirmAllowed(services, request, "knowledge.propose");
 
       const report = await services.companyBrainService.deriveFromArtifact(
-        organizationOf(request),
+        access.organizationId,
         parameterUuid(request.params) as ArtifactId,
         actorOf(request),
+        reachOf(access),
       );
 
       return report;
@@ -1959,6 +2016,44 @@ function reachOf(access: Access): ((workspaceId: WorkspaceId | undefined) => boo
   return reachableWorkspaces(access) === "all"
     ? undefined
     : (workspaceId) => reaches(access, workspaceId);
+}
+
+/**
+ * Knowledge the caller may curate right now: every entry named must be in a
+ * workspace they reach (or it reads as not found), and they must be allowed
+ * to curate in each of those workspaces - and in the one it is moving to.
+ */
+async function curatableKnowledge(
+  services: ApiServices,
+  request: { access?: Access; identity?: Identity },
+  knowledgeIds: MemoryId[],
+  movingTo?: WorkspaceId,
+): Promise<Access> {
+  const access = accessOf(request);
+  const workspaces = await Promise.all(
+    knowledgeIds.map((id) => services.companyBrainService.locateKnowledge(access.organizationId, id)),
+  );
+
+  for (const workspaceId of workspaces) {
+    authorizeRead(access, workspaceId, () => new KnowledgeNotFoundError());
+  }
+
+  return confirmCurating(services, request, movingTo ? [...workspaces, movingTo] : workspaces);
+}
+
+/** Curating in every one of these workspaces, checked against the membership as it stands now. */
+async function confirmCurating(
+  services: ApiServices,
+  request: { access?: Access; identity?: Identity },
+  workspaces: Array<WorkspaceId | undefined>,
+): Promise<Access> {
+  for (const workspaceId of workspaces) authorize(accessOf(request), "knowledge.curate", workspaceId);
+
+  const fresh = await confirmAllowed(services, request, "knowledge.curate", workspaces[0]);
+
+  for (const workspaceId of workspaces) authorize(fresh, "knowledge.curate", workspaceId);
+
+  return fresh;
 }
 
 /** The work in the route, confirmed as something the caller may operate right now. */
