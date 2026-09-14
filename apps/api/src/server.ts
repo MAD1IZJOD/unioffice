@@ -455,6 +455,27 @@ export function buildApiServer(
         at: new Date().toISOString(),
       });
 
+      let reach = reachOf(accessOf(request));
+      let index: Map<WorkId, WorkspaceId | undefined> | undefined;
+
+      // Someone who reaches only some workspaces is sent only those missions'
+      // events. Which mission is where is read once, and again when an event
+      // names a mission not seen yet - one just opened.
+      const visible = async (events: Event[]): Promise<Event[]> => {
+        const narrow = reach;
+
+        if (!narrow) return events;
+
+        if (!index || events.some((event) => event.workId && !index!.has(event.workId))) {
+          index = await services.workQueryService.workspaceIndex(organizationId);
+        }
+
+        const known = index;
+
+        return events.filter((event) =>
+          !event.workId || (known.has(event.workId) && narrow(known.get(event.workId))));
+      };
+
       const subscription = services.executionStream.subscribe(
         organizationId,
         (events) => {
@@ -464,16 +485,42 @@ export function buildApiServer(
 
           if (relevant.length === 0) return;
 
-          send("activity", { events: relevant.map(streamFrame) });
+          visible(relevant).then(
+            (shown) => {
+              if (shown.length > 0) send("activity", { events: shown.map(streamFrame) });
+            },
+            (error: unknown) => {
+              request.log.warn({ err: error }, "Could not narrow live events to the caller's workspaces.");
+            },
+          );
         },
       );
 
       // An idle connection is indistinguishable from a dead one, and every
       // layer between here and the browser will eventually reclaim it. The
       // comment frame is the protocol's own keep-alive and costs one line.
+      //
+      // Each heartbeat also re-reads the membership behind the channel, so
+      // someone suspended, removed or moved out of a workspace stops receiving
+      // that activity within one interval rather than whenever they reconnect.
       const heartbeat = setInterval(() => {
         if (raw.writableEnded) return;
         raw.write(`: keep-alive ${Date.now()}\n\n`);
+
+        const identity = request.identity;
+        if (!identity) return;
+
+        services.accessResolver.resolve(identity, organizationId).then(
+          (fresh) => {
+            request.access = fresh;
+            reach = reachOf(fresh);
+            index = undefined;
+          },
+          () => {
+            close();
+            if (!raw.writableEnded) raw.end();
+          },
+        );
       }, 20_000);
 
       heartbeat.unref?.();
@@ -542,6 +589,7 @@ export function buildApiServer(
         {
           status: parseWorkStatus(query.status),
           limit: parseOptionalLimit(query.limit),
+          reach: reachOf(accessOf(request)),
         },
       );
 
@@ -553,7 +601,10 @@ export function buildApiServer(
 
       return services.companyOverviewService.getOverview(
         organizationOf(request),
-        { activityLimit: parseOptionalLimit(query.activityLimit) },
+        {
+          activityLimit: parseOptionalLimit(query.activityLimit),
+          reach: reachOf(accessOf(request)),
+        },
       );
     });
 
@@ -565,7 +616,7 @@ export function buildApiServer(
 
       return services.missionControlService.getAttention(
         organizationOf(request),
-        { limit: parseOptionalLimit(query.limit) },
+        { limit: parseOptionalLimit(query.limit), reach: reachOf(accessOf(request)) },
       );
     });
 
@@ -574,10 +625,9 @@ export function buildApiServer(
     // company recently decided and learned. Built from the same state the
     // attention queue is, so the two cannot disagree.
     instance.get("/mission-control", async (request) => {
-      const query = objectBody(request.query);
-
       return services.missionControlService.getMissionControl(
         organizationOf(request),
+        { reach: reachOf(accessOf(request)) },
       );
     });
 
@@ -611,13 +661,14 @@ export function buildApiServer(
 
     instance.get("/artifacts", async (request) => {
       const query = objectBody(request.query);
+      const access = accessOf(request);
       const artifacts =
         await services.workQueryService.getOrganizationArtifacts(
-          organizationOf(request),
+          access.organizationId,
           parseOptionalLimit(query.limit),
         );
 
-      return { artifacts };
+      return { artifacts: await reachableByWork(services, access, artifacts) };
     });
 
     // The execution room reads here and nowhere else. Kept separate from
@@ -1031,12 +1082,13 @@ export function buildApiServer(
 
     instance.get("/activity", async (request) => {
       const query = objectBody(request.query);
+      const access = accessOf(request);
       const events = await services.workQueryService.getOrganizationActivity(
-        organizationOf(request),
+        access.organizationId,
         parseOptionalLimit(query.limit),
       );
 
-      return { events };
+      return { events: await reachableByWork(services, access, events) };
     });
 
     // ---------------------------------------------------------------------
@@ -1897,6 +1949,16 @@ async function reachableByWork<T extends { workId?: WorkId }>(
 
   return items.filter((item) =>
     !item.workId || (index.has(item.workId) && reaches(access, index.get(item.workId))));
+}
+
+/**
+ * A caller's workspace reach as a filter, or nothing for owners and admins,
+ * who reach every workspace and so need nothing narrowed.
+ */
+function reachOf(access: Access): ((workspaceId: WorkspaceId | undefined) => boolean) | undefined {
+  return reachableWorkspaces(access) === "all"
+    ? undefined
+    : (workspaceId) => reaches(access, workspaceId);
 }
 
 /** The work in the route, confirmed as something the caller may operate right now. */

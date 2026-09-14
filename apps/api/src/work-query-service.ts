@@ -26,6 +26,8 @@ import type {
 export interface ListWorkOptions {
   status?: WorkStatus;
   limit?: number;
+  /** Which workspaces the caller sees. Absent: all of them. */
+  reach?: (workspaceId: WorkspaceId | undefined) => boolean;
 }
 
 /**
@@ -133,9 +135,11 @@ export class WorkQueryService {
     options: ListWorkOptions = {},
   ): Promise<Work[]> {
     const work = await this.workRepository.findByOrganization(organizationId);
-    const filtered = options.status
-      ? work.filter((item) => item.status === options.status)
-      : work;
+    // Narrowed before the limit, so a caller who reaches few workspaces still
+    // gets a full page of the missions they can open.
+    const filtered = work.filter((item) =>
+      (!options.status || item.status === options.status) &&
+      (!options.reach || options.reach(item.workspaceId)));
 
     return filtered
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
