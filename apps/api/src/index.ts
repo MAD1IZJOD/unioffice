@@ -62,6 +62,8 @@ export async function createApiServer() {
   }
 
   return buildApiServer({
+    authenticator: runtime.authenticator,
+    accessResolver: runtime.accessResolver,
     applicationService: runtime.applicationService,
     workService: runtime.workService,
     workExecutionService: runtime.workExecutionService,
@@ -81,7 +83,6 @@ export async function createApiServer() {
     agentDirectoryService: runtime.agentDirectoryService,
     missionTemplateService: runtime.missionTemplateService,
     toolRegistry: runtime.toolRegistry,
-    developmentOrganizationId: developmentOrganization?.organization.id,
     corsOrigins: config.corsOrigins,
     healthCheck: async () => {
       const { error } = await runtime.supabase

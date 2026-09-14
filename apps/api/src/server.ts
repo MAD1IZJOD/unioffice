@@ -146,10 +146,20 @@ import type {
   ToolRegistry,
 } from "@unioffice/tools";
 
-const developmentRequesterId =
-  "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09" as UserId;
+import { AccessError, type AccessResolver } from "./access/access-resolver.js";
+import { bearerToken, type Authenticator } from "./access/authenticator.js";
+import type { Access } from "./access/permissions.js";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    /** Set once the caller is verified and their membership resolved. */
+    access?: Access;
+  }
+}
 
 export interface ApiServices {
+  authenticator: Authenticator;
+  accessResolver: Pick<AccessResolver, "resolve">;
   applicationService: WorkApplicationService;
   workService: WorkService;
   workExecutionService: WorkExecutionService;
@@ -170,7 +180,6 @@ export interface ApiServices {
   missionTemplateService: MissionTemplateService;
   toolRegistry: ToolRegistry;
   healthCheck: () => Promise<Record<string, unknown>>;
-  developmentOrganizationId?: OrganizationId;
   corsOrigins: string[];
 }
 
@@ -219,7 +228,7 @@ export function buildApiServer(
         "access-control-allow-methods",
         "GET,POST,OPTIONS",
       );
-      reply.header("access-control-allow-headers", "content-type");
+      reply.header("access-control-allow-headers", "authorization, content-type");
 
       // Defence in depth for a JSON API. It should never be framed, its
       // content type should never be sniffed into something executable, and
@@ -233,6 +242,28 @@ export function buildApiServer(
 
     instance.options("/*", async (_request, reply) => {
       return reply.status(204).send();
+    });
+
+    // Every route but the health check is a signed-in member acting inside
+    // one organization. The token says who the caller is; their membership,
+    // read fresh, says where and as what. The organization a request names is
+    // only a choice among the caller's own - it is never trusted on its own -
+    // and handlers read the organization and the actor from here, not from
+    // the request.
+    instance.addHook("preHandler", async (request) => {
+      if (request.method === "OPTIONS" || request.routeOptions.url === "/health") return;
+
+      const token = bearerToken(request.headers.authorization);
+      const identity = token ? await services.authenticator.verify(token) : null;
+
+      if (!identity) {
+        throw new ApiError(401, "Sign in to continue.");
+      }
+
+      request.access = await services.accessResolver.resolve(
+        identity,
+        requestedOrganization(request),
+      );
     });
 
     instance.setErrorHandler((error, request, reply) => {
@@ -276,10 +307,7 @@ export function buildApiServer(
       // handler no longer owns this response, so a rejected request has to be
       // rejected while it can still be answered normally.
       const query = objectBody(request.query);
-      const organizationId = requiredOrganizationId(
-        services,
-        query.organizationId,
-      );
+      const organizationId = organizationOf(request);
       const workId = optionalText(query.workId);
 
       reply.hijack();
@@ -356,10 +384,7 @@ export function buildApiServer(
 
     instance.post("/work", async (request, reply) => {
       const body = objectBody(request.body);
-      const organizationId = requiredOrganizationId(
-        services,
-        body.organizationId,
-      );
+      const organizationId = organizationOf(request);
       const workspaceId = optionalUuid(body.workspaceId, "workspaceId") as
         | WorkspaceId
         | undefined;
@@ -377,7 +402,7 @@ export function buildApiServer(
         // fill in. There is no auth yet, so it is the seeded development
         // requester; a caller-supplied requesterId used to be honoured, which
         // is authorship spoofing waiting to matter the day identity lands.
-        requesterId: developmentRequesterId,
+        requesterId: accessOf(request).userId,
         objective: requiredText(body.objective, "objective", 4_000),
         priority: parsePriority(body.priority),
         workspaceId,
@@ -399,7 +424,7 @@ export function buildApiServer(
     instance.get("/work", async (request) => {
       const query = objectBody(request.query);
       const work = await services.workQueryService.listWork(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         {
           status: parseWorkStatus(query.status),
           limit: parseOptionalLimit(query.limit),
@@ -413,7 +438,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.companyOverviewService.getOverview(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         { activityLimit: parseOptionalLimit(query.activityLimit) },
       );
     });
@@ -425,7 +450,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.missionControlService.getAttention(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         { limit: parseOptionalLimit(query.limit) },
       );
     });
@@ -438,7 +463,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.missionControlService.getMissionControl(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
       );
     });
 
@@ -449,9 +474,9 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       return services.missionControlService.acknowledge(
-        requiredOrganizationId(services, body.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as WorkId,
-        actorOf(),
+        actorOf(request),
       );
     });
 
@@ -473,7 +498,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
       const artifacts =
         await services.workQueryService.getOrganizationArtifacts(
-          requiredOrganizationId(services, query.organizationId),
+          organizationOf(request),
           parseOptionalLimit(query.limit),
         );
 
@@ -503,7 +528,7 @@ export function buildApiServer(
     instance.get("/work/:id", async (request) => {
       const work = await services.workQueryService.assertWorkInOrganization(
         parameterId(request.params),
-        requiredOrganizationId(services, objectBody(request.query).organizationId),
+        organizationOf(request),
       );
 
       return { work };
@@ -550,7 +575,7 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       return services.workCancellationService.cancelWork(workId, {
-        actorId: developmentRequesterId,
+        actorId: accessOf(request).userId,
         reason: optionalBoundedText(body.reason, "reason", 500),
       });
     });
@@ -589,7 +614,7 @@ export function buildApiServer(
     instance.get("/approvals", async (request) => {
       const query = objectBody(request.query);
       const approvals = await services.workApprovalService.getPendingApprovals(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
       );
 
       return { approvals };
@@ -603,8 +628,8 @@ export function buildApiServer(
     instance.post("/approvals/:id/approve", async (request) => {
       const approval = await services.workApprovalService.approve(
         parameterApprovalId(request.params),
-        developmentRequesterId,
-        requiredOrganizationId(services, objectBody(request.body).organizationId),
+        accessOf(request).userId,
+        organizationOf(request),
       );
       // Resuming is a durable enqueue too, so an approval granted while no
       // worker happens to be up is still executed once one starts.
@@ -619,8 +644,8 @@ export function buildApiServer(
     instance.post("/approvals/:id/reject", async (request) => {
       const approval = await services.workApprovalService.reject(
         parameterApprovalId(request.params),
-        developmentRequesterId,
-        requiredOrganizationId(services, objectBody(request.body).organizationId),
+        accessOf(request).userId,
+        organizationOf(request),
       );
       return { approval };
     });
@@ -637,7 +662,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.governanceOverviewService.getOverview(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         { activityLimit: parseOptionalLimit(query.activityLimit) },
       );
     });
@@ -646,7 +671,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       const policies = await services.governanceService.listPolicies(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         { includeArchived: query.includeArchived === "true" },
       );
 
@@ -657,7 +682,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       const policy = await services.governanceService.getPolicy(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         parameterId(request.params) as unknown as PolicyId,
       );
 
@@ -668,7 +693,7 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const policy = await services.governanceService.createPolicy({
-        organizationId: requiredOrganizationId(services, body.organizationId),
+        organizationId: organizationOf(request),
         name: requiredText(body.name, "name"),
         description: optionalText(body.description) ?? "",
         subject: parsePolicySubject(body.subject),
@@ -687,7 +712,7 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const policy = await services.governanceService.updatePolicy({
-        organizationId: requiredOrganizationId(services, body.organizationId),
+        organizationId: organizationOf(request),
         policyId: parameterId(request.params) as unknown as PolicyId,
         name: optionalText(body.name),
         description:
@@ -725,14 +750,14 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.workspaceService.getOrganizationOverview(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
       );
     });
 
     instance.get("/workspaces", async (request) => {
       const query = objectBody(request.query);
       const workspaces = await services.workspaceService.listWorkspaces(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
       );
 
       return { workspaces };
@@ -742,7 +767,7 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const workspace = await services.workspaceService.createWorkspace({
-        organizationId: requiredOrganizationId(services, body.organizationId),
+        organizationId: organizationOf(request),
         name: requiredText(body.name, "name"),
         description: optionalText(body.description),
       });
@@ -754,7 +779,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.workspaceService.getWorkspaceDetail(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         parameterId(request.params) as unknown as WorkspaceId,
       );
     });
@@ -763,7 +788,7 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const workspace = await services.workspaceService.updateWorkspace({
-        organizationId: requiredOrganizationId(services, body.organizationId),
+        organizationId: organizationOf(request),
         workspaceId: parameterId(request.params) as unknown as WorkspaceId,
         name: optionalText(body.name),
         description: nullableText(body.description),
@@ -777,7 +802,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.agentDirectoryService.getAgentDetail(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         parameterId(request.params) as unknown as AgentId,
       );
     });
@@ -786,7 +811,7 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const agent = await services.agentDirectoryService.createAgent({
-        organizationId: requiredOrganizationId(services, body.organizationId),
+        organizationId: organizationOf(request),
         name: requiredText(body.name, "name"),
         description: requiredText(body.description, "description"),
         type: parseAgentType(body.type),
@@ -804,7 +829,7 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const agent = await services.agentDirectoryService.updateAgent({
-        organizationId: requiredOrganizationId(services, body.organizationId),
+        organizationId: organizationOf(request),
         agentId: parameterId(request.params) as unknown as AgentId,
         description: optionalText(body.description),
         capabilities:
@@ -831,7 +856,7 @@ export function buildApiServer(
     instance.get("/agents", async (request) => {
       const query = objectBody(request.query);
       const agents = await services.workQueryService.getAgents(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
       );
 
       return { agents };
@@ -840,7 +865,7 @@ export function buildApiServer(
     instance.get("/activity", async (request) => {
       const query = objectBody(request.query);
       const events = await services.workQueryService.getOrganizationActivity(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         parseOptionalLimit(query.limit),
       );
 
@@ -860,7 +885,7 @@ export function buildApiServer(
     instance.get("/mission-templates", async (request) => {
       const query = objectBody(request.query);
       const templates = await services.missionTemplateService.listTemplates(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
       );
 
       return { templates };
@@ -870,7 +895,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.missionTemplateService.getTemplate(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         parameterTemplateId(request.params),
       );
     });
@@ -885,8 +910,8 @@ export function buildApiServer(
         // agents, tasks, approval state, another requester - never reaches the
         // service.
         const work = await services.missionTemplateService.startMission({
-          organizationId: requiredOrganizationId(services, body.organizationId),
-          requesterId: developmentRequesterId,
+          organizationId: organizationOf(request),
+          requesterId: accessOf(request).userId,
           templateId: parameterTemplateId(request.params),
           name: templateText(body.name, "name"),
           objective: templateText(body.objective, "objective") ?? "",
@@ -918,7 +943,7 @@ export function buildApiServer(
     instance.get("/memory", { config: { rateLimit: KNOWLEDGE_SEARCH_LIMIT } }, async (request) => {
       const query = objectBody(request.query);
       const result = await services.companyBrainService.search(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         {
           query: optionalBoundedText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
           limit: parseOptionalLimit(query.limit),
@@ -932,7 +957,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.companyBrainService.search(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         {
           query: optionalBoundedText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
           types: parseKnowledgeTypes(query.types),
@@ -952,7 +977,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.companyBrainService.getOverview(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
       );
     });
 
@@ -960,7 +985,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.companyBrainService.previewRecall(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         {
           query: requiredText(query.query, "query", MAX_KNOWLEDGE_QUERY_CHARS),
           workspaceId: optionalUuid(query.workspaceId, "workspaceId") as WorkspaceId | undefined,
@@ -973,7 +998,7 @@ export function buildApiServer(
       const query = objectBody(request.query);
 
       return services.companyBrainService.getDetail(
-        requiredOrganizationId(services, query.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as MemoryId,
       );
     });
@@ -982,14 +1007,14 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const knowledge = await services.companyBrainService.createKnowledge({
-        organizationId: requiredOrganizationId(services, body.organizationId),
+        organizationId: organizationOf(request),
         title: requiredText(body.title, "title", 200),
         content: requiredText(body.content, "content", 4_000),
         type: parseKnowledgeType(body.type),
         importance: parseUnitNumber(body.importance, "importance"),
         confidence: parseUnitNumber(body.confidence, "confidence"),
         workspaceId: optionalUuid(body.workspaceId, "workspaceId") as WorkspaceId | undefined,
-        createdBy: actorOf(),
+        createdBy: actorOf(request),
       });
 
       return reply.status(201).send({ knowledge });
@@ -999,7 +1024,7 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const knowledge = await services.companyBrainService.updateKnowledge({
-        organizationId: requiredOrganizationId(services, body.organizationId),
+        organizationId: organizationOf(request),
         knowledgeId: parameterUuid(request.params) as MemoryId,
         title: body.title === undefined ? undefined : requiredText(body.title, "title", 200),
         content: body.content === undefined ? undefined : requiredText(body.content, "content", 4_000),
@@ -1013,7 +1038,7 @@ export function buildApiServer(
             : body.workspaceId === null
               ? null
               : (requiredUuid(body.workspaceId, "workspaceId") as WorkspaceId),
-        updatedBy: actorOf(),
+        updatedBy: actorOf(request),
       });
 
       return { knowledge };
@@ -1023,9 +1048,9 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const knowledge = await services.companyBrainService.approveKnowledge(
-        requiredOrganizationId(services, body.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as MemoryId,
-        actorOf(),
+        actorOf(request),
       );
 
       return { knowledge };
@@ -1035,10 +1060,10 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const knowledge = await services.companyBrainService.archiveKnowledge(
-        requiredOrganizationId(services, body.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as MemoryId,
         {
-          by: actorOf(),
+          by: actorOf(request),
           reason: optionalBoundedText(body.reason, "reason", 500),
         },
       );
@@ -1050,9 +1075,9 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const knowledge = await services.companyBrainService.restoreKnowledge(
-        requiredOrganizationId(services, body.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as MemoryId,
-        actorOf(),
+        actorOf(request),
       );
 
       return { knowledge };
@@ -1064,10 +1089,10 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const { kept, merged } = await services.companyBrainService.mergeKnowledge(
-        requiredOrganizationId(services, body.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as MemoryId,
         requiredUuid(body.intoId, "intoId") as MemoryId,
-        actorOf(),
+        actorOf(request),
       );
 
       return { knowledge: kept, merged };
@@ -1079,10 +1104,10 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const { current, replaced } = await services.companyBrainService.supersedeKnowledge(
-        requiredOrganizationId(services, body.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as MemoryId,
         requiredUuid(body.replacesId, "replacesId") as MemoryId,
-        actorOf(),
+        actorOf(request),
         optionalBoundedText(body.note, "note", 500),
       );
 
@@ -1093,10 +1118,10 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const conflict = await services.companyBrainService.resolveConflict(
-        requiredOrganizationId(services, body.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as KnowledgeConflictId,
         parseConflictResolution(body),
-        actorOf(),
+        actorOf(request),
         optionalBoundedText(body.note, "note", 500),
       );
 
@@ -1109,9 +1134,9 @@ export function buildApiServer(
       const body = objectBody(request.body);
 
       const report = await services.companyBrainService.deriveFromArtifact(
-        requiredOrganizationId(services, body.organizationId),
+        organizationOf(request),
         parameterUuid(request.params) as ArtifactId,
-        actorOf(),
+        actorOf(request),
       );
 
       return report;
@@ -1121,7 +1146,7 @@ export function buildApiServer(
       const workId = await authorizedWorkId(services, request);
 
       return services.companyBrainService.getMissionKnowledge(
-        requiredOrganizationId(services, objectBody(request.query).organizationId),
+        organizationOf(request),
         workId,
       );
     });
@@ -1171,13 +1196,38 @@ const KNOWLEDGE_SEARCH_LIMIT = { max: 60, timeWindow: "1 minute" };
 const KNOWLEDGE_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
 const KNOWLEDGE_DERIVE_LIMIT = { max: 5, timeWindow: "1 minute" };
 
+/** The verified caller. Only the sign-in hook sets it. */
+function accessOf(request: { access?: Access }): Access {
+  if (!request.access) throw new ApiError(401, "Sign in to continue.");
+  return request.access;
+}
+
+/** The organization the caller is acting in, as their membership says. */
+function organizationOf(request: { access?: Access }): OrganizationId {
+  return accessOf(request).organizationId;
+}
+
 /**
- * Who is acting, for provenance. There is no authentication yet, so every
- * write is attributed to the seeded development requester - the same identity
- * /work uses - rather than to anything the request says about itself.
+ * Who is acting, for provenance: the signed-in user, never anything the
+ * request says about itself.
  */
-function actorOf(): string {
-  return `user:${developmentRequesterId}`;
+function actorOf(request: { access?: Access }): string {
+  return `user:${accessOf(request).userId}`;
+}
+
+/**
+ * The organization a request names, if any. A query string and a body that
+ * name two different ones are refused rather than one being picked.
+ */
+function requestedOrganization(request: { query: unknown; body: unknown }): string | undefined {
+  const fromQuery = optionalText(fieldOf(request.query, "organizationId"));
+  const fromBody = optionalText(fieldOf(request.body, "organizationId"));
+
+  if (fromQuery && fromBody && fromQuery !== fromBody) {
+    throw new ApiError(404, "Organization not found.");
+  }
+
+  return fromQuery ?? fromBody;
 }
 
 const TEMPLATE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -1356,48 +1406,6 @@ function safeLength(payload: Record<string, unknown>): number {
     // A payload that will not serialize cannot be sent either way.
     return Number.POSITIVE_INFINITY;
   }
-}
-
-/**
- * Resolves the organization every request acts within.
- *
- * There is no authentication yet, so the API is bound to exactly one
- * organization - the seeded one. A request may name that organization
- * explicitly (the web client does, on every scoped call), but it may not name
- * a *different* one: with no caller identity to check an override against,
- * honouring an arbitrary organizationId is a tenant boundary anyone can step
- * across just by changing a query string. So a mismatch is refused rather than
- * trusted. When real authentication lands, the bound organization comes from
- * the caller's token instead of this default, and the same equality check
- * still holds the line.
- */
-function requiredOrganizationId(
-  services: ApiServices,
-  value: unknown,
-): OrganizationId {
-  const bound = services.developmentOrganizationId;
-  const requested = optionalText(value);
-
-  if (!bound) {
-    // No auth and no seeded organization: there is nothing to scope to, and
-    // trusting a caller-supplied id here would be the whole vulnerability.
-    throw new ApiError(
-      400,
-      "organizationId is required when no development workforce is seeded.",
-    );
-  }
-
-  if (requested && requested !== bound) {
-    // Deliberately "not found" rather than "forbidden": a caller with no
-    // identity should not be able to tell a real other organization apart
-    // from a made-up one.
-    throw new ApiError(
-      404,
-      "Organization not found.",
-    );
-  }
-
-  return bound;
 }
 
 /**
@@ -1620,6 +1628,13 @@ function healthHandler(services: ApiServices) {
   });
 }
 
+/** One field of a query or body that may not be an object at all (a GET has no body). */
+function fieldOf(value: unknown, field: string): unknown {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)[field]
+    : undefined;
+}
+
 function objectBody(body: unknown): Record<string, unknown> {
   if (typeof body !== "object" || body === null) {
     throw new ApiError(400, "Request body must be a JSON object.");
@@ -1638,13 +1653,10 @@ function objectBody(body: unknown): Record<string, unknown> {
  */
 async function authorizedWorkId(
   services: ApiServices,
-  request: { params: unknown; query: unknown },
+  request: { params: unknown; access?: Access },
 ): Promise<WorkId> {
   const workId = parameterId(request.params);
-  const organizationId = requiredOrganizationId(
-    services,
-    objectBody(request.query).organizationId,
-  );
+  const organizationId = organizationOf(request);
 
   await services.workQueryService.assertWorkInOrganization(
     workId,
@@ -1761,7 +1773,7 @@ function parsePriority(value: unknown): WorkPriority | undefined {
 
 
 function statusForError(error: Error): number {
-  if (error instanceof ApiError) {
+  if (error instanceof ApiError || error instanceof AccessError) {
     return error.statusCode;
   }
 
@@ -1840,6 +1852,8 @@ function statusForError(error: Error): number {
 
 function errorCode(statusCode: number): string {
   if (statusCode === 400) return "VALIDATION_ERROR";
+  if (statusCode === 401) return "UNAUTHENTICATED";
+  if (statusCode === 403) return "FORBIDDEN";
   if (statusCode === 404) return "NOT_FOUND";
   if (statusCode === 409) return "INVALID_STATE";
   if (statusCode === 429) return "RATE_LIMITED";

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildApiServer, type ApiServices } from "./server.js";
+import type { ApiServices } from "./server.js";
+import { buildTestServer, type TestServices } from "./access/testing.js";
 import { missionControlFixture, orgA, orgB } from "./mission-control.fixture.js";
 
 /**
@@ -14,7 +15,7 @@ import { missionControlFixture, orgA, orgB } from "./mission-control.fixture.js"
 const developmentRequester = "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09";
 
 function serve(fixture: ReturnType<typeof missionControlFixture>) {
-  return buildApiServer({
+  return buildTestServer({
     missionControlService: fixture.service,
     developmentOrganizationId: orgA,
     corsOrigins: [],
@@ -100,7 +101,7 @@ test("another organization's mission, a malformed id, and a mission that is stil
 });
 
 test("a store failure is reported generically, never with its details", async () => {
-  const app = buildApiServer({
+  const app = buildTestServer({
     missionControlService: {
       getMissionControl: async () => {
         throw new Error("Failed to read mission summaries: connection to db.internal refused (password=hunter2)");

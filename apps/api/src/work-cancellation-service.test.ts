@@ -15,7 +15,8 @@ import type {
 import { InMemoryExecutionJobRepository } from "@unioffice/database";
 
 import { EventRecorder } from "./event-recorder.js";
-import { buildApiServer, type ApiServices } from "./server.js";
+import type { ApiServices } from "./server.js";
+import { buildTestServer, type TestServices } from "./access/testing.js";
 import { WorkCancellationError, WorkCancellationService } from "./work-cancellation-service.js";
 
 /**
@@ -219,7 +220,7 @@ test("the route records the server's requester, reads only the reason, and maps 
   const queued = f.mission();
   const finished = f.mission({ status: "completed" });
 
-  const app = buildApiServer({
+  const app = buildTestServer({
     workCancellationService: f.service,
     workQueryService: { assertWorkInOrganization: async () => undefined },
     developmentOrganizationId: organizationId,

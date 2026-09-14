@@ -23,7 +23,8 @@ import type {
 import { WorkApplicationService } from "./application.js";
 import { EventRecorder } from "./event-recorder.js";
 import { MissionTemplateService } from "./mission-template-service.js";
-import { buildApiServer, type ApiServices } from "./server.js";
+import type { ApiServices } from "./server.js";
+import { buildTestServer, type TestServices } from "./access/testing.js";
 
 /**
  * The template routes over the real template service and the real application
@@ -78,7 +79,7 @@ function harness(options: { failList?: boolean } = {}) {
     policyRepository,
   );
 
-  const app = buildApiServer({
+  const app = buildTestServer({
     missionTemplateService,
     developmentOrganizationId: org,
     corsOrigins: [],

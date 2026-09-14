@@ -28,7 +28,8 @@ import { GovernanceService } from "./governance-service.js";
 import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
 import { KnowledgeGovernance } from "./knowledge-governance.js";
 import { KnowledgeRecallService } from "./knowledge-recall-service.js";
-import { buildApiServer, type ApiServices } from "./server.js";
+import type { ApiServices } from "./server.js";
+import { buildTestServer, type TestServices } from "./access/testing.js";
 
 /**
  * Merging and replacing knowledge at the edge, over the real Brain service and
@@ -79,7 +80,7 @@ function harness() {
     nothing as unknown as AgentRepository,
   );
 
-  const app = buildApiServer({
+  const app = buildTestServer({
     companyBrainService,
     developmentOrganizationId: org,
     corsOrigins: [],

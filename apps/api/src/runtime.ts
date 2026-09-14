@@ -11,6 +11,7 @@ import {
   SupabaseEventRepository,
   SupabaseExecutionJobRepository,
   SupabaseKnowledgeLinkRepository,
+  SupabaseMembershipRepository,
   SupabaseMemoryRepository,
   SupabaseOperationalReadRepository,
   SupabaseOrganizationRepository,
@@ -33,6 +34,8 @@ import {
 
 import { createDefaultToolRegistry } from "@unioffice/tools";
 
+import { AccessResolver } from "./access/access-resolver.js";
+import { SupabaseAuthenticator } from "./access/authenticator.js";
 import { AgentDirectoryService } from "./agent-directory-service.js";
 import { GovernanceOverviewService } from "./governance-overview-service.js";
 import { GovernanceService } from "./governance-service.js";
@@ -87,6 +90,12 @@ export function createExecutionRuntime(config: ApiConfig) {
   const executionJobRepository = new SupabaseExecutionJobRepository(supabase);
   const policyRepository = new SupabasePolicyRepository(supabase);
   const workspaceRepository = new SupabaseWorkspaceRepository(supabase);
+  const membershipRepository = new SupabaseMembershipRepository(supabase);
+
+  // Tokens are checked with the auth server; what a verified person may do
+  // comes from their membership, which only the API reads and writes.
+  const authenticator = new SupabaseAuthenticator(supabase);
+  const accessResolver = new AccessResolver(membershipRepository);
 
   const eventRecorder = new EventRecorder(eventRepository);
 
@@ -380,6 +389,9 @@ export function createExecutionRuntime(config: ApiConfig) {
     knowledgeLinkRepository,
     executionJobRepository,
     policyRepository,
+    membershipRepository,
+    authenticator,
+    accessResolver,
     eventRecorder,
     toolRegistry,
     applicationService,

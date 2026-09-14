@@ -6,14 +6,15 @@ import type { OrganizationId, Work, WorkId } from "@unioffice/core";
 
 import type { CreateWorkInput } from "./application.js";
 import { AgentValidationError } from "./agent-directory-service.js";
-import { buildApiServer, type ApiServices } from "./server.js";
+import type { ApiServices } from "./server.js";
+import { buildTestServer, type TestServices } from "./access/testing.js";
 import {
   WorkspaceNotFoundError,
   WorkspaceValidationError,
 } from "./workspace-service.js";
 import type { WorkQueryService } from "./work-query-service.js";
 
-function baseServices(overrides: Partial<ApiServices> = {}): ApiServices {
+function baseServices(overrides: Partial<TestServices> = {}): TestServices {
   return {
     applicationService: {} as ApiServices["applicationService"],
     workService: {} as ApiServices["workService"],
@@ -46,7 +47,7 @@ test("returns a generic message for an unmapped internal error, never the raw er
       throw new Error("Sensitive internal detail: password=hunter2 host=db.internal");
     },
   } as unknown as WorkQueryService;
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workQueryService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -69,7 +70,7 @@ test("still returns the specific message for an intentional not-found error", as
       throw new Error(`Work not found: ${id}`);
     },
   } as unknown as WorkQueryService;
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workQueryService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -86,7 +87,7 @@ test("still returns the specific message for an intentional not-found error", as
 });
 
 test("returns a validation error with its intended message for bad input", async () => {
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
 
@@ -103,7 +104,7 @@ test("returns a validation error with its intended message for bad input", async
 });
 
 test("rate limits a client that exceeds the request budget", async () => {
-  const app = buildApiServer(baseServices());
+  const app = buildTestServer(baseServices());
   await app.ready();
 
   let lastResponse;
@@ -132,7 +133,7 @@ test("returns the created work for a valid request", async () => {
   const applicationService = {
     createWork: async () => work,
   } as unknown as ApiServices["applicationService"];
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     applicationService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -168,7 +169,7 @@ test("stores a mission briefing on the work it creates", async () => {
       } satisfies Work;
     },
   } as unknown as ApiServices["applicationService"];
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     applicationService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -190,7 +191,7 @@ test("stores a mission briefing on the work it creates", async () => {
 });
 
 test("rejects a briefing too long to put in front of the planner", async () => {
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
 
@@ -224,7 +225,7 @@ test("treats a blank briefing as no briefing at all", async () => {
       } satisfies Work;
     },
   } as unknown as ApiServices["applicationService"];
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     applicationService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -259,7 +260,7 @@ test("creating a workspace returns it and reports validation failures plainly", 
       };
     },
   } as unknown as ApiServices["workspaceService"];
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workspaceService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -289,7 +290,7 @@ test("a workspace from another organization is not found rather than forbidden",
       throw new WorkspaceNotFoundError("Workspace not found: workspace-9");
     },
   } as unknown as ApiServices["workspaceService"];
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workspaceService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -304,7 +305,7 @@ test("a workspace from another organization is not found rather than forbidden",
 });
 
 test("rejects an agent type the domain model does not have", async () => {
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
 
@@ -330,7 +331,7 @@ test("surfaces an unknown tool grant as a client error, not a server one", async
       throw new AgentValidationError("No such tool: telepathy");
     },
   } as unknown as ApiServices["agentDirectoryService"];
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     agentDirectoryService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -359,7 +360,7 @@ test("clearing an agent's workspace is passed through as null, not dropped", asy
       return { id: "agent-1", name: "Dana" };
     },
   } as unknown as ApiServices["agentDirectoryService"];
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     agentDirectoryService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -375,7 +376,7 @@ test("clearing an agent's workspace is passed through as null, not dropped", asy
 });
 
 test("names the field that was left blank, not just that it was blank", async () => {
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
 
@@ -443,7 +444,7 @@ test("the live channel opens and carries events through as frames", async () => 
     },
   } as unknown as ApiServices["executionStream"];
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     executionStream,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -511,7 +512,7 @@ test("a client that goes away takes its subscription with it", async () => {
     },
   } as unknown as ApiServices["executionStream"];
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     executionStream,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -546,7 +547,7 @@ test("the live channel sends only the mission that was asked for", async () => {
     },
   } as unknown as ApiServices["executionStream"];
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     executionStream,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -596,7 +597,7 @@ test("an oversized payload is dropped rather than pushed to every open tab", asy
     },
   } as unknown as ApiServices["executionStream"];
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     executionStream,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -680,7 +681,7 @@ test("refuses a request that names a different organization", async () => {
     },
   } as unknown as WorkQueryService;
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workQueryService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -700,7 +701,7 @@ test("serves a request that names the bound organization", async () => {
     listWork: async () => [],
   } as unknown as WorkQueryService;
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workQueryService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -724,7 +725,7 @@ test("a work item in another organization is not reachable by id", async () => {
     },
   } as unknown as WorkQueryService;
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workQueryService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -748,7 +749,7 @@ test("rejects a malformed work id before it reaches a query", async () => {
     },
   } as unknown as WorkQueryService;
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workQueryService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -766,7 +767,7 @@ test("an approval decision is recorded against the server's requester, whatever 
   const decided: Array<{ decision: string; resolvedBy: string; organizationId: string }> = [];
   const approvalId = "55555555-5555-4555-8555-555555555555";
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     workApprovalService: {
       approve: async (_id: string, resolvedBy: string, organizationId: string) => {
         decided.push({ decision: "approve", resolvedBy, organizationId });
@@ -815,7 +816,7 @@ test("drops a caller-supplied work metadata object, keeping only the briefing", 
     },
   } as unknown as ApiServices["applicationService"];
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     applicationService,
     developmentOrganizationId: "org-1" as OrganizationId,
   }));
@@ -840,7 +841,7 @@ test("work cannot be filed under another organization's workspace", async () => 
   let created = false;
   let askedFor: unknown[] = [];
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     applicationService: {
       createWork: async () => {
         created = true;
@@ -871,7 +872,7 @@ test("work filed under one of our workspaces keeps it, and a malformed id is ref
   const ownWorkspace = "44444444-4444-4444-8444-444444444444";
   const created: CreateWorkInput[] = [];
 
-  const app = buildApiServer(baseServices({
+  const app = buildTestServer(baseServices({
     applicationService: {
       createWork: async (input: CreateWorkInput) => {
         created.push(input);
