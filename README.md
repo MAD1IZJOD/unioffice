@@ -6,13 +6,23 @@ tools, executes it, and keeps consequential steps behind your approval.
 
 ## Running locally
 
-Three processes, each in its own terminal. All of them read `.env` at the
-repository root - copy `.env.example` and fill in Supabase and Ollama.
+All three processes read `.env` at the repository root - copy `.env.example`
+and fill in Supabase and Ollama. Then, from the repository root:
+
+```
+pnpm dev      # starts the API, the worker and the web app together
+```
+
+`pnpm dev` runs each package's `dev` script through turbo, so the worker is
+started alongside the API. Without a worker, missions are planned and put on
+the queue but never executed - Mission Control reports them as stalled.
+
+To run one process on its own, in its own terminal:
 
 ```
 pnpm api      # HTTP API on http://127.0.0.1:4000
 pnpm worker   # executes queued work
-pnpm web      # web app on http://127.0.0.1:5173
+pnpm web      # web app on http://localhost:5173
 ```
 
 Ollama must be running with the model named by `OLLAMA_MODEL`.
