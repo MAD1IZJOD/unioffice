@@ -107,7 +107,12 @@ export interface CreateKnowledgeInput {
   confidence?: number;
   workspaceId?: WorkspaceId;
   createdBy: string;
+  /** The author may propose knowledge but not make it current: it waits for review. */
+  proposeOnly?: boolean;
 }
+
+/** Which workspaces the caller sees. Absent: all of them. */
+export type KnowledgeReach = (workspaceId: WorkspaceId | undefined) => boolean;
 
 export interface UpdateKnowledgeInput {
   organizationId: OrganizationId;
@@ -155,6 +160,7 @@ export class CompanyBrainService {
   async search(
     organizationId: OrganizationId,
     input: KnowledgeSearchInput,
+    reach?: KnowledgeReach,
   ): Promise<{ mode: "relevance" | "recent"; items: KnowledgeSearchResult[] }> {
     if (input.workspaceId) {
       await this.requireWorkspace(organizationId, input.workspaceId);
@@ -183,7 +189,7 @@ export class CompanyBrainService {
 
       return {
         mode: "recent",
-        items: rows.map((knowledge) => {
+        items: rows.filter((knowledge) => !reach || reach(knowledge.workspaceId)).map((knowledge) => {
           const freshness = freshnessOf(knowledge, now);
           return {
             knowledge,
@@ -209,6 +215,7 @@ export class CompanyBrainService {
     });
 
     const filtered = ranked.filter(({ memory }) =>
+      (!reach || reach(memory.workspaceId)) &&
       (!input.types?.length || input.types.includes(memory.type)) &&
       (input.workspaceId === undefined ||
         (input.workspaceId === null ? !memory.workspaceId : memory.workspaceId === input.workspaceId)) &&
@@ -231,7 +238,11 @@ export class CompanyBrainService {
   }
 
   /** The Brain's opening: what the company knows, learned, uses and disputes. */
-  async getOverview(organizationId: OrganizationId) {
+  async getOverview(organizationId: OrganizationId, reach?: KnowledgeReach) {
+    // Everything named below is narrowed to the workspaces the caller sees;
+    // only the lifecycle counts stay company-wide.
+    const visible = (memory: Memory) => !reach || reach(memory.workspaceId);
+
     const [counts, recentlyLearned, awaitingReview, important, recentRecalls, openConflicts, archived, sample] =
       await Promise.all([
         this.memories.countByStatus(organizationId),
@@ -269,8 +280,15 @@ export class CompanyBrainService {
     const usedById = new Map(usedRows.map((row) => [row.id, row]));
     const conflictById = new Map(conflictRows.map((row) => [row.id, row]));
 
+    const visibleSample = sample.filter(visible);
     const byType: Partial<Record<MemoryType, number>> = {};
-    for (const row of sample) byType[row.type] = (byType[row.type] ?? 0) + 1;
+    for (const row of visibleSample) byType[row.type] = (byType[row.type] ?? 0) + 1;
+
+    const conflicts = openConflicts.flatMap((conflict) => {
+      const left = conflictById.get(conflict.memoryId);
+      const right = conflictById.get(conflict.conflictingMemoryId);
+      return left && right && visible(left) && visible(right) ? [{ conflict, left, right }] : [];
+    });
 
     const now = new Date();
 
@@ -279,30 +297,26 @@ export class CompanyBrainService {
       generatedAt: now,
       counts: {
         ...counts,
-        openConflicts: openConflicts.length,
+        openConflicts: reach ? conflicts.length : openConflicts.length,
         missionsInformed: new Set(recentRecalls.flatMap((recall) => (recall.workId ? [recall.workId] : []))).size,
         recallsRecorded: recentRecalls.length,
-        stale: sample.filter((row) => freshnessOf(row, now).stale).length,
+        stale: visibleSample.filter((row) => freshnessOf(row, now).stale).length,
       },
       byType,
       /** byType is counted over at most this many of the newest recallable rows. */
-      byTypeSampleSize: sample.length,
-      recentlyLearned,
-      awaitingReview,
-      important,
+      byTypeSampleSize: visibleSample.length,
+      recentlyLearned: recentlyLearned.filter(visible),
+      awaitingReview: awaitingReview.filter(visible),
+      important: important.filter(visible),
       inUse: mostUsedIds.flatMap((id) => {
         const knowledge = usedById.get(id);
         const entry = usage.get(id)!;
-        return knowledge
+        return knowledge && visible(knowledge)
           ? [{ knowledge, recallCount: entry.count, missionCount: entry.works.size, lastRecalledAt: entry.lastRecalledAt }]
           : [];
       }),
-      conflicts: openConflicts.flatMap((conflict) => {
-        const left = conflictById.get(conflict.memoryId);
-        const right = conflictById.get(conflict.conflictingMemoryId);
-        return left && right ? [{ conflict, left, right }] : [];
-      }),
-      archived,
+      conflicts,
+      archived: archived.filter(visible),
       retrieval: {
         semantic: Boolean(this.embeddingModel),
         embeddingModel: this.embeddingModel,
@@ -310,9 +324,15 @@ export class CompanyBrainService {
     };
   }
 
-  async getDetail(organizationId: OrganizationId, knowledgeId: MemoryId) {
+  async getDetail(organizationId: OrganizationId, knowledgeId: MemoryId, reach?: KnowledgeReach) {
     const knowledge = await this.requireKnowledge(organizationId, knowledgeId);
     const now = new Date();
+
+    // The entry itself is the route's to authorize; what it links to is
+    // narrowed here, so a related entry from a workspace the caller was not
+    // given is simply not named.
+    const visible = (memory: Memory | undefined): memory is Memory =>
+      memory !== undefined && (!reach || reach(memory.workspaceId));
 
     const [work, task, artifact, agent, workspace, recalls, conflicts, sameMission, sameArtifact, similar, supersedes] =
       await Promise.all([
@@ -408,24 +428,24 @@ export class CompanyBrainService {
         extraction: knowledge.metadata.extraction,
       },
       related: {
-        sameMission: sameMission.filter((row) => row.id !== knowledge.id).slice(0, 10),
-        sameArtifact: sameArtifact.filter((row) => row.id !== knowledge.id).slice(0, 10),
+        sameMission: sameMission.filter((row) => row.id !== knowledge.id && visible(row)).slice(0, 10),
+        sameArtifact: sameArtifact.filter((row) => row.id !== knowledge.id && visible(row)).slice(0, 10),
         similar: similar
-          .filter((entry) => entry.memory.id !== knowledge.id)
+          .filter((entry) => entry.memory.id !== knowledge.id && visible(entry.memory))
           .slice(0, 6)
           .map((entry) => ({ knowledge: entry.memory, relevance: Math.round(entry.score * 1_000) / 1_000, reasons: entry.reasons })),
-        supersedes: supersedes[0],
-        supersededBy,
-        mergedInto,
+        supersedes: visible(supersedes[0]) ? supersedes[0] : undefined,
+        supersededBy: visible(supersededBy) ? supersededBy : undefined,
+        mergedInto: visible(mergedInto) ? mergedInto : undefined,
       },
       confirmations,
       usage,
-      conflicts: conflicts.map((conflict) => ({
-        conflict,
-        counterpart: counterparts.get(
+      conflicts: conflicts.flatMap((conflict) => {
+        const counterpart = counterparts.get(
           conflict.memoryId === knowledge.id ? conflict.conflictingMemoryId : conflict.memoryId,
-        ),
-      })),
+        );
+        return !reach || visible(counterpart) ? [{ conflict, counterpart }] : [];
+      }),
     };
   }
 
@@ -638,6 +658,29 @@ export class CompanyBrainService {
   async previewRecall(
     organizationId: OrganizationId,
     input: { query: string; workspaceId?: WorkspaceId; agentId?: AgentId },
+    reach?: KnowledgeReach,
+  ): Promise<RecallResult> {
+    const result = await this.previewRecallFor(organizationId, input);
+
+    if (!reach) return result;
+
+    // The preview is what an agent would be handed, which can include
+    // knowledge from workspaces this person was not given. They are shown the
+    // part they may read; the rest is not named.
+    const hidden = new Set(
+      result.ranked.filter((entry) => !reach(entry.memory.workspaceId)).map((entry) => entry.memory.id as string),
+    );
+
+    return {
+      ...result,
+      items: result.items.filter((item) => !hidden.has(item.id)),
+      ranked: result.ranked.filter((entry) => !hidden.has(entry.memory.id)),
+    };
+  }
+
+  private async previewRecallFor(
+    organizationId: OrganizationId,
+    input: { query: string; workspaceId?: WorkspaceId; agentId?: AgentId },
   ): Promise<RecallResult> {
     if (input.workspaceId) await this.requireWorkspace(organizationId, input.workspaceId);
 
@@ -692,10 +735,11 @@ export class CompanyBrainService {
         workspaceId: input.workspaceId,
         scope: "company",
         type,
-        // A person writing knowledge is vouching for it, so it is active from
-        // the start - except when it reads like an instruction to an AI, which
-        // waits for a second look however it arrived.
-        status: flags.length > 0 ? "proposed" : "active",
+        // A person who may curate knowledge is vouching for what they write,
+        // so it is active from the start. Someone who may only propose it,
+        // and anything that reads like an instruction to an AI however it
+        // arrived, waits for a second look.
+        status: flags.length > 0 || input.proposeOnly ? "proposed" : "active",
         title,
         content,
         sourceType: "user",
@@ -712,7 +756,9 @@ export class CompanyBrainService {
         actorId: input.createdBy,
         reason: flags.length > 0
           ? "Held as a proposal: the text is phrased as instructions to an AI."
-          : "Written by a person.",
+          : input.proposeOnly
+            ? "Proposed for review by someone who can propose knowledge but not make it current."
+            : "Written by a person.",
       },
     );
   }
@@ -1051,10 +1097,29 @@ export class CompanyBrainService {
     return this.replace(newer, older, by, note ?? `Replaced by “${newer.title}”.`);
   }
 
+  /** The workspace an entry lives in, for deciding who may act on it. */
+  async locateKnowledge(organizationId: OrganizationId, knowledgeId: MemoryId): Promise<WorkspaceId | undefined> {
+    return (await this.requireKnowledge(organizationId, knowledgeId)).workspaceId;
+  }
+
+  /** The workspaces of both sides of a conflict, for deciding who may settle it. */
+  async locateConflict(organizationId: OrganizationId, conflictId: KnowledgeConflictId): Promise<Array<WorkspaceId | undefined>> {
+    const conflict = await this.links.findConflictById(organizationId, conflictId);
+
+    if (!conflict) {
+      throw new KnowledgeNotFoundError("Conflict not found.");
+    }
+
+    const sides = await this.memories.findByIds(organizationId, [conflict.memoryId, conflict.conflictingMemoryId]);
+
+    return sides.map((side) => side.workspaceId);
+  }
+
   async deriveFromArtifact(
     organizationId: OrganizationId,
     artifactId: ArtifactId,
     requestedBy: string,
+    reach?: KnowledgeReach,
   ): Promise<CaptureReport> {
     const artifact = await this.artifactRepository.findById(artifactId);
 
@@ -1067,10 +1132,17 @@ export class CompanyBrainService {
     }
 
     const work = artifact.workId ? await this.workRepository.findById(artifact.workId) : null;
+    const ownWork = work && work.organizationId === organizationId ? work : undefined;
+
+    // An artifact from a mission in a workspace the caller was not given reads
+    // as one that does not exist.
+    if (reach && !reach(ownWork?.workspaceId)) {
+      throw new KnowledgeNotFoundError("Artifact not found.");
+    }
 
     return this.capture.captureFromArtifact({
       artifact,
-      work: work && work.organizationId === organizationId ? work : undefined,
+      work: ownWork,
       requestedBy,
     });
   }
