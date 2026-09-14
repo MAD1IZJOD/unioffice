@@ -88,6 +88,14 @@ export function roleCan(role: OrganizationRole, permission: Permission): boolean
   return GRANTS[role].has(permission);
 }
 
+/**
+ * Everything a role may do, for a client deciding which controls to show.
+ * Showing is all it decides: every action is checked again on the server.
+ */
+export function permissionsOf(role: OrganizationRole): Permission[] {
+  return EVERYTHING.filter((permission) => GRANTS[role].has(permission));
+}
+
 /** The signed-in caller's standing in one organization, resolved on the server. */
 export interface Access {
   userId: UserId;

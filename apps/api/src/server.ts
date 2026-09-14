@@ -147,19 +147,23 @@ import type {
 } from "@unioffice/tools";
 
 import { AccessError, type AccessResolver } from "./access/access-resolver.js";
-import { bearerToken, type Authenticator } from "./access/authenticator.js";
-import type { Access } from "./access/permissions.js";
+import { bearerToken, type Authenticator, type Identity } from "./access/authenticator.js";
+import { permissionsOf, type Access } from "./access/permissions.js";
+import type { StreamTickets } from "./access/stream-tickets.js";
 
 declare module "fastify" {
   interface FastifyRequest {
-    /** Set once the caller is verified and their membership resolved. */
+    /** Set once the caller's token (or stream ticket) is verified. */
+    identity?: Identity;
+    /** Set once the caller's membership is resolved. */
     access?: Access;
   }
 }
 
 export interface ApiServices {
   authenticator: Authenticator;
-  accessResolver: Pick<AccessResolver, "resolve">;
+  accessResolver: Pick<AccessResolver, "resolve" | "organizationsFor">;
+  streamTickets: StreamTickets;
   applicationService: WorkApplicationService;
   workService: WorkService;
   workExecutionService: WorkExecutionService;
@@ -251,7 +255,35 @@ export function buildApiServer(
     // and handlers read the organization and the actor from here, not from
     // the request.
     instance.addHook("preHandler", async (request) => {
-      if (request.method === "OPTIONS" || request.routeOptions.url === "/health") return;
+      const route = request.routeOptions.url;
+
+      if (request.method === "OPTIONS" || route === "/health") return;
+
+      // The live channel cannot send headers, so a browser opens it with a
+      // single-use ticket bought by a signed-in request. The ticket names who
+      // and where; the membership behind it is still resolved fresh here.
+      const ticket = route === "/stream"
+        ? optionalText(fieldOf(request.query, "ticket"))
+        : undefined;
+
+      if (ticket !== undefined) {
+        const holder = services.streamTickets.redeem(ticket);
+
+        if (!holder) throw new ApiError(401, "Sign in to continue.");
+
+        const requested = requestedOrganization(request);
+
+        if (requested !== undefined && requested !== holder.organizationId) {
+          throw new ApiError(404, "Organization not found.");
+        }
+
+        request.identity = holder.identity;
+        request.access = await services.accessResolver.resolve(
+          holder.identity,
+          holder.organizationId,
+        );
+        return;
+      }
 
       const token = bearerToken(request.headers.authorization);
       const identity = token ? await services.authenticator.verify(token) : null;
@@ -259,6 +291,12 @@ export function buildApiServer(
       if (!identity) {
         throw new ApiError(401, "Sign in to continue.");
       }
+
+      request.identity = identity;
+
+      // Answerable before belonging anywhere: it is how someone new, or
+      // suspended, learns where they stand.
+      if (route === "/me") return;
 
       request.access = await services.accessResolver.resolve(
         identity,
@@ -302,6 +340,63 @@ export function buildApiServer(
     // description of what a mission is - the one the services compute - and
     // the browser never becomes a second place where that is decided.
     // ---------------------------------------------------------------------
+    // Who the caller is, where they belong, and what they may do in the
+    // organization they asked about. The web app shapes itself from this;
+    // the server checks every action again regardless.
+    instance.get("/me", async (request) => {
+      const identity = request.identity;
+
+      if (!identity) throw new ApiError(401, "Sign in to continue.");
+
+      const memberships = await services.accessResolver.organizationsFor(identity);
+      let access: Access | null = null;
+      let standing: "active" | "suspended" | "none" = "none";
+
+      try {
+        access = await services.accessResolver.resolve(identity, requestedOrganization(request));
+        standing = "active";
+      } catch (error) {
+        if (!(error instanceof AccessError)) throw error;
+        if (error.statusCode === 403) standing = "suspended";
+      }
+
+      return {
+        user: { id: identity.userId, email: identity.email },
+        standing,
+        organization: access
+          ? {
+              id: access.organizationId,
+              memberId: access.memberId,
+              role: access.role,
+              permissions: permissionsOf(access.role),
+              workspaces: [...access.workspaces].map(([workspaceId, level]) => ({
+                workspaceId,
+                access: level,
+              })),
+            }
+          : null,
+        memberships: memberships.map((member) => ({
+          organizationId: member.organizationId,
+          role: member.role,
+          status: member.status,
+        })),
+      };
+    });
+
+    instance.post(
+      "/stream/tickets",
+      { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+        const access = accessOf(request);
+
+        if (!request.identity) throw new ApiError(401, "Sign in to continue.");
+
+        return reply
+          .status(201)
+          .send(services.streamTickets.issue(request.identity, access.organizationId));
+      },
+    );
+
     instance.get("/stream", (request, reply) => {
       // Validated before the reply is hijacked. Afterwards the shared error
       // handler no longer owns this response, so a rejected request has to be

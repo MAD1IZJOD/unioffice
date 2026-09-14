@@ -10,6 +10,7 @@ import type {
 import { buildApiServer, type ApiServices } from "../server.js";
 
 import { AccessError } from "./access-resolver.js";
+import { StreamTickets } from "./stream-tickets.js";
 
 /** The user route tests act as unless they say otherwise. */
 export const TEST_USER_ID = "1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09" as UserId;
@@ -32,6 +33,8 @@ export interface TestPrincipal {
 export function signedIn(principal: TestPrincipal = {}): Pick<ApiServices, "authenticator" | "accessResolver"> {
   const userId = principal.userId ?? TEST_USER_ID;
   const email = principal.email ?? "tester@example.test";
+  const memberId = `member-${userId}` as MemberId;
+  const role = principal.role ?? "owner";
 
   return {
     authenticator: {
@@ -51,20 +54,35 @@ export function signedIn(principal: TestPrincipal = {}): Pick<ApiServices, "auth
           userId: identity.userId,
           email: identity.email,
           organizationId,
-          memberId: `member-${identity.userId}` as MemberId,
-          role: principal.role ?? "owner",
+          memberId,
+          role,
           workspaces: new Map(
             Object.entries(principal.workspaces ?? {}) as Array<[WorkspaceId, WorkspaceAccessLevel]>,
           ),
         };
+      },
+      async organizationsFor(identity) {
+        if (!principal.organizationId) return [];
+
+        const now = new Date(0);
+        return [{
+          id: memberId,
+          organizationId: principal.organizationId,
+          userId: identity.userId,
+          email: identity.email,
+          role,
+          status: "active",
+          createdAt: now,
+          updatedAt: now,
+        }];
       },
     },
   };
 }
 
 export type TestServices =
-  Omit<ApiServices, "authenticator" | "accessResolver"> &
-  Partial<Pick<ApiServices, "authenticator" | "accessResolver">> &
+  Omit<ApiServices, "authenticator" | "accessResolver" | "streamTickets"> &
+  Partial<Pick<ApiServices, "authenticator" | "accessResolver" | "streamTickets">> &
   { developmentOrganizationId?: OrganizationId; role?: OrganizationRole };
 
 /**
@@ -77,6 +95,7 @@ export function buildTestServer(services: TestServices) {
 
   const app = buildApiServer({
     ...signedIn({ organizationId: developmentOrganizationId, role }),
+    streamTickets: new StreamTickets(),
     ...rest,
   });
 

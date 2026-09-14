@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 
+import { StreamTickets } from "./access/stream-tickets.js";
 import { loadApiConfig } from "./config.js";
 import { ensureDevelopmentWorkforce } from "./development-workforce.js";
 import { createExecutionRuntime } from "./runtime.js";
@@ -64,6 +65,9 @@ export async function createApiServer() {
   return buildApiServer({
     authenticator: runtime.authenticator,
     accessResolver: runtime.accessResolver,
+    // In memory: tickets live for a minute and are only ever redeemed by the
+    // process that issued them.
+    streamTickets: new StreamTickets(),
     applicationService: runtime.applicationService,
     workService: runtime.workService,
     workExecutionService: runtime.workExecutionService,
