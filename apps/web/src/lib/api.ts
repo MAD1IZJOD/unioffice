@@ -1683,6 +1683,21 @@ export async function executeWork(workId: string): Promise<{
   return post(`/work/${workId}/execute`, {}, READ_TIMEOUT_MS);
 }
 
+/**
+ * Cancels a mission. The server refuses while a worker is running it or its
+ * plan is being written, and records who cancelled from the caller.
+ */
+export async function cancelWork(
+  workId: string,
+  reason?: string,
+): Promise<{ work: WorkItem; cancelledTaskCount: number; closedApprovalCount: number }> {
+  return post(
+    scoped(`/work/${encodeURIComponent(workId)}/cancel`),
+    { reason: reason?.trim() || undefined },
+    READ_TIMEOUT_MS,
+  );
+}
+
 export async function retryWork(workId: string): Promise<RetryResult> {
   return post<RetryResult>(`/work/${workId}/retry`, {}, READ_TIMEOUT_MS);
 }

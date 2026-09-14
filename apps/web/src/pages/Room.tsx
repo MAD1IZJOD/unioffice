@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Ban,
   LoaderCircle,
   Play,
   RefreshCw,
@@ -11,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
+  cancelWork,
   executeWork,
   fetchExecutionRoom,
   fetchMissionKnowledge,
@@ -79,6 +81,7 @@ export default function Room() {
 
   const [action, setAction] = useState<string>();
   const [actionError, setActionError] = useState<string>();
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [openArtifact, setOpenArtifact] = useState<ArtifactItem>();
   const [focused, setFocused] = useState<string>();
 
@@ -392,6 +395,50 @@ export default function Room() {
                     : "Retry it"}
               </button>
             )}
+
+            {/* Offered only where the server would allow it: not while a
+                worker is running the mission or its plan is being written.
+                The server decides either way; this only avoids offering a
+                button that would be refused. */}
+            {!opening &&
+              executionJob?.status !== "running" &&
+              ["queued", "executing", "waiting_approval", "failed"].includes(work.status) &&
+              (confirmingCancel ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="t-meta">Cancel this mission? Finished steps are kept.</span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="button-ghost"
+                    onClick={() =>
+                      run("cancel", async () => {
+                        await cancelWork(work.id);
+                        setConfirmingCancel(false);
+                      })
+                    }
+                  >
+                    {action === "cancel" ? "Cancelling…" : "Yes, cancel it"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="button-quiet"
+                    onClick={() => setConfirmingCancel(false)}
+                  >
+                    Keep it
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="button-quiet"
+                  onClick={() => setConfirmingCancel(true)}
+                >
+                  <Ban size={12} />
+                  Cancel mission
+                </button>
+              ))}
 
             <button
               type="button"
