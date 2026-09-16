@@ -132,6 +132,8 @@ import type {
 
 import type { WorkforceService } from "./workforce-service.js";
 
+import { publicAgent } from "./public-agent.js";
+
 import type {
   MissionTemplateService,
 } from "./mission-template-service.js";
@@ -680,7 +682,14 @@ export function buildApiServer(
     // answer it gives.
     instance.get("/work/:id/room", async (request) => {
       const workId = await authorizedWorkId(services, request);
-      return services.executionRoomService.getRoom(workId);
+      const room = await services.executionRoomService.getRoom(workId);
+
+      return {
+        ...room,
+        agents: room.agents.map(publicAgent),
+        orchestrator: room.orchestrator ? publicAgent(room.orchestrator) : undefined,
+        cast: room.cast.map((member) => ({ ...member, agent: publicAgent(member.agent) })),
+      };
     });
 
     instance.get("/work/:id/detail", async (request) => {
@@ -692,7 +701,7 @@ export function buildApiServer(
 
       // Real queue state, read from the job row - never a guess about what a
       // worker might be doing.
-      return { ...detail, executionJob: job };
+      return { ...detail, agents: detail.agents.map(publicAgent), executionJob: job };
     });
 
     instance.get("/work/:id", async (request) => {
@@ -1010,7 +1019,9 @@ export function buildApiServer(
       // A workspace the caller was not given reads as one that does not exist.
       authorizeRead(access, workspaceId, () => new ApiError(404, "Workspace not found."));
 
-      return services.workspaceService.getWorkspaceDetail(access.organizationId, workspaceId);
+      const detail = await services.workspaceService.getWorkspaceDetail(access.organizationId, workspaceId);
+
+      return { ...detail, agents: detail.agents.map(publicAgent) };
     });
 
     instance.post("/workspaces/:id", async (request) => {
@@ -1079,7 +1090,7 @@ export function buildApiServer(
           | undefined,
       });
 
-      return reply.status(201).send({ agent });
+      return reply.status(201).send({ agent: publicAgent(agent) });
     });
 
     instance.post("/agents/:id", async (request) => {
@@ -1108,16 +1119,22 @@ export function buildApiServer(
         status: parseAgentStatus(body.status),
       });
 
-      return { agent };
+      return { agent: publicAgent(agent) };
     });
 
+    // The names every surface uses to attribute work. Narrowed like the
+    // workforce: an agent working in a workspace the caller was not given is
+    // not on their list.
     instance.get("/agents", async (request) => {
-      const query = objectBody(request.query);
-      const agents = await services.workQueryService.getAgents(
-        organizationOf(request),
-      );
+      const access = accessOf(request);
+      const reach = reachOf(access);
+      const agents = await services.workQueryService.getAgents(access.organizationId);
 
-      return { agents };
+      return {
+        agents: agents
+          .filter((agent) => !reach || reach(agent.workspaceId))
+          .map(publicAgent),
+      };
     });
 
     instance.get("/activity", async (request) => {

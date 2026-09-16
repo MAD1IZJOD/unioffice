@@ -29,7 +29,7 @@ function server(role: OrganizationRole, workspaces: Record<string, WorkspaceAcce
     workspaceService: {
       createWorkspace: record("createWorkspace"),
       updateWorkspace: record("updateWorkspace"),
-      getWorkspaceDetail: async (_org: string, id: string) => ({ workspace: { id } }),
+      getWorkspaceDetail: async (_org: string, id: string) => ({ workspace: { id }, agents: [] }),
     },
     agentDirectoryService: { createAgent: record("createAgent"), updateAgent: record("updateAgent") },
     healthCheck: async () => ({}),

@@ -96,7 +96,7 @@ async function company(options: { resolver?: (real: AccessResolver) => ApiServic
       },
       async getTasks() { return []; },
     },
-    executionRoomService: { async getRoom(id: WorkId) { return { work: { id } }; } },
+    executionRoomService: { async getRoom(id: WorkId) { return { work: { id }, agents: [], cast: [] }; } },
     workService: { async planWork(id: WorkId) { done.push(`plan:${id}`); return { id }; } },
     executionQueueService: { async enqueueWork(id: WorkId) { done.push(`execute:${id}`); return { enqueued: true }; } },
     workRecoveryService: { async retryWork(id: WorkId) { done.push(`retry:${id}`); return { mode: "replan" }; } },
