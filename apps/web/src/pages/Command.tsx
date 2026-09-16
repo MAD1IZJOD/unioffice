@@ -475,13 +475,18 @@ function MissionRow({ card, index }: { card: MissionCard; index: number }) {
   const elapsed = elapsedLabel(card);
 
   return (
-    <Link to={`/missions/${card.id}`} className="ledger-row mission-row">
+    // The whole row opens the mission through its title link, stretched over
+    // the row, so the names of the agents on it can each open their own
+    // workforce profile without one link sitting inside another.
+    <article className="ledger-row mission-row" aria-label={missionTitle(card)}>
       <span className={`ledger-rail ${toneClass[tone]}${card.phase === "running" ? " op-rail-running" : ""}`} />
 
       <span className="ledger-index">{String(index + 1).padStart(2, "0")}</span>
 
       <span className="min-w-0">
-        <span className="ledger-title">{missionTitle(card)}</span>
+        <Link to={`/missions/${card.id}`} className="mission-row-link">
+          <span className="ledger-title">{missionTitle(card)}</span>
+        </Link>
         {card.name && <span className="mission-row-objective">{card.objective}</span>}
 
         <span className="mission-row-stage">{card.stage}</span>
@@ -493,10 +498,15 @@ function MissionRow({ card, index }: { card: MissionCard; index: number }) {
           {card.team.length > 0 && (
             <span className="mission-row-team">
               {card.team.map((member) => (
-                <span key={member.agentId} className={`team-chip ${toneClass[teamStateTone(member.state)]}`} title={member.state}>
+                <Link
+                  key={member.agentId}
+                  to={`/workforce/${member.agentId}`}
+                  className={`team-chip team-chip-link ${toneClass[teamStateTone(member.state)]}`}
+                  title={`${member.name}: ${member.state}`}
+                >
                   <span className="pill-dot" aria-hidden="true" />
                   {member.name}
-                </span>
+                </Link>
               ))}
             </span>
           )}
@@ -528,7 +538,7 @@ function MissionRow({ card, index }: { card: MissionCard; index: number }) {
           {phaseLabel(card.phase)}
         </StatusPill>
       </span>
-    </Link>
+    </article>
   );
 }
 
@@ -688,7 +698,7 @@ function SignalGroup({
 function Workforce({ workforce }: { workforce: MissionControl["workforce"] }) {
   return (
     <p className="control-workforce">
-      <Link to="/agents">
+      <Link to="/workforce">
         {workforce.total} {workforce.total === 1 ? "agent" : "agents"}
       </Link>
       {" · "}

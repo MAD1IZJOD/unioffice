@@ -304,7 +304,7 @@ export default function Governance() {
           index="02"
           title="Who they constrain"
           action={
-            <Link to="/agents" className="button-quiet">
+            <Link to="/workforce" className="button-quiet">
               The roster
             </Link>
           }

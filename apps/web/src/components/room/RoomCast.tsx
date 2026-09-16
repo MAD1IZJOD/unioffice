@@ -49,7 +49,7 @@ export function RoomCast({ room }: { room: ExecutionRoom }) {
         return (
           <Link
             key={member.agent.id}
-            to={`/agents/${member.agent.id}`}
+            to={`/workforce/${member.agent.id}`}
             className={`cast-member ${toneClass[tone]}`}
           >
             <span className="cast-mark">

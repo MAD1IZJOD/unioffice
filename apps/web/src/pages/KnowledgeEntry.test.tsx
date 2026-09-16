@@ -80,7 +80,7 @@ describe("a piece of knowledge, opened", () => {
     const trail = await screen.findByRole("list", { name: "Where this knowledge came from" });
 
     expect(within(trail).getByRole("link", { name: "Revise the Starter pricing." }).getAttribute("href")).toBe(`/missions/${missionId}`);
-    expect(within(trail).getByRole("link", { name: "Harvey" }).getAttribute("href")).toBe("/agents/harvey");
+    expect(within(trail).getByRole("link", { name: "Harvey" }).getAttribute("href")).toBe("/workforce/harvey");
     expect(within(trail).getByText("Analyse Starter churn")).toBeDefined();
     expect(within(trail).getByText("Churn analysis")).toBeDefined();
   });

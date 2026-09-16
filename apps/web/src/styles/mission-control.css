@@ -203,6 +203,41 @@
   color: var(--ink-muted);
 }
 
+/* The row opens the mission; a team member's name opens their profile. */
+.mission-row {
+  position: relative;
+}
+
+.mission-row-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mission-row-link::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.mission-row-link:focus-visible {
+  outline: none;
+}
+
+.mission-row:focus-within {
+  outline: 1px solid var(--accent-line);
+  outline-offset: -1px;
+}
+
+.team-chip-link {
+  position: relative;
+  z-index: 1;
+  text-decoration: none;
+}
+
+.team-chip-link:hover {
+  color: #84b4fb;
+}
+
 .mission-row-latest {
   display: block;
   margin-top: 7px;

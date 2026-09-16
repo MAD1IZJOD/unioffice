@@ -270,11 +270,12 @@ describe("the Command Center", () => {
     })));
 
     const running = (await screen.findByRole("heading", { name: /Running/ })).closest("section")!;
-    const reviewRow = within(running).getByRole("link", { name: /Q3 burn review/ });
-    expect(reviewRow.getAttribute("href")).toBe("/missions/w-review");
+    const reviewRow = within(running).getByRole("article", { name: "Q3 burn review" });
+    expect(within(reviewRow).getByRole("link", { name: "Q3 burn review" }).getAttribute("href")).toBe("/missions/w-review");
     expect(within(reviewRow).getByText("Review our monthly burn against plan.")).toBeDefined();
     expect(within(reviewRow).getByText("Working on “Draft the review”")).toBeDefined();
-    expect(within(reviewRow).getByText("Harvey")).toBeDefined();
+    // Each agent on the mission opens their own workforce profile.
+    expect(within(reviewRow).getByRole("link", { name: "Harvey" }).getAttribute("href")).toBe("/workforce/a1");
     expect(within(reviewRow).getByText("1/3 steps")).toBeDefined();
     expect(within(reviewRow).getByText("12m so far")).toBeDefined();
     expect(within(reviewRow).getByText(/Harvey started “Draft the review”/)).toBeDefined();

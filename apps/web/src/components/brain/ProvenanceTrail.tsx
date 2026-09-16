@@ -38,7 +38,7 @@ export function ProvenanceTrail({ detail }: { detail: KnowledgeDetail }) {
     nodes.push({
       kind: "Agent",
       name: provenance.agent.name,
-      to: `/agents/${provenance.agent.id}`,
+      to: `/workforce/${provenance.agent.id}`,
     });
   }
 

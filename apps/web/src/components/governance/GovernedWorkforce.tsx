@@ -47,7 +47,7 @@ export function GovernedWorkforce({ agents }: { agents: GovernedAgent[] }) {
 
               <span className="min-w-0 flex-1">
                 <Link
-                  to={`/agents/${agent.agentId}`}
+                  to={`/workforce/${agent.agentId}`}
                   className="governed-agent-name"
                 >
                   {agent.name}

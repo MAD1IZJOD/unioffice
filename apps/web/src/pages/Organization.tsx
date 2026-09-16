@@ -158,7 +158,7 @@ export default function Organization() {
           index="01"
           title="Workspaces"
           action={
-            <Link to="/agents" className="button-quiet">
+            <Link to="/workforce" className="button-quiet">
               The whole workforce
               <ArrowRight size={11} />
             </Link>
@@ -336,7 +336,7 @@ export default function Organization() {
         )}
 
         {(data?.unassignedAgentCount ?? 0) > 0 && workspaces.length > 0 && (
-          <Link to="/agents" className="presence-row mt-4 !border-0">
+          <Link to="/workforce" className="presence-row mt-4 !border-0">
             <span className="presence-mark tone-idle">
               <Users size={14} />
             </span>

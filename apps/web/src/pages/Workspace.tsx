@@ -291,7 +291,7 @@ export default function Workspace() {
           index="01"
           title="Who works here"
           action={
-            <Link to="/agents" className="button-quiet">
+            <Link to="/workforce" className="button-quiet">
               The whole workforce
               <ArrowRight size={11} />
             </Link>
@@ -303,7 +303,7 @@ export default function Workspace() {
             line="No one is assigned to this workspace."
             detail="A mission opened here can still run — an agent belonging to no workspace stays available everywhere — but nothing is scoped to this place yet. Assign someone from their own page."
             action={
-              <Link to="/agents" className="button-ghost">
+              <Link to="/workforce" className="button-ghost">
                 <Plus size={13} />
                 Assign someone
               </Link>
@@ -314,7 +314,7 @@ export default function Workspace() {
             {agents.map((agent) => (
               <Link
                 key={agent.id}
-                to={`/agents/${agent.id}`}
+                to={`/workforce/${agent.id}`}
                 className={`crew-member ${toneClass[agent.status === "active" ? "live" : "idle"]}`}
               >
                 <div className="crew-head">
