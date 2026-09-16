@@ -4,3 +4,4 @@ export * from "./http.js";
 export * from "./sanitize.js";
 export * from "./rate-limiter.js";
 export * from "./providers/oauth.js";
+export * from "./providers/github/github-oauth.js";
