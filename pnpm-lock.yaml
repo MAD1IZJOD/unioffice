@@ -353,6 +353,15 @@ importers:
         specifier: workspace:*
         version: link:../tools
 
+  packages/connect:
+    dependencies:
+      '@unioffice/core':
+        specifier: workspace:*
+        version: link:../core
+      '@unioffice/tools':
+        specifier: workspace:*
+        version: link:../tools
+
   packages/core: {}
 
   packages/database:
