@@ -156,6 +156,43 @@
   letter-spacing: 0.06em;
 }
 
+/* A tool on a profile, with what governance actually lets the agent do with it. */
+.agent-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  margin-top: 12px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--line-subtle);
+}
+
+.agent-tool {
+  display: grid;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--surface-1);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.agent-tool-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-primary);
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.agent-tool-why {
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.55;
+  grid-column: 1 / -1;
+}
+
 .workers-note {
   margin-top: -14px;
   color: var(--ink-faint);
