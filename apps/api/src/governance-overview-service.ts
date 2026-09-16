@@ -347,7 +347,7 @@ export class GovernanceOverviewService {
 }
 
 /** Whether a policy's scope can reach this agent at all. */
-function reachesAgent(policy: Policy, agent: Agent): boolean {
+export function reachesAgent(policy: Policy, agent: Agent): boolean {
   if (
     policy.scope.agentIds.length > 0 &&
     !policy.scope.agentIds.includes(agent.id)
