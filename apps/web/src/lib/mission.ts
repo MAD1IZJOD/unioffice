@@ -484,6 +484,15 @@ function tell(
         note: shorten(payload.error),
       };
 
+    case "external.read":
+    case "external.write":
+      return {
+        act: "execution",
+        tone: event.type === "external.write" ? "tone-warning" : "tone-live",
+        actor,
+        line: `${text("summary") ?? "An external system was used"}.`,
+      };
+
     case "agent.started":
       return {
         act: "execution",

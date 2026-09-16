@@ -210,6 +210,17 @@ export function describeEvent(event: ActivityEvent): DescribedEvent {
         detail: summarizeValue(payload.error),
       };
 
+    // An external call is recorded by what happened, never by what was read
+    // or written, so there is no output to summarise here.
+    case "external.read":
+    case "external.write":
+      return {
+        category: "tool",
+        tone: event.type === "external.write" ? "tone-warning" : "tone-live",
+        title: text("summary") ?? "External system used",
+        detail: text("provider") === "github" ? "GitHub" : text("provider") === "google_drive" ? "Google Drive" : undefined,
+      };
+
     case "approval.requested":
       return {
         category: "approval",
