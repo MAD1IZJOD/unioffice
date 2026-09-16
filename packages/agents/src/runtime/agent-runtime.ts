@@ -35,6 +35,13 @@ export interface AgentExecutionContext {
     dependencies: AgentDependencyResult[];
     /** Tool ids delegation determined this specific task needs. */
     requiredTools?: string[];
+
+    /**
+     * Tools a person approved this step to use. Filled from the step's
+     * recorded approval by the execution path, never from model output, and
+     * the only thing that lets an external write run.
+     */
+    approvedTools?: string[];
   };
 
   context: Record<string, unknown>;
@@ -75,9 +82,24 @@ export interface AgentExecutionResult {
 export interface AgentToolCall {
   toolId: string;
 
+  /** Absent for external tools: what was asked of another system is not kept. */
   input: unknown;
 
+  /** Absent for external tools: what another system returned is not kept. */
   output?: unknown;
+
+  /** Set when the tool reaches outside the company. */
+  external?: {
+    provider: string;
+    access: "read" | "write";
+  };
+
+  /** The tool's own safe record of a completed call. */
+  audit?: {
+    action: string;
+    summary: string;
+    resource?: Record<string, string | number>;
+  };
 
   error?: {
     code: string;
