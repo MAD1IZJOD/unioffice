@@ -65,3 +65,7 @@ export type MemberId = string & {
 export type WorkspaceMemberId = string & {
   readonly __brand: "WorkspaceMemberId";
 };
+
+export type ConnectionId = string & {
+  readonly __brand: "ConnectionId";
+};

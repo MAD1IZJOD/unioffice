@@ -15,3 +15,4 @@ export * from "./value-objects/organization-slug.js";
 export * from "./value-objects/entity-id.js";
 export * from "./entities/workspace.js";
 export * from "./entities/membership.js";
+export * from "./entities/connection.js";
