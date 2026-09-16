@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  Artifact,
+  ArtifactId,
   Event,
   EventId,
   OrganizationId,
@@ -160,4 +162,77 @@ test("events are filtered by type, mission and organization, newest first and bo
     limit: 2,
   });
   assert.deepEqual(acrossCompany.map((entry) => entry.id), ["e5", "e3"]);
+});
+
+test("events can be narrowed to one agent", async () => {
+  const repository = new InMemoryOperationalReadRepository([], [], [
+    event("mine", { type: "task.completed", agentId: "harvey" as Event["agentId"], timestamp: at(2) }),
+    event("theirs", { type: "task.completed", agentId: "tony" as Event["agentId"], timestamp: at(3) }),
+    event("nobody", { type: "task.completed", timestamp: at(4) }),
+  ]);
+
+  const events = await repository.findEventsByTypes(orgA, {
+    types: ["task.completed"],
+    agentId: "harvey" as Event["agentId"],
+    limit: 10,
+  });
+
+  assert.deepEqual(events.map((entry) => entry.id), ["mine"]);
+});
+
+test("an agent's steps come newest first, bounded, and carry no results or descriptions", async () => {
+  const assigned = (id: string, minute: number, agent: string): Task => ({
+    ...task(id, "w1", minute),
+    assignedAgentId: agent as Task["assignedAgentId"],
+  });
+  const repository = new InMemoryOperationalReadRepository([], [
+    assigned("old", 1, "harvey"),
+    assigned("new", 5, "harvey"),
+    assigned("middle", 3, "harvey"),
+    assigned("tony's", 9, "tony"),
+  ]);
+
+  const steps = await repository.findTaskSummariesByAgent("harvey" as never, 2);
+
+  assert.deepEqual(steps.map((step) => step.id), ["new", "middle"]);
+  assert.doesNotMatch(JSON.stringify(steps), /huge|description|toolCalls/);
+});
+
+test("missions are read back by id only inside the organization", async () => {
+  const repository = new InMemoryOperationalReadRepository([
+    work("ours"),
+    work("theirs", { organizationId: orgB }),
+    work("unasked"),
+  ]);
+
+  const summaries = await repository.findWorkSummariesByIds(orgA, ["ours" as WorkId, "theirs" as WorkId]);
+
+  assert.deepEqual(summaries.map((summary) => summary.id), ["ours"]);
+});
+
+test("an agent's artifacts stay inside the organization, newest first, without their content", async () => {
+  const artifact = (id: string, minute: number, overrides: Partial<Artifact> = {}): Artifact => ({
+    id: id as ArtifactId,
+    organizationId: orgA,
+    workId: "w1" as WorkId,
+    createdByAgentId: "harvey" as Artifact["createdByAgentId"],
+    name: `Analysis ${id}`,
+    type: "analysis",
+    version: 1,
+    createdAt: at(minute),
+    updatedAt: at(minute),
+    metadata: { content: "The confidential analysis itself." },
+    ...overrides,
+  });
+  const repository = new InMemoryOperationalReadRepository([], [], [], [
+    artifact("first", 1),
+    artifact("second", 4),
+    artifact("other agent", 5, { createdByAgentId: "tony" as Artifact["createdByAgentId"] }),
+    artifact("other org", 6, { organizationId: orgB }),
+  ]);
+
+  const produced = await repository.findArtifactSummariesByAgent(orgA, "harvey" as never, 10);
+
+  assert.deepEqual(produced.map((entry) => entry.id), ["second", "first"]);
+  assert.doesNotMatch(JSON.stringify(produced), /confidential/);
 });

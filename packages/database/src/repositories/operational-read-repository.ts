@@ -1,5 +1,7 @@
 import type {
   AgentId,
+  ArtifactId,
+  ArtifactType,
   Event,
   EventType,
   OrganizationId,
@@ -76,10 +78,23 @@ export interface TaskSummary {
   updatedAt: Date;
 }
 
+/** What an artifact is and where it came from, without its content. */
+export interface ArtifactSummary {
+  id: ArtifactId;
+  organizationId: OrganizationId;
+  workId?: WorkId;
+  taskId?: TaskId;
+  name: string;
+  type: ArtifactType;
+  createdAt: Date;
+}
+
 export interface OperationalEventQuery {
   types: EventType[];
   /** Narrows to these missions. Absent reads across the organization. */
   workIds?: WorkId[];
+  /** Narrows to events about one agent. */
+  agentId?: AgentId;
   limit: number;
 }
 
@@ -97,6 +112,28 @@ export interface OperationalReadRepository {
    * mission ids it has already read inside the organization.
    */
   findTaskSummaries(workIds: WorkId[]): Promise<TaskSummary[]>;
+
+  /** Summaries of these missions, never outside the organization. */
+  findWorkSummariesByIds(
+    organizationId: OrganizationId,
+    workIds: WorkId[],
+  ): Promise<WorkSummary[]>;
+
+  /**
+   * The steps one agent has been given, newest first.
+   *
+   * Tasks carry no organization of their own, so the caller must read the
+   * agent inside the organization first, and read the missions back through
+   * findWorkSummariesByIds, which does check it.
+   */
+  findTaskSummariesByAgent(agentId: AgentId, limit: number): Promise<TaskSummary[]>;
+
+  /** What one agent produced, newest first, never outside the organization. */
+  findArtifactSummariesByAgent(
+    organizationId: OrganizationId,
+    agentId: AgentId,
+    limit: number,
+  ): Promise<ArtifactSummary[]>;
 
   /** Events of the given types, newest first, never outside the organization. */
   findEventsByTypes(

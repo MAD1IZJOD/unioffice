@@ -1,4 +1,6 @@
 import type {
+  AgentId,
+  ArtifactId,
   Event,
   EventId,
   OrganizationId,
@@ -12,6 +14,7 @@ import {
   boundedObjective,
   boundedText,
   dateOf,
+  type ArtifactSummary,
   type OperationalEventQuery,
   type OperationalReadRepository,
   type TaskSummary,
@@ -65,6 +68,17 @@ const EVENT_COLUMNS = [
   "payload",
 ].join(",");
 
+/** An artifact's identity and origin. Its content never leaves on this path. */
+const ARTIFACT_SUMMARY_COLUMNS = [
+  "id",
+  "organization_id",
+  "work_id",
+  "task_id",
+  "name",
+  "type",
+  "created_at",
+].join(",");
+
 /** Postgres takes a long IN list; a URL does not. Ids are chunked below this. */
 const MAX_IDS_PER_REQUEST = 100;
 
@@ -115,6 +129,65 @@ export class SupabaseOperationalReadRepository implements OperationalReadReposit
     return summaries;
   }
 
+  async findWorkSummariesByIds(
+    organizationId: OrganizationId,
+    workIds: WorkId[],
+  ): Promise<WorkSummary[]> {
+    const unique = [...new Set(workIds)];
+    const summaries: WorkSummary[] = [];
+
+    for (let start = 0; start < unique.length; start += MAX_IDS_PER_REQUEST) {
+      const { data, error } = await this.client
+        .from("works")
+        .select(WORK_SUMMARY_COLUMNS)
+        .eq("organization_id", organizationId)
+        .in("id", unique.slice(start, start + MAX_IDS_PER_REQUEST));
+
+      if (error) {
+        throw new Error(`Failed to read mission summaries: ${error.message}`);
+      }
+
+      summaries.push(...((data ?? []) as unknown as WorkSummaryRow[]).map(toWorkSummary));
+    }
+
+    return summaries;
+  }
+
+  async findTaskSummariesByAgent(agentId: AgentId, limit: number): Promise<TaskSummary[]> {
+    const { data, error } = await this.client
+      .from("tasks")
+      .select(TASK_SUMMARY_COLUMNS)
+      .eq("assigned_agent_id", agentId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to read an agent's steps: ${error.message}`);
+    }
+
+    return ((data ?? []) as unknown as TaskSummaryRow[]).map(toTaskSummary);
+  }
+
+  async findArtifactSummariesByAgent(
+    organizationId: OrganizationId,
+    agentId: AgentId,
+    limit: number,
+  ): Promise<ArtifactSummary[]> {
+    const { data, error } = await this.client
+      .from("artifacts")
+      .select(ARTIFACT_SUMMARY_COLUMNS)
+      .eq("organization_id", organizationId)
+      .eq("created_by_agent_id", agentId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to read an agent's artifacts: ${error.message}`);
+    }
+
+    return ((data ?? []) as unknown as ArtifactSummaryRow[]).map(toArtifactSummary);
+  }
+
   async findEventsByTypes(
     organizationId: OrganizationId,
     query: OperationalEventQuery,
@@ -131,6 +204,10 @@ export class SupabaseOperationalReadRepository implements OperationalReadReposit
 
     if (query.workIds) {
       request = request.in("work_id", [...new Set(query.workIds)].slice(0, MAX_IDS_PER_REQUEST));
+    }
+
+    if (query.agentId) {
+      request = request.eq("agent_id", query.agentId);
     }
 
     const { data, error } = await request
@@ -173,6 +250,28 @@ interface TaskSummaryRow {
   started_at: string | null;
   completed_at: string | null;
   updated_at: string;
+}
+
+interface ArtifactSummaryRow {
+  id: string;
+  organization_id: string;
+  work_id: string | null;
+  task_id: string | null;
+  name: string;
+  type: ArtifactSummary["type"];
+  created_at: string;
+}
+
+function toArtifactSummary(row: ArtifactSummaryRow): ArtifactSummary {
+  return {
+    id: row.id as ArtifactId,
+    organizationId: row.organization_id as OrganizationId,
+    workId: row.work_id ? (row.work_id as WorkId) : undefined,
+    taskId: row.task_id ? (row.task_id as TaskId) : undefined,
+    name: row.name,
+    type: row.type,
+    createdAt: new Date(row.created_at),
+  };
 }
 
 interface EventRow {

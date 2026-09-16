@@ -1,4 +1,6 @@
 import type {
+  AgentId,
+  Artifact,
   Event,
   OrganizationId,
   Task,
@@ -8,6 +10,7 @@ import type {
 
 import {
   summarizeWork,
+  type ArtifactSummary,
   type OperationalEventQuery,
   type OperationalReadRepository,
   type TaskSummary,
@@ -26,6 +29,7 @@ export class InMemoryOperationalReadRepository implements OperationalReadReposit
     readonly works: Work[] = [],
     readonly tasks: Task[] = [],
     readonly events: Event[] = [],
+    readonly artifacts: Artifact[] = [],
   ) {}
 
   async findWorkSummaries(
@@ -45,15 +49,45 @@ export class InMemoryOperationalReadRepository implements OperationalReadReposit
     return this.tasks
       .filter((task) => wanted.has(task.workId))
       .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
-      .map((task) => ({
-        id: task.id,
-        workId: task.workId,
-        title: task.title,
-        status: task.status,
-        assignedAgentId: task.assignedAgentId,
-        startedAt: task.startedAt,
-        completedAt: task.completedAt,
-        updatedAt: task.updatedAt,
+      .map(toTaskSummary);
+  }
+
+  async findWorkSummariesByIds(
+    organizationId: OrganizationId,
+    workIds: WorkId[],
+  ): Promise<WorkSummary[]> {
+    const wanted = new Set(workIds);
+
+    return this.works
+      .filter((work) => work.organizationId === organizationId && wanted.has(work.id))
+      .map((work) => summarizeWork(structuredClone(work)));
+  }
+
+  async findTaskSummariesByAgent(agentId: AgentId, limit: number): Promise<TaskSummary[]> {
+    return this.tasks
+      .filter((task) => task.assignedAgentId === agentId)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .slice(0, Math.max(0, limit))
+      .map(toTaskSummary);
+  }
+
+  async findArtifactSummariesByAgent(
+    organizationId: OrganizationId,
+    agentId: AgentId,
+    limit: number,
+  ): Promise<ArtifactSummary[]> {
+    return this.artifacts
+      .filter((artifact) => artifact.organizationId === organizationId && artifact.createdByAgentId === agentId)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .slice(0, Math.max(0, limit))
+      .map((artifact) => ({
+        id: artifact.id,
+        organizationId: artifact.organizationId,
+        workId: artifact.workId,
+        taskId: artifact.taskId,
+        name: artifact.name,
+        type: artifact.type,
+        createdAt: artifact.createdAt,
       }));
   }
 
@@ -68,9 +102,23 @@ export class InMemoryOperationalReadRepository implements OperationalReadReposit
       .filter((event) =>
         event.organizationId === organizationId &&
         types.has(event.type) &&
-        (!works || (event.workId !== undefined && works.has(event.workId))))
+        (!works || (event.workId !== undefined && works.has(event.workId))) &&
+        (!query.agentId || event.agentId === query.agentId))
       .sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime())
       .slice(0, Math.max(0, query.limit))
       .map((event) => structuredClone(event));
   }
+}
+
+function toTaskSummary(task: Task): TaskSummary {
+  return {
+    id: task.id,
+    workId: task.workId,
+    title: task.title,
+    status: task.status,
+    assignedAgentId: task.assignedAgentId,
+    startedAt: task.startedAt,
+    completedAt: task.completedAt,
+    updatedAt: task.updatedAt,
+  };
 }
