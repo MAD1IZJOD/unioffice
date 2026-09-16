@@ -130,6 +130,30 @@ The seed reconciles an existing row against this table on every boot, including
 its name, so changing the table renames the agent rather than creating a second
 one.
 
+### Workforce
+
+The Workforce page (`/workforce`) answers who is working for the organization.
+It is served by `GET /workforce` and `GET /workforce/:agentId`, both read by
+`WorkforceService` from the same lean task, mission, event and artifact reads
+Mission Control uses, so the two never disagree about who is doing what.
+
+- **Status** is only what the backend records: *working* (a step is running),
+  *waiting on a decision* (a step is held for an approval), *available*,
+  *paused* and *unavailable* (the agent's own status). Paused and unavailable
+  agents are given no new steps.
+- **Current work** names the mission and the step. **Outcomes** are the agent's
+  finished and failed steps over the most recently active missions.
+- **A profile** adds capabilities, tools, what governance lets the agent do with
+  each tool it holds (a grant is not a permission), the enforced policies that
+  reach it, its work history, what it produced and a record built from its
+  events. Owners and admins can pause, resume and configure it.
+
+Everything is scoped like the rest of the API: another organization's agent,
+or one working in a workspace the caller was not given, reads as not found; a
+mission the caller cannot open is never named, only that the agent is busy.
+An agent's model instructions, task outputs, tool inputs and raw failure text
+never leave the server - on the workforce, or anywhere else an agent is named.
+
 ## The web app
 
 `apps/web` reads the API and nothing else - there is no mock data anywhere in
