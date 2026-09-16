@@ -369,10 +369,6 @@ export function createExecutionRuntime(config: ApiConfig) {
   const agentDirectoryService = new AgentDirectoryService(
     agentRepository,
     workspaceRepository,
-    taskRepository,
-    workRepository,
-    artifactRepository,
-    eventRepository,
     toolRegistry,
     eventRecorder,
   );

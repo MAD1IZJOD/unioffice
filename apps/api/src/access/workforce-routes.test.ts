@@ -166,10 +166,6 @@ async function company() {
     agentDirectoryService: new AgentDirectoryService(
       agentRepository as never,
       workspaceRepository as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
       tools,
       { record: async () => ({}) } as never,
     ),
@@ -207,6 +203,9 @@ test("an agent's instructions never leave the server, on the roster or a profile
 
   assert.equal(profile.statusCode, 200);
   assert.doesNotMatch(roster.body + profile.body, /PROMPT-THAT-MUST-STAY-ON-THE-SERVER|systemInstructions|metadata/);
+
+  // The old detail read returned the whole agent row; it no longer exists.
+  assert.equal((await get("owner", `/agents/${tony}`)).statusCode, 404);
 });
 
 test("knowing an agent's id is not enough: another organization's, or another workspace's, reads as not found", async () => {

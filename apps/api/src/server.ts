@@ -1065,15 +1065,6 @@ export function buildApiServer(
       );
     });
 
-    instance.get("/agents/:id", async (request) => {
-      const query = objectBody(request.query);
-
-      return services.agentDirectoryService.getAgentDetail(
-        organizationOf(request),
-        parameterId(request.params) as unknown as AgentId,
-      );
-    });
-
     instance.post("/agents", async (request, reply) => {
       const body = objectBody(request.body);
       const access = await confirmAllowed(services, request, "agents.configure");

@@ -4,21 +4,12 @@ import {
   type AgentId,
   type AgentStatus,
   type AgentType,
-  type Artifact,
-  type Event,
   type OrganizationId,
-  type Task,
-  type Work,
-  type Workspace,
   type WorkspaceId,
 } from "@unioffice/core";
 
 import type {
   AgentRepository,
-  ArtifactRepository,
-  EventRepository,
-  TaskRepository,
-  WorkRepository,
   WorkspaceRepository,
 } from "@unioffice/database";
 
@@ -60,29 +51,9 @@ export interface UpdateAgentInput {
   status?: AgentStatus;
 }
 
-/** One task an agent held, with the mission it belonged to. */
-export interface AgentAssignment {
-  task: Task;
-  work?: Work;
-}
-
-export interface AgentDetail {
-  agent: Agent;
-  workspace?: Workspace;
-  /** Tools the agent is authorized for, described from the live registry. */
-  tools: Array<{ id: string; name: string; description: string }>;
-  /** Tool ids on the agent that no longer exist in the registry. */
-  unknownToolIds: string[];
-  assignments: AgentAssignment[];
-  current?: AgentAssignment;
-  artifacts: Artifact[];
-  activity: Event[];
-  completedCount: number;
-  failedCount: number;
-}
-
 /**
- * Reading and configuring the workforce.
+ * Configuring the workforce. Reading it - who is working, on what, and what
+ * each agent has done - is the WorkforceService's.
  *
  * Two rules run through all of it. Everything is organization-scoped, so an
  * agent from another organization is not found rather than forbidden. And an
@@ -94,10 +65,6 @@ export class AgentDirectoryService {
   constructor(
     private readonly agentRepository: AgentRepository,
     private readonly workspaceRepository: WorkspaceRepository,
-    private readonly taskRepository: TaskRepository,
-    private readonly workRepository: WorkRepository,
-    private readonly artifactRepository: ArtifactRepository,
-    private readonly eventRepository: EventRepository,
     private readonly toolRegistry: ToolRegistry,
     private readonly eventRecorder: EventRecorder,
   ) {}
@@ -113,75 +80,6 @@ export class AgentDirectoryService {
     }
 
     return agent;
-  }
-
-  async getAgentDetail(
-    organizationId: OrganizationId,
-    agentId: AgentId,
-  ): Promise<AgentDetail> {
-    const agent = await this.getAgent(organizationId, agentId);
-
-    const [tasks, artifacts, activity, workspace] = await Promise.all([
-      this.taskRepository.findByAgent(agentId, 40),
-      this.artifactRepository.findByOrganization(organizationId, 200),
-      this.eventRepository.findByOrganization(organizationId, 200),
-      agent.workspaceId
-        ? this.workspaceRepository.findById(agent.workspaceId)
-        : Promise.resolve(null),
-    ]);
-
-    // One read per distinct mission the agent touched, rather than the whole
-    // organization's work to find a handful of objectives.
-    const workIds = [...new Set(tasks.map((task) => task.workId))];
-    const work = await Promise.all(
-      workIds.map((workId) => this.workRepository.findById(workId)),
-    );
-    const workById = new Map(
-      work.filter((item): item is Work => item !== null).map((item) => [
-        item.id,
-        item,
-      ]),
-    );
-
-    const assignments: AgentAssignment[] = tasks.map((task) => ({
-      task,
-      work: workById.get(task.workId),
-    }));
-
-    const authorized = agent.toolIds.map((toolId) => ({
-      toolId,
-      tool: this.toolRegistry.get(toolId),
-    }));
-
-    return {
-      agent,
-      // A workspace that was deleted out from under the agent reads as no
-      // workspace rather than as a broken reference.
-      workspace: workspace ?? undefined,
-      tools: authorized
-        .filter((entry) => entry.tool !== null)
-        .map((entry) => ({
-          id: entry.tool!.id,
-          name: entry.tool!.name,
-          description: entry.tool!.description,
-        })),
-      unknownToolIds: authorized
-        .filter((entry) => entry.tool === null)
-        .map((entry) => entry.toolId),
-      assignments,
-      current: assignments.find(
-        (assignment) => assignment.task.status === "running",
-      ),
-      artifacts: artifacts
-        .filter((artifact) => artifact.createdByAgentId === agentId)
-        .slice(0, 20),
-      activity: activity
-        .filter((event) => event.agentId === agentId)
-        .slice(0, 30),
-      completedCount: tasks.filter((task) => task.status === "completed")
-        .length,
-      failedCount: tasks.filter((task) => task.status === "failed").length,
-    };
   }
 
   async createAgent(input: CreateAgentInput): Promise<Agent> {

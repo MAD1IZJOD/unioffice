@@ -464,25 +464,6 @@ export interface OrganizationOverview {
   activity: ActivityEvent[];
 }
 
-export interface AgentAssignment {
-  task: TaskItem;
-  work?: WorkItem;
-}
-
-export interface AgentDetail {
-  agent: AgentSummary & { workspaceId?: string };
-  workspace?: WorkspaceItem;
-  tools: Array<{ id: string; name: string; description: string }>;
-  /** Tool ids the agent holds that the registry no longer knows about. */
-  unknownToolIds: string[];
-  assignments: AgentAssignment[];
-  current?: AgentAssignment;
-  artifacts: ArtifactItem[];
-  activity: ActivityEvent[];
-  completedCount: number;
-  failedCount: number;
-}
-
 export interface ToolDescriptor {
   id: string;
   name: string;
@@ -1692,10 +1673,6 @@ export async function fetchWorkforce(): Promise<Workforce> {
 
 export async function fetchAgentProfile(agentId: string): Promise<AgentProfile> {
   return get<AgentProfile>(scoped(`/workforce/${encodeURIComponent(agentId)}`));
-}
-
-export async function fetchAgent(agentId: string): Promise<AgentDetail> {
-  return get<AgentDetail>(scoped(`/agents/${agentId}`), 60_000);
 }
 
 export async function createAgent(input: {
