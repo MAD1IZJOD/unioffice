@@ -51,7 +51,9 @@ export type Permission =
   /** Record knowledge as a proposal for review. */
   | "knowledge.propose"
   /** Make knowledge current, edit, archive, merge, replace, settle conflicts. */
-  | "knowledge.curate";
+  | "knowledge.curate"
+  /** Connect and disconnect external systems, and decide what agents may do through them. */
+  | "connections.manage";
 
 const EVERYTHING: readonly Permission[] = [
   "organization.read",
@@ -66,6 +68,7 @@ const EVERYTHING: readonly Permission[] = [
   "approvals.decide",
   "knowledge.propose",
   "knowledge.curate",
+  "connections.manage",
 ];
 
 const GRANTS: Record<OrganizationRole, ReadonlySet<Permission>> = {

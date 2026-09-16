@@ -50,6 +50,7 @@ test("each role holds exactly the permissions it is meant to", () => {
     "approvals.decide": ["owner", "admin", "member"],
     "knowledge.propose": ["owner", "admin", "member"],
     "knowledge.curate": ["owner", "admin"],
+    "connections.manage": ["owner", "admin"],
   };
 
   for (const [permission, allowed] of Object.entries(matrix) as Array<[Permission, OrganizationRole[]]>) {
@@ -64,6 +65,7 @@ test("a viewer can do nothing that changes anything, anywhere", () => {
   const changes: Permission[] = [
     "organization.manage", "members.manage", "owners.manage", "workspaces.manage", "agents.configure",
     "policies.manage", "missions.create", "missions.operate", "approvals.decide", "knowledge.propose", "knowledge.curate",
+    "connections.manage",
   ];
 
   for (const permission of changes) {
