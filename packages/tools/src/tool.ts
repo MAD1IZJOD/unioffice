@@ -16,6 +16,41 @@ export type ToolRisk =
   | "high"
   | "critical";
 
+/**
+ * A tool that reaches a system outside the company.
+ *
+ * Declared by the tool, like its risk, because only the tool knows whether it
+ * reads from somewhere or changes something there. Anything declared here is
+ * held to stricter rules than a local tool, by the executor and the runtime
+ * rather than by convention:
+ *
+ * - A write only runs when the calling step was approved by a person for that
+ *   tool. No policy, guard or model output can stand in for the approval.
+ * - What an external call read or wrote is never persisted as its output. The
+ *   tool's own audit record is kept instead.
+ */
+export interface ToolExternalReach {
+  /** Which system, for people: "github", "google_drive". */
+  provider: string;
+
+  access: "read" | "write";
+}
+
+/**
+ * What is kept about one external call once it has happened. Identifiers and
+ * a sentence - never content, never credentials.
+ */
+export interface ToolAuditRecord {
+  /** A stable verb for the audit trail, e.g. "pull_request.created". */
+  action: string;
+
+  /** For a person: "GitHub pull request created". */
+  summary: string;
+
+  /** Safe identifiers for what was touched: a repository, an issue number, a file id. */
+  resource?: Record<string, string | number>;
+}
+
 export interface ToolValidationError {
   path: string;
 
@@ -44,6 +79,15 @@ export interface ToolDefinition<
   /** What this tool can reach. Defaults to low when a tool does not say. */
   risk?: ToolRisk;
 
+  /** Present only on tools that reach outside the company. */
+  external?: ToolExternalReach;
+
+  /**
+   * How many times one agent run may call this tool. Unbounded when absent;
+   * a write that a person approved once should run once.
+   */
+  maxCallsPerRun?: number;
+
   /** Structural validation performed before execute() ever runs. */
   validate(input: unknown): ToolValidationResult<TInput>;
 
@@ -51,6 +95,9 @@ export interface ToolDefinition<
     input: TInput,
     context: ToolExecutionContext,
   ): Promise<TOutput>;
+
+  /** What to keep about a completed call. Required in practice for external tools. */
+  audit?(input: TInput, output: TOutput): ToolAuditRecord;
 }
 
 /**
@@ -94,6 +141,13 @@ export interface ToolExecutionContext {
 
   /** Tool ids the calling agent is explicitly authorized to invoke. */
   authorizedToolIds: string[];
+
+  /**
+   * Tool ids a person approved for the step this call belongs to. Set by the
+   * execution path from the step's recorded approval - never from anything a
+   * model produced - and required for any external write.
+   */
+  approvedToolIds?: string[];
 
   metadata: Record<string, unknown>;
 }
