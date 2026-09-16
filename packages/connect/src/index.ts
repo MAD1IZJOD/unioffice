@@ -7,3 +7,4 @@ export * from "./providers/oauth.js";
 export * from "./providers/github/github-oauth.js";
 export * from "./providers/google-drive/drive-oauth.js";
 export * from "./providers/github/github-client.js";
+export * from "./providers/google-drive/drive-client.js";
