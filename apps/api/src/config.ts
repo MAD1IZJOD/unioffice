@@ -11,6 +11,27 @@ dotenv.config({
     ),
 });
 
+export interface OAuthClientSettings {
+  clientId: string;
+  clientSecret: string;
+}
+
+/**
+ * External systems. Each provider is on only when its OAuth client and the
+ * encryption key are both present; a half-configured provider is refused at
+ * startup rather than failing on someone's first click.
+ */
+export interface ConnectConfig {
+  /** 32 random bytes, base64. Seals every stored provider credential. */
+  encryptionKey?: string;
+  github?: OAuthClientSettings;
+  googleDrive?: OAuthClientSettings;
+  /** Where the browser reaches the API. Provider callbacks come back here. */
+  publicApiUrl: string;
+  /** Where people are sent back to once a provider round trip ends. */
+  webUrl: string;
+}
+
 export interface ApiConfig {
   port: number;
   supabaseUrl: string;
@@ -52,6 +73,8 @@ export interface ApiConfig {
    * connected - so this is the whole cost of the product feeling live.
    */
   streamTailIntervalMs: number;
+
+  connect: ConnectConfig;
 }
 
 export function loadApiConfig(
@@ -108,7 +131,47 @@ export function loadApiConfig(
       1_000,
       "STREAM_TAIL_INTERVAL_MS",
     ),
+    connect: loadConnectConfig(env, port),
   };
+}
+
+function loadConnectConfig(env: NodeJS.ProcessEnv, port: number): ConnectConfig {
+  const encryptionKey = env.CONNECT_ENCRYPTION_KEY?.trim() || undefined;
+  const github = oauthClient(env, "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET");
+  const googleDrive = oauthClient(env, "GOOGLE_DRIVE_CLIENT_ID", "GOOGLE_DRIVE_CLIENT_SECRET");
+
+  if ((github || googleDrive) && !encryptionKey) {
+    throw new Error(
+      "CONNECT_ENCRYPTION_KEY is required when a connection provider is configured.",
+    );
+  }
+
+  return {
+    encryptionKey,
+    github,
+    googleDrive,
+    publicApiUrl: optionalUrl(env.API_URL, `http://127.0.0.1:${port}`, "API_URL"),
+    webUrl: optionalUrl(env.WEB_URL, "http://localhost:5173", "WEB_URL"),
+  };
+}
+
+function oauthClient(
+  env: NodeJS.ProcessEnv,
+  idName: string,
+  secretName: string,
+): OAuthClientSettings | undefined {
+  const clientId = env[idName]?.trim();
+  const clientSecret = env[secretName]?.trim();
+
+  if (!clientId && !clientSecret) {
+    return undefined;
+  }
+
+  if (!clientId || !clientSecret) {
+    throw new Error(`${idName} and ${secretName} must be set together.`);
+  }
+
+  return { clientId, clientSecret };
 }
 
 function positiveInteger(

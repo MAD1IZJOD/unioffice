@@ -55,3 +55,35 @@ test("rejects a stale-run window that is not a positive number", () => {
     /EXECUTION_STALE_AFTER_MINUTES must be a positive number/,
   );
 });
+
+test("connections are off until a provider is configured", () => {
+  const config = loadApiConfig(environment());
+
+  assert.equal(config.connect.github, undefined);
+  assert.equal(config.connect.googleDrive, undefined);
+  assert.equal(config.connect.webUrl, "http://localhost:5173");
+});
+
+test("a connection provider needs the encryption key", () => {
+  assert.throws(
+    () => loadApiConfig(environment({ GITHUB_CLIENT_ID: "id", GITHUB_CLIENT_SECRET: "secret" })),
+    /CONNECT_ENCRYPTION_KEY is required/,
+  );
+
+  const config = loadApiConfig(environment({
+    GITHUB_CLIENT_ID: "id",
+    GITHUB_CLIENT_SECRET: "secret",
+    CONNECT_ENCRYPTION_KEY: "a2V5",
+    API_URL: "http://localhost:4000/",
+  }));
+
+  assert.deepEqual(config.connect.github, { clientId: "id", clientSecret: "secret" });
+  assert.equal(config.connect.publicApiUrl, "http://localhost:4000");
+});
+
+test("a provider's client id and secret must come together, and the error names neither value", () => {
+  assert.throws(
+    () => loadApiConfig(environment({ GOOGLE_DRIVE_CLIENT_SECRET: "do-not-print", CONNECT_ENCRYPTION_KEY: "a2V5" })),
+    (error: Error) => /must be set together/.test(error.message) && !error.message.includes("do-not-print"),
+  );
+});
