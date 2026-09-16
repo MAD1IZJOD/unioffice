@@ -1,5 +1,6 @@
 import {
   createEntityId,
+  highestRisk,
   isKnowledgeSubject,
   KNOWLEDGE_TYPES,
   type Agent,
@@ -130,7 +131,7 @@ export class GovernanceService {
       work.organizationId,
     );
 
-    return this.engine.evaluate(
+    const decision = this.engine.evaluate(
       {
         kind: "task",
         title: task.title,
@@ -147,6 +148,52 @@ export class GovernanceService {
       },
       policies,
     );
+
+    return this.withExternalWriteFloor(decision, task);
+  }
+
+  /**
+   * The step's tools that change something outside the company.
+   *
+   * Exposed so the execution path can record, on the approval itself, exactly
+   * which external writes a person is being asked to allow.
+   */
+  externalWritesFor(task: Task): string[] {
+    return requiredToolsOf(task).filter(
+      (toolId) => this.toolRegistry.get(toolId)?.external?.access === "write",
+    );
+  }
+
+  /**
+   * A step that writes to another system always needs a person.
+   *
+   * Not a policy the company can pause or archive: an agent opening a pull
+   * request or an issue acts in the company's name somewhere others can see,
+   * so the floor is part of the product. Policies still apply on top - a
+   * deny stays a deny, and a policy's own approval prompt is kept - but no
+   * allow, and no absence of rules, can lower it.
+   */
+  private withExternalWriteFloor(decision: GovernanceDecision, task: Task): GovernanceDecision {
+    const writes = this.externalWritesFor(task);
+
+    if (writes.length === 0 || decision.outcome === "deny") {
+      return decision;
+    }
+
+    const systems = [...new Set(writes.map((toolId) => this.toolRegistry.get(toolId)?.external?.provider ?? "an external system"))]
+      .map(systemName)
+      .join(" and ");
+
+    return {
+      ...decision,
+      outcome: "require_approval",
+      risk: highestRisk(decision.risk, "high"),
+      summary: decision.outcome === "require_approval"
+        ? decision.summary
+        : `“${task.title}” changes something in ${systems}, so a person must approve it first.`,
+      approvalPrompt: decision.approvalPrompt ??
+        `This step will use ${writes.join(", ")} to change something in ${systems}. Approve only if that change should happen.`,
+    };
   }
 
   /**
@@ -487,6 +534,10 @@ function requiredText(value: string | undefined, field: string): string {
   }
 
   return text;
+}
+
+function systemName(provider: string): string {
+  return provider === "github" ? "GitHub" : provider === "google_drive" ? "Google Drive" : provider;
 }
 
 function requiredToolsOf(task: Task): string[] {
