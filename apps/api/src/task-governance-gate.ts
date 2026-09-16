@@ -25,6 +25,8 @@ export interface TaskGovernanceOutcome {
   policyName?: string;
   /** Shown on the approval request when one is raised. */
   approvalPrompt?: string;
+  /** External write tools the step needs; approving the step allows exactly these. */
+  externalWrites?: string[];
 }
 
 /**
@@ -84,6 +86,7 @@ export class PolicyTaskGovernanceGate implements TaskGovernanceGate {
       policyId: decision.decidingPolicyId,
       policyName: decision.decidingPolicyName,
       approvalPrompt: decision.approvalPrompt,
+      externalWrites: this.governance.externalWritesFor(task),
     };
   }
 }
