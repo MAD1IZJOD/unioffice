@@ -8,6 +8,7 @@ import {
   SupabaseAgentRepository,
   SupabaseApprovalRepository,
   SupabaseArtifactRepository,
+  SupabaseConnectionRepository,
   SupabaseEventRepository,
   SupabaseExecutionJobRepository,
   SupabaseKnowledgeLinkRepository,
@@ -34,10 +35,15 @@ import {
 
 import { createDefaultToolRegistry } from "@unioffice/tools";
 
+import { createDriveTools, createGitHubTools } from "@unioffice/connect";
+
 import { AccessResolver } from "./access/access-resolver.js";
 import { SupabaseAuthenticator } from "./access/authenticator.js";
 import { MemberService } from "./access/member-service.js";
 import { AgentDirectoryService } from "./agent-directory-service.js";
+import { createConnectionProviders } from "./connections/connection-providers.js";
+import { ConnectionResolver } from "./connections/connection-resolver.js";
+import { ConnectionService } from "./connections/connection-service.js";
 import { GovernanceOverviewService } from "./governance-overview-service.js";
 import { GovernanceService } from "./governance-service.js";
 import { GovernanceToolGuard } from "./governance-tool-guard.js";
@@ -93,6 +99,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const policyRepository = new SupabasePolicyRepository(supabase);
   const workspaceRepository = new SupabaseWorkspaceRepository(supabase);
   const membershipRepository = new SupabaseMembershipRepository(supabase);
+  const connectionRepository = new SupabaseConnectionRepository(supabase);
 
   // Tokens are checked with the auth server; what a verified person may do
   // comes from their membership, which only the API reads and writes.
@@ -108,6 +115,36 @@ export function createExecutionRuntime(config: ApiConfig) {
   );
 
   const toolRegistry = createDefaultToolRegistry();
+
+  // External systems join the same registry as every other tool, so they go
+  // through the same grant check, the same governance guard and the same
+  // executor. What makes them external - a connection resolved from the
+  // mission's own organization at call time - lives behind the resolver, and
+  // a tool has no way to name a connection of its own choosing.
+  const connectionProviders = createConnectionProviders(config.connect);
+  const connectionResolver = new ConnectionResolver(
+    connectionRepository,
+    connectionProviders,
+    eventRecorder,
+  );
+
+  for (const tool of [
+    ...createGitHubTools(connectionResolver),
+    ...createDriveTools(connectionResolver),
+  ]) {
+    toolRegistry.register(tool);
+  }
+
+  const connectionService = new ConnectionService({
+    connections: connectionRepository,
+    members: membershipRepository,
+    workspaces: workspaceRepository,
+    providers: connectionProviders,
+    toolRegistry,
+    eventRecorder,
+    publicApiUrl: config.connect.publicApiUrl,
+    webUrl: config.connect.webUrl,
+  });
 
   // Governance is built before the agent runtime because the runtime's tool
   // executor takes the guard at construction. That ordering is the reason a
@@ -406,6 +443,8 @@ export function createExecutionRuntime(config: ApiConfig) {
     executionJobRepository,
     policyRepository,
     membershipRepository,
+    connectionRepository,
+    connectionService,
     authenticator,
     accessResolver,
     memberService,
