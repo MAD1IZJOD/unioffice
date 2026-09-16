@@ -41,6 +41,8 @@ export interface ExecutionRequest {
       result?: unknown;
     }>;
     requiredTools?: string[];
+    /** External write tools a person approved this step for. */
+    approvedTools?: string[];
   };
 
   context: Record<string, unknown>;
