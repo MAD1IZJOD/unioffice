@@ -43,6 +43,7 @@ import { GovernanceService } from "./governance-service.js";
 import { GovernanceToolGuard } from "./governance-tool-guard.js";
 import { PolicyTaskGovernanceGate } from "./task-governance-gate.js";
 import { MissionControlService } from "./mission-control-service.js";
+import { WorkforceService } from "./workforce-service.js";
 import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
@@ -320,9 +321,11 @@ export function createExecutionRuntime(config: ApiConfig) {
   // The company's operational state, and what needs a person, from one set of
   // lean reads. A mission sitting untouched past the same window startup uses
   // to call a run abandoned is reported as stalled rather than as in flight.
+  const operationalReads = new SupabaseOperationalReadRepository(supabase);
+
   const missionControlService = new MissionControlService(
     {
-      reads: new SupabaseOperationalReadRepository(supabase),
+      reads: operationalReads,
       works: workRepository,
       approvals: approvalRepository,
       jobs: executionJobRepository,
@@ -373,6 +376,16 @@ export function createExecutionRuntime(config: ApiConfig) {
     toolRegistry,
     eventRecorder,
   );
+
+  // The roster and each agent's profile, from the same lean reads Mission
+  // Control uses, so the two can never disagree about who is working.
+  const workforceService = new WorkforceService({
+    agents: agentRepository,
+    reads: operationalReads,
+    workspaces: workspaceRepository,
+    policies: policyRepository,
+    tools: toolRegistry,
+  });
 
   const staleRunReconciler = new StaleRunReconciler(
     workRepository,
@@ -426,6 +439,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     taskGovernanceGate,
     workspaceService,
     agentDirectoryService,
+    workforceService,
     staleRunReconciler,
   };
 }

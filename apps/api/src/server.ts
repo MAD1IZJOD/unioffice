@@ -130,6 +130,8 @@ import type {
   AgentDirectoryService,
 } from "./agent-directory-service.js";
 
+import type { WorkforceService } from "./workforce-service.js";
+
 import type {
   MissionTemplateService,
 } from "./mission-template-service.js";
@@ -200,6 +202,7 @@ export interface ApiServices {
   governanceOverviewService: GovernanceOverviewService;
   workspaceService: WorkspaceService;
   agentDirectoryService: AgentDirectoryService;
+  workforceService: Pick<WorkforceService, "getWorkforce" | "getProfile">;
   missionTemplateService: MissionTemplateService;
   toolRegistry: ToolRegistry;
   healthCheck: () => Promise<Record<string, unknown>>;
@@ -1024,6 +1027,31 @@ export function buildApiServer(
       });
 
       return { workspace };
+    });
+
+    // ---------------------------------------------------------------------
+    // The workforce.
+    //
+    // Who works for the organization and what each of them is doing, read in
+    // one pass for the roster and one for a profile. Both are narrowed to the
+    // workspaces the caller reaches: an agent working somewhere they were not
+    // given reads as not found, and a mission they cannot open is not named.
+    // ---------------------------------------------------------------------
+
+    instance.get("/workforce", async (request) => {
+      const access = accessOf(request);
+
+      return services.workforceService.getWorkforce(access.organizationId, { reach: reachOf(access) });
+    });
+
+    instance.get("/workforce/:id", async (request) => {
+      const access = accessOf(request);
+
+      return services.workforceService.getProfile(
+        access.organizationId,
+        parameterUuid(request.params) as AgentId,
+        { reach: reachOf(access) },
+      );
     });
 
     instance.get("/agents/:id", async (request) => {
