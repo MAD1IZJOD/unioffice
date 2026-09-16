@@ -2,7 +2,9 @@ import {
   ArrowLeft,
   Check,
   CircleDot,
+  Pause,
   Pencil,
+  Play,
   Plus,
   ShieldAlert,
   Wrench,
@@ -61,6 +63,25 @@ export default function Agent() {
   );
 
   const [editing, setEditing] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [statusError, setStatusError] = useState<string>();
+
+  // Pausing stops the delegator giving the agent new steps; resuming lets it
+  // be given work again. The API decides whether it may - the last active
+  // orchestrator cannot be paused - and says why when it refuses.
+  async function setStatus(status: "active" | "paused") {
+    setSwitching(true);
+    setStatusError(undefined);
+
+    try {
+      await updateAgent(agentId, { status });
+      profile.reload();
+    } catch (caught) {
+      setStatusError((caught as Error).message);
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   if (profile.loading) {
     return (
@@ -163,7 +184,33 @@ export default function Agent() {
                 <Pencil size={12} />
                 Configure
               </button>
+
+              {(member.status === "active" || member.status === "paused") && (
+                <button
+                  type="button"
+                  className="button-quiet"
+                  disabled={switching}
+                  onClick={() => void setStatus(member.status === "active" ? "paused" : "active")}
+                >
+                  {member.status === "active" ? <Pause size={12} /> : <Play size={12} />}
+                  {switching
+                    ? member.status === "active" ? "Pausing…" : "Resuming…"
+                    : member.status === "active" ? "Pause" : "Resume"}
+                </button>
+              )}
             </div>
+          )}
+
+          {statusError && (
+            <div className="mt-4 max-w-[68ch]">
+              <Failure headline="The agent's status was not changed" detail={statusError} />
+            </div>
+          )}
+
+          {member.status === "paused" && member.current && (
+            <p className="config-hint mt-4 max-w-[68ch]">
+              Paused agents are given no new steps. The step it is on now is left to finish.
+            </p>
           )}
 
           {orchestrator && (

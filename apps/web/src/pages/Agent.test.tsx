@@ -1,4 +1,5 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -151,10 +152,60 @@ describe("an agent's profile", () => {
     expect(await screen.findByRole("button", { name: "Configure" })).toBeDefined();
   });
 
-  it("does not offer configuration to a viewer", async () => {
-    open("viewer");
-    await screen.findByRole("heading", { name: "Tony" });
-    expect(screen.queryByRole("button", { name: "Configure" })).toBeNull();
+  it("does not offer configuration, pausing or resuming to a viewer or member", async () => {
+    for (const role of ["viewer", "member"] as const) {
+      open(role);
+      await screen.findByRole("heading", { name: "Tony" });
+      expect(screen.queryByRole("button", { name: "Configure" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("pauses an active agent through the API, then reads the profile again", async () => {
+    const user = userEvent.setup();
+    const calls = open("admin");
+
+    await user.click(await screen.findByRole("button", { name: "Pause" }));
+
+    await waitFor(() => {
+      const update = calls.find((call) => call.method === "POST" && call.url.pathname === "/agents/agent-tony");
+      expect(update?.body).toMatchObject({ status: "paused" });
+    });
+    await waitFor(() => expect(calls.filter((call) => call.url.pathname === "/workforce/agent-tony").length).toBe(2));
+  });
+
+  it("offers to resume a paused agent, and says a step it is still on is left to finish", async () => {
+    open("owner", () => json(200, { ...tony, member: { ...tony.member, status: "paused", presence: "paused" } }));
+
+    expect(await screen.findByRole("button", { name: "Resume" })).toBeDefined();
+    expect(screen.getByText(/The step it is on now is left to finish/)).toBeDefined();
+  });
+
+  it("says a paused agent with nothing running is not given new work", async () => {
+    open("owner", () =>
+      json(200, { ...tony, member: { ...tony.member, status: "paused", presence: "paused", current: undefined } }));
+
+    expect(await screen.findByText("Paused. It is not given new work until it is resumed.")).toBeDefined();
+  });
+
+  it("says why the API refused to pause an agent", async () => {
+    const user = userEvent.setup();
+    stubNetwork((call) =>
+      call.method === "POST"
+        ? json(400, { error: { code: "VALIDATION_ERROR", message: "Tyrion is the only active orchestrator." } })
+        : call.url.pathname === "/workforce/agent-tony" ? json(200, tony) : json(200, { tools: [], workspaces: [] }));
+
+    const router = createMemoryRouter(
+      [{ path: "/workforce/:agentId", element: <AccessContext.Provider value={signedInAs("owner")}><Agent /></AccessContext.Provider> }],
+      { initialEntries: ["/workforce/agent-tony"] },
+    );
+    render(<RouterProvider router={router} />);
+
+    await user.click(await screen.findByRole("button", { name: "Pause" }));
+
+    expect(await screen.findByText("The agent's status was not changed")).toBeDefined();
+    expect(screen.getByText("Tyrion is the only active orchestrator.")).toBeDefined();
   });
 
   it("says an unknown or out-of-reach agent is not in the workforce, without retrying", async () => {
