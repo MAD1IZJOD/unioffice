@@ -231,6 +231,9 @@ importers:
       '@unioffice/agents':
         specifier: workspace:*
         version: link:../../packages/agents
+      '@unioffice/connect':
+        specifier: workspace:*
+        version: link:../../packages/connect
       '@unioffice/core':
         specifier: workspace:*
         version: link:../../packages/core

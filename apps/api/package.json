@@ -14,6 +14,7 @@
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
     "@unioffice/agents": "workspace:*",
+    "@unioffice/connect": "workspace:*",
     "@unioffice/core": "workspace:*",
     "@unioffice/database": "workspace:*",
     "@unioffice/governance": "workspace:*",
