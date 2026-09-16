@@ -34,3 +34,5 @@ export * from "./repositories/supabase-operational-read-repository.js";
 export * from "./repositories/in-memory-operational-read-repository.js";
 export * from "./repositories/supabase-membership-repository.js";
 export * from "./repositories/in-memory-membership-repository.js";
+export * from "./repositories/connection-repository.js";
+export * from "./repositories/in-memory-connection-repository.js";
