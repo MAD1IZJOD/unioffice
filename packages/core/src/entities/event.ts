@@ -78,7 +78,16 @@ export type EventType =
   | "member.reactivated"
   | "member.removed"
   | "workspace.access_granted"
-  | "workspace.access_revoked";
+  | "workspace.access_revoked"
+  // External systems. The lifecycle of a connection, and what agents did
+  // through one. Payloads name the provider, the connection and the resource
+  // touched - never a token, and never the content that was read.
+  | "connection.connected"
+  | "connection.updated"
+  | "connection.needs_attention"
+  | "connection.disconnected"
+  | "external.read"
+  | "external.write";
 
 export type EventActorType =
   | "user"
