@@ -1128,7 +1128,8 @@ export type Permission =
   | "missions.operate"
   | "approvals.decide"
   | "knowledge.propose"
-  | "knowledge.curate";
+  | "knowledge.curate"
+  | "connections.manage";
 
 /** Who is signed in and where they stand, as the API resolved it. */
 export interface Me {
@@ -1665,6 +1666,15 @@ export interface AgentProfile {
     }>;
     policies: Array<{ id: string; name: string; effect: "allow" | "require_approval" | "deny"; risk: RiskLevel }>;
   };
+  /** External systems the agent holds tools for, and whether it can use each now. */
+  systems: Array<{
+    provider: ConnectionProvider;
+    name: string;
+    state: "ready" | "not_connected" | "needs_attention" | "not_enabled";
+    account?: string;
+    scope?: "workspace" | "company";
+    tools: Array<{ toolId: string; name: string; access: "read" | "write"; usable: boolean; note: string }>;
+  }>;
 }
 
 export async function fetchWorkforce(): Promise<Workforce> {
@@ -1959,4 +1969,102 @@ export function formatDuration(
   const minutes = Math.floor(ms / 60_000);
   const seconds = Math.round((ms % 60_000) / 1_000);
   return `${minutes}m ${seconds}s`;
+}
+
+/* --------------------------------------------------------------------------
+   Connections
+   --------------------------------------------------------------------------
+   External systems the organization has connected. Nothing here ever holds a
+   token: the browser starts a round trip, the provider sends it back to the
+   API, and the API keeps the credentials. */
+
+export type ConnectionProvider = "github" | "google_drive";
+
+export type ConnectionCapability = "github.read" | "github.write" | "drive.read";
+
+export interface ConnectionProviderItem {
+  provider: ConnectionProvider;
+  name: string;
+  description: string;
+  /** False when this server has no OAuth client for the provider. */
+  configured: boolean;
+}
+
+export interface ConnectionItem {
+  id: string;
+  provider: ConnectionProvider;
+  providerName: string;
+  status: "active" | "needs_attention" | "revoked";
+  workspace: { id: string; name: string } | null;
+  account: string | null;
+  scopes: string[];
+  capabilities: ConnectionCapability[];
+  availableCapabilities: Array<{
+    capability: ConnectionCapability;
+    label: string;
+    access: "read" | "write";
+    enabled: boolean;
+    grantable: boolean;
+  }>;
+  connectedBy: string | null;
+  connectedAt: string;
+  lastUsedAt: string | null;
+  problem: string | null;
+  revokedAt: string | null;
+  tools: Array<{ id: string; name: string; access: "read" | "write" }>;
+}
+
+export interface ConnectionsOverview {
+  providers: ConnectionProviderItem[];
+  connections: ConnectionItem[];
+}
+
+export async function fetchConnections(): Promise<ConnectionsOverview> {
+  return get<ConnectionsOverview>(scoped("/connections"));
+}
+
+export async function fetchConnection(connectionId: string): Promise<ConnectionItem> {
+  const { connection } = await get<{ connection: ConnectionItem }>(
+    scoped(`/connections/${encodeURIComponent(connectionId)}`),
+  );
+  return connection;
+}
+
+/** Where to send the browser to authorize. The provider returns it to the API, never here. */
+export async function startConnection(
+  provider: ConnectionProvider,
+  options: { workspaceId?: string; repositoryAccess?: "public" | "private" } = {},
+): Promise<string> {
+  const { authorizationUrl } = await post<{ authorizationUrl: string }>(
+    `/connections/${provider}/authorize`,
+    {
+      organizationId: organizationId(),
+      workspaceId: options.workspaceId || undefined,
+      repositoryAccess: options.repositoryAccess,
+    },
+    READ_TIMEOUT_MS,
+  );
+  return authorizationUrl;
+}
+
+export async function setConnectionCapabilities(
+  connectionId: string,
+  capabilities: ConnectionCapability[],
+): Promise<ConnectionItem> {
+  const { connection } = await post<{ connection: ConnectionItem }>(
+    `/connections/${encodeURIComponent(connectionId)}/capabilities`,
+    { organizationId: organizationId(), capabilities },
+    READ_TIMEOUT_MS,
+  );
+  return connection;
+}
+
+export async function disconnectConnection(
+  connectionId: string,
+): Promise<{ connection: ConnectionItem; providerRevoked: boolean }> {
+  return post<{ connection: ConnectionItem; providerRevoked: boolean }>(
+    `/connections/${encodeURIComponent(connectionId)}/disconnect`,
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
 }

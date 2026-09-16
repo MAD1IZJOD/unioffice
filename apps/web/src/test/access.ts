@@ -8,11 +8,12 @@ const PERMISSIONS: Record<OrganizationRole, Permission[]> = {
   owner: [
     "organization.read", "organization.manage", "members.manage", "owners.manage", "workspaces.manage",
     "agents.configure", "policies.manage", "missions.create", "missions.operate", "approvals.decide",
-    "knowledge.propose", "knowledge.curate",
+    "knowledge.propose", "knowledge.curate", "connections.manage",
   ],
   admin: [
     "organization.read", "members.manage", "workspaces.manage", "agents.configure", "policies.manage",
     "missions.create", "missions.operate", "approvals.decide", "knowledge.propose", "knowledge.curate",
+    "connections.manage",
   ],
   member: ["organization.read", "missions.create", "missions.operate", "approvals.decide", "knowledge.propose"],
   viewer: ["organization.read"],
