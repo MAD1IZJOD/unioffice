@@ -185,6 +185,8 @@ const AGENT_EVENT_TYPES: EventType[] = [
   "governance.denied",
   "governance.approval_required",
   "artifact.created",
+  "external.read",
+  "external.write",
 ];
 
 export class WorkforceService {

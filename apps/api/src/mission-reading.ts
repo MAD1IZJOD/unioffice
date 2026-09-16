@@ -234,6 +234,8 @@ export const MEANINGFUL_EVENT_TYPES: EventType[] = [
   "governance.denied",
   "governance.approval_required",
   "artifact.created",
+  "external.read",
+  "external.write",
 ];
 
 /**
@@ -289,6 +291,11 @@ export function describeEvent(event: Event, agents: Map<AgentId, Agent>): string
       return `${textOf(payload.policyName) ?? "A policy"} requires a decision on ${quoted(textOf(payload.action))}`;
     case "artifact.created":
       return `Produced ${quoted(textOf(payload.name))}`;
+    // The summary is the tool's own fixed sentence ("GitHub pull request
+    // created"), never anything read from or written to the other system.
+    case "external.read":
+    case "external.write":
+      return `${who ?? "An agent"}: ${textOf(payload.summary) ?? "used an external system"}`;
     default:
       return undefined;
   }
