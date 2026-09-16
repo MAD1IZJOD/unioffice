@@ -106,7 +106,7 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
     ],
   },
   {
-    label: "Workforce",
+    label: "Company",
     entries: [
       { label: "Workforce", path: "/workforce", icon: Users },
       { label: "Tools", path: "/tools", icon: Wrench },
@@ -157,11 +157,11 @@ function locate(pathname: string): { group: string; title: string } {
   }
 
   if (pathname.startsWith("/workspaces/")) {
-    return { group: "Workforce", title: "Workspace" };
+    return { group: "Company", title: "Workspace" };
   }
 
   if (pathname.startsWith("/workforce/")) {
-    return { group: "Workforce", title: "Agent" };
+    return { group: "Company", title: "Agent" };
   }
 
   for (const group of NAV_GROUPS) {

@@ -67,7 +67,7 @@ export default function Workforce() {
   return (
     <div className="mx-auto max-w-[1240px] fade-up">
       <PageOpening
-        eyebrow="Workforce"
+        eyebrow="Company"
         title={workforce.loading || !summary ? "THE WORKFORCE." : `${spellOut(summary.total)} ${summary.total === 1 ? "WORKER" : "WORKERS"}.`}
         lead={
           !summary

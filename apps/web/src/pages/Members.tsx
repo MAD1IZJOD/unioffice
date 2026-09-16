@@ -127,7 +127,7 @@ export default function Members() {
   return (
     <div className="fade-up">
       <PageOpening
-        eyebrow="Workforce"
+        eyebrow="Company"
         title="MEMBERS"
         lead={list.length === 1 ? "ONE PERSON." : `${list.length} PEOPLE.`}
         detail="What each person can see and do comes from their role, and - for members and viewers - from the workspaces they are given. Owners and admins reach every workspace."

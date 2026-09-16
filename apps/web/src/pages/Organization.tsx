@@ -115,7 +115,7 @@ export default function Organization() {
   return (
     <div className="fade-up">
       <PageOpening
-        eyebrow="Workforce"
+        eyebrow="Company"
         title={data ? data.organization.name.toUpperCase() : "THE COMPANY"}
         lead={
           active.length === 0
