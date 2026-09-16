@@ -1,6 +1,8 @@
 import type {
   Agent,
   AgentId,
+  Connection,
+  ConnectionProvider,
   EventType,
   OrganizationId,
   PolicyEffect,
@@ -12,6 +14,7 @@ import type {
 
 import type {
   AgentRepository,
+  ConnectionRepository,
   OperationalReadRepository,
   PolicyRepository,
   TaskSummary,
@@ -24,6 +27,7 @@ import { effectivePermissions } from "@unioffice/governance";
 import type { ToolRegistry } from "@unioffice/tools";
 
 import { AgentNotFoundError } from "./agent-directory-service.js";
+import { PROVIDER_INFO } from "./connections/connection-providers.js";
 import { reachesAgent } from "./governance-overview-service.js";
 import { clip, describeEvent, isTerminal } from "./mission-reading.js";
 
@@ -132,6 +136,27 @@ export interface AgentProfile {
     }>;
     policies: Array<{ id: string; name: string; effect: PolicyEffect; risk: RiskLevel }>;
   };
+  /**
+   * External systems this agent holds tools for, and whether it can actually
+   * use each one now. Only systems the agent was granted a tool for appear -
+   * a connection alone gives an agent nothing - and a tool is usable only
+   * when a live connection reaches the agent, allows what the tool does, and
+   * governance does not refuse it.
+   */
+  systems: Array<{
+    provider: ConnectionProvider;
+    name: string;
+    state: "ready" | "not_connected" | "needs_attention" | "not_enabled";
+    account?: string;
+    scope?: "workspace" | "company";
+    tools: Array<{
+      toolId: string;
+      name: string;
+      access: "read" | "write";
+      usable: boolean;
+      note: string;
+    }>;
+  }>;
 }
 
 export interface WorkforceDependencies {
@@ -140,6 +165,8 @@ export interface WorkforceDependencies {
   workspaces: Pick<WorkspaceRepository, "findByOrganization">;
   policies: Pick<PolicyRepository, "findEnforced">;
   tools: Pick<ToolRegistry, "get" | "list">;
+  /** Absent in tests that are not about external systems. */
+  connections?: Pick<ConnectionRepository, "list">;
 }
 
 /** Missions the roster's status and recent outcomes are read over. */
@@ -214,12 +241,15 @@ export class WorkforceService {
       throw new AgentNotFoundError(`Agent not found: ${agentId}`);
     }
 
-    const [steps, events, artifacts, workspaces, enforced] = await Promise.all([
+    const [steps, events, artifacts, workspaces, enforced, connections] = await Promise.all([
       this.deps.reads.findTaskSummariesByAgent(agent.id, PROFILE_STEPS),
       this.deps.reads.findEventsByTypes(organizationId, { types: AGENT_EVENT_TYPES, agentId: agent.id, limit: PROFILE_ACTIVITY * 2 }),
       this.deps.reads.findArtifactSummariesByAgent(organizationId, agent.id, PROFILE_ARTIFACTS * 2),
       this.deps.workspaces.findByOrganization(organizationId),
       this.deps.policies.findEnforced(organizationId),
+      this.agentHoldsExternalTools(agent) && this.deps.connections
+        ? this.deps.connections.list(organizationId)
+        : Promise.resolve([] as Connection[]),
     ]);
 
     // Steps carry no organization. Their missions are read back inside this
@@ -246,6 +276,7 @@ export class WorkforceService {
     };
 
     const agentsById = new Map([[agent.id, agent]]);
+    const governance = this.governanceOf(agent, enforced.filter((policy) => policy.organizationId === organizationId));
 
     return {
       member: this.member(agent, ownSteps, worksById, workspacesById, reach),
@@ -277,8 +308,71 @@ export class WorkforceService {
           return summary ? [{ id: event.id, type: event.type, at: event.timestamp, summary, missionId: event.workId }] : [];
         })
         .slice(0, PROFILE_ACTIVITY),
-      governance: this.governanceOf(agent, enforced.filter((policy) => policy.organizationId === organizationId)),
+      governance,
+      systems: this.systemsOf(agent, connections.filter((connection) => connection.organizationId === organizationId), governance),
     };
+  }
+
+  private agentHoldsExternalTools(agent: Agent): boolean {
+    return agent.toolIds.some((toolId) => this.deps.tools.get(toolId)?.external !== undefined);
+  }
+
+  private systemsOf(agent: Agent, connections: Connection[], governance: AgentProfile["governance"]): AgentProfile["systems"] {
+    const held = agent.toolIds
+      .map((toolId) => this.deps.tools.get(toolId))
+      .filter((tool): tool is NonNullable<typeof tool> => tool?.external !== undefined);
+
+    const providers = [...new Set(held.map((tool) => tool.external!.provider))]
+      .filter((provider): provider is ConnectionProvider => provider in PROVIDER_INFO);
+
+    return providers.map((provider) => {
+      // The connection a call from this agent would resolve to: its own
+      // workspace's first, then the company-wide one.
+      const live = connections.filter((connection) => connection.provider === provider && connection.status !== "revoked");
+      const connection =
+        (agent.workspaceId ? live.find((entry) => entry.workspaceId === agent.workspaceId) : undefined) ??
+        live.find((entry) => entry.workspaceId === undefined);
+
+      const tools = held
+        .filter((tool) => tool.external!.provider === provider)
+        .map((tool) => {
+          const access = tool.external!.access;
+          const capability = PROVIDER_INFO[provider].capabilities.find((entry) => entry.access === access)?.capability;
+          const ruled = governance.tools.find((entry) => entry.toolId === tool.id);
+
+          const [usable, note] = !connection
+            ? [false, "No connection reaches this agent."]
+            : connection.status !== "active"
+              ? [false, "The connection needs to be reconnected."]
+              : !capability || !connection.capabilities.includes(capability)
+                ? [false, "The connection does not allow this."]
+                : ruled?.access === "denied"
+                  ? [false, "A policy refuses it."]
+                  : access === "write"
+                    ? [true, "Each use waits for an owner or admin to approve the step."]
+                    : [true, "Available."];
+
+          return { toolId: tool.id, name: tool.name, access, usable, note };
+        });
+
+      const state: AgentProfile["systems"][number]["state"] = !connection
+        ? "not_connected"
+        : connection.status !== "active"
+          ? "needs_attention"
+          : tools.some((tool) => tool.usable)
+            ? "ready"
+            : "not_enabled";
+
+      return {
+        provider,
+        name: PROVIDER_INFO[provider].name,
+        state,
+        ...(connection
+          ? { account: connection.accountLabel, scope: connection.workspaceId ? "workspace" as const : "company" as const }
+          : {}),
+        tools,
+      };
+    });
   }
 
   private member(

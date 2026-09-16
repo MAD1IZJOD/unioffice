@@ -418,6 +418,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workspaces: workspaceRepository,
     policies: policyRepository,
     tools: toolRegistry,
+    connections: connectionRepository,
   });
 
   const staleRunReconciler = new StaleRunReconciler(

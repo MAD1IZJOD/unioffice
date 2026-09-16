@@ -278,3 +278,72 @@ test("governance shows what the agent may do with each tool it holds, which a gr
   assert.deepEqual(governance.tools[0]!.policyNames, ["Calculations need a person"]);
   assert.deepEqual(governance.policies.map((entry) => entry.name), ["Calculations need a person"]);
 });
+
+test("a profile shows only the external systems the agent holds tools for, and whether it can really use them", async () => {
+  const { InMemoryConnectionRepository } = await import("@unioffice/database");
+  const { createDriveTools, createGitHubTools } = await import("@unioffice/connect");
+
+  const tools = createDefaultToolRegistry();
+  const access = { async use() { throw new Error("not called"); } };
+  for (const tool of [...createGitHubTools(access), ...createDriveTools(access)]) tools.register(tool);
+
+  const connections = new InMemoryConnectionRepository();
+  const connection = (overrides: Record<string, unknown>) => ({
+    id: `c0000000-0000-4000-8000-00000000000${connections.connections.size + 1}`,
+    organizationId: orgA,
+    provider: "github",
+    status: "active",
+    scopes: ["public_repo"],
+    capabilities: ["github.read"],
+    accountLabel: "octo-dev",
+    createdAt: ago(1),
+    updatedAt: ago(1),
+    ...overrides,
+  }) as never;
+
+  await connections.create(connection({}), "sealed");
+  await connections.create(connection({ organizationId: orgB, provider: "google_drive", capabilities: ["drive.read"] }), "sealed");
+
+  const agents = [
+    agent("tony", { toolIds: ["calculator", "github_issue", "github_create_issue", "drive_read_file"] }),
+    agent("harvey", { toolIds: ["calculator"] }),
+  ];
+
+  const service = new WorkforceService({
+    agents: {
+      async findById(id) { return agents.find((entry) => entry.id === id) ?? null; },
+      async findByOrganization(organizationId) { return agents.filter((entry) => entry.organizationId === organizationId); },
+    },
+    reads: new InMemoryOperationalReadRepository([], [], [], []),
+    workspaces: { async findByOrganization() { return []; } },
+    policies: { async findEnforced() { return []; } },
+    tools,
+    connections,
+  });
+
+  const tony = await service.getProfile(orgA, "tony" as AgentId);
+  const github = tony.systems.find((system) => system.provider === "github")!;
+  const drive = tony.systems.find((system) => system.provider === "google_drive")!;
+
+  assert.equal(github.state, "ready");
+  assert.equal(github.scope, "company");
+  assert.deepEqual(github.tools.map((tool) => [tool.toolId, tool.usable]), [["github_issue", true], ["github_create_issue", false]]);
+  assert.match(github.tools[1]!.note, /does not allow/);
+
+  // Another organization's Drive connection gives this agent nothing.
+  assert.equal(drive.state, "not_connected");
+  assert.equal(drive.tools[0]!.usable, false);
+
+  // Holding no external tool means no external systems, whatever is connected.
+  assert.deepEqual((await service.getProfile(orgA, "harvey" as AgentId)).systems, []);
+
+  // Writes enabled: usable, and said to wait for approval.
+  const [live] = await connections.list(orgA);
+  await connections.update({ ...live!, capabilities: ["github.read", "github.write"] });
+  const enabled = (await service.getProfile(orgA, "tony" as AgentId)).systems.find((system) => system.provider === "github")!;
+  assert.equal(enabled.tools[1]!.usable, true);
+  assert.match(enabled.tools[1]!.note, /approve/);
+
+  await connections.revoke(orgA, live!.id, undefined, new Date());
+  assert.equal((await service.getProfile(orgA, "tony" as AgentId)).systems.find((system) => system.provider === "github")!.state, "not_connected");
+});
