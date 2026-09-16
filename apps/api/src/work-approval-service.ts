@@ -316,15 +316,32 @@ export class WorkApprovalService implements ApprovalCoordinator {
  * the request fall back to the task, which has always carried it.
  */
 export function isGovernedByPolicy(approval: ApprovalRequest, task?: Task | null): boolean {
-  if (typeof approval.metadata.policyId === "string") return true;
-  return task ? typeof approvalMetadata(task).policyId === "string" : false;
+  if (typeof approval.metadata.policyId === "string" || hasExternalWrites(approval.metadata)) return true;
+  if (!task) return false;
+
+  const metadata = approvalMetadata(task);
+  return typeof metadata.policyId === "string" || hasExternalWrites(metadata);
+}
+
+/**
+ * A step that writes to another system is decided with the same authority
+ * as one a policy governs: an owner or admin, never a member approving an
+ * agent's change to the company's GitHub on their own.
+ */
+function hasExternalWrites(metadata: Record<string, unknown>): boolean {
+  return Array.isArray(metadata.externalWrites) && metadata.externalWrites.length > 0;
 }
 
 /** The policy fields worth keeping on the request itself; empty for planner-raised approvals. */
 function governingPolicy(approval: Record<string, unknown>): Record<string, unknown> {
-  if (typeof approval.policyId !== "string") return {};
+  const externalWrites = hasExternalWrites(approval)
+    ? { externalWrites: (approval.externalWrites as unknown[]).filter((entry): entry is string => typeof entry === "string") }
+    : {};
+
+  if (typeof approval.policyId !== "string") return externalWrites;
 
   return {
+    ...externalWrites,
     policyId: approval.policyId,
     ...(typeof approval.policyName === "string" ? { policyName: approval.policyName } : {}),
     ...(typeof approval.risk === "string" ? { risk: approval.risk } : {}),
