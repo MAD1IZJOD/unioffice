@@ -9,3 +9,4 @@ export * from "./providers/google-drive/drive-oauth.js";
 export * from "./providers/github/github-client.js";
 export * from "./providers/google-drive/drive-client.js";
 export * from "./tools/connection-access.js";
+export * from "./tools/github-tools.js";
