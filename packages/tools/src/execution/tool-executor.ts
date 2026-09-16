@@ -1,4 +1,5 @@
 import type {
+  ToolAuditRecord,
   ToolDefinition,
   ToolExecutionContext,
   ToolGuard,
@@ -14,6 +15,10 @@ export type ToolExecutionErrorCode =
   | "TOOL_NOT_AUTHORIZED"
   /** The agent holds the grant, but a company policy refuses this call. */
   | "TOOL_DENIED_BY_POLICY"
+  /** An external write, in a step no person approved it for. */
+  | "TOOL_NOT_APPROVED"
+  /** The tool's per-run allowance is used up. */
+  | "TOOL_CALL_LIMIT_REACHED"
   | "TOOL_INPUT_INVALID"
   | "TOOL_EXECUTION_FAILED";
 
@@ -31,6 +36,9 @@ export interface ToolExecutionResult {
     message: string;
     details?: ToolValidationError[];
   };
+
+  /** The tool's own record of a completed call, when it keeps one. */
+  audit?: ToolAuditRecord;
 
   /** Set when a guard refused the call, so callers can name the rule. */
   deniedBy?: {
@@ -91,6 +99,22 @@ export class ToolExecutor {
         startedAt,
         "TOOL_NOT_AUTHORIZED",
         `Agent is not authorized to use tool: ${toolId}`,
+      );
+    }
+
+    // Before governance is even asked: a write to another system needs a
+    // person's approval of this step for this tool, and nothing a guard or
+    // policy says can substitute for it. Refusing first also keeps an
+    // unapproved write out of the governance trail as if it were a question.
+    if (
+      tool.external?.access === "write" &&
+      !(context.approvedToolIds ?? []).includes(toolId)
+    ) {
+      return this.failed(
+        toolId,
+        startedAt,
+        "TOOL_NOT_APPROVED",
+        `${toolId} changes something outside the company, and this step was not approved for it by a person.`,
       );
     }
 
@@ -164,6 +188,7 @@ export class ToolExecutor {
         toolId,
         status: "completed",
         output,
+        audit: auditOf(tool, validation.value, output),
         startedAt,
         completedAt: new Date(),
       };
@@ -191,5 +216,25 @@ export class ToolExecutor {
       startedAt,
       completedAt: new Date(),
     };
+  }
+}
+
+function auditOf<TInput, TOutput>(
+  tool: ToolDefinition<TInput, TOutput>,
+  input: TInput,
+  output: TOutput,
+): ToolAuditRecord | undefined {
+  if (!tool.audit) {
+    return tool.external
+      ? { action: `${tool.id}.${tool.external.access}`, summary: `${tool.name} used` }
+      : undefined;
+  }
+
+  try {
+    return tool.audit(input, output);
+  } catch {
+    // The call already happened; failing to describe it must not make it look
+    // as if it had not. A plain record is kept instead.
+    return { action: `${tool.id}.completed`, summary: `${tool.name} used` };
   }
 }

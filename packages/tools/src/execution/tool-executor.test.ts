@@ -220,3 +220,79 @@ test("without a guard the executor behaves exactly as it did before", async () =
 
   assert.equal(result.status, "completed");
 });
+
+const writeTool: ToolDefinition<{ text: string }, { number: number }> = {
+  ...echoTool,
+  id: "remote_write",
+  name: "Remote write",
+  external: { provider: "remote", access: "write" },
+  async execute() {
+    return { number: 7 };
+  },
+  audit(_input, output) {
+    return { action: "item.created", summary: "Remote item created", resource: { number: output.number } };
+  },
+};
+
+function registryWithWrite() {
+  const registry = new DefaultToolRegistry();
+  registry.register(writeTool);
+  return registry;
+}
+
+test("an external write without a step approval never runs and never reaches governance", async () => {
+  let asked = false;
+  let ran = false;
+  const registry = new DefaultToolRegistry();
+  registry.register({ ...writeTool, async execute() { ran = true; return { number: 1 }; } });
+
+  const executor = new ToolExecutor(registry, {
+    async check() {
+      asked = true;
+      return { outcome: "allow", reason: "Everything is allowed." };
+    },
+  });
+
+  const result = await executor.execute("remote_write", { text: "hi" }, {
+    ...context(["remote_write"]),
+    approvedToolIds: ["some_other_tool"],
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error?.code, "TOOL_NOT_APPROVED");
+  assert.equal(asked, false);
+  assert.equal(ran, false);
+});
+
+test("an approved external write still needs the grant and the guard", async () => {
+  const denying = new ToolExecutor(registryWithWrite(), {
+    async check() {
+      return { outcome: "deny", reason: "Not here." };
+    },
+  });
+
+  const approved = { ...context(["remote_write"]), approvedToolIds: ["remote_write"] };
+
+  assert.equal(
+    (await new ToolExecutor(registryWithWrite()).execute("remote_write", { text: "hi" }, { ...approved, authorizedToolIds: [] })).error?.code,
+    "TOOL_NOT_AUTHORIZED",
+  );
+  assert.equal((await denying.execute("remote_write", { text: "hi" }, approved)).error?.code, "TOOL_DENIED_BY_POLICY");
+
+  const result = await new ToolExecutor(registryWithWrite()).execute("remote_write", { text: "hi" }, approved);
+  assert.equal(result.status, "completed");
+  assert.deepEqual(result.audit, { action: "item.created", summary: "Remote item created", resource: { number: 7 } });
+});
+
+test("an audit that throws still leaves a plain record of the call", async () => {
+  const registry = new DefaultToolRegistry();
+  registry.register({ ...writeTool, audit() { throw new Error("boom"); } });
+
+  const result = await new ToolExecutor(registry).execute("remote_write", { text: "hi" }, {
+    ...context(["remote_write"]),
+    approvedToolIds: ["remote_write"],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.audit?.summary, "Remote write used");
+});
