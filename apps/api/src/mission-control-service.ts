@@ -442,7 +442,11 @@ export class MissionControlService {
     const orgWorks = works.filter((work) => work.organizationId === organizationId);
     const orgApprovals = approvals.filter((approval) => approval.organizationId === organizationId);
     const orgJobs = jobs.filter((job) => job.organizationId === organizationId);
-    const ownAgents = agents.filter((agent) => agent.organizationId === organizationId);
+    // An agent working in a workspace the caller was not given is left off the
+    // roster too. The missions they can see only ever use agents they can see:
+    // a scoped agent is only given work in its own workspace.
+    const ownAgents = agents.filter((agent) =>
+      agent.organizationId === organizationId && (!reach || reach(agent.workspaceId)));
 
     // Someone who reaches only some workspaces is shown only those missions,
     // and only the approvals, jobs and knowledge that belong to them. The
