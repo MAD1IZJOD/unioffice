@@ -288,7 +288,7 @@ function missionItems(
       detail: reading.blocked.reason,
       consequence: "That step cannot start until the agent is active again or the mission is re-planned.",
       action: agentId && input.agentIds.has(agentId)
-        ? { label: "Review agent", path: `/agents/${agentId}` }
+        ? { label: "Review agent", path: `/workforce/${agentId}` }
         : { label: "Open mission", path: missionPath(work.id) },
       acknowledgeable: false,
       agentId,

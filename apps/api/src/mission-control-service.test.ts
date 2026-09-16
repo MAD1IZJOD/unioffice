@@ -185,7 +185,7 @@ test("a step assigned to an agent who cannot work is the obstacle named, with th
   const item = view.attention.items[0]!;
   assert.equal(item.kind, "agent_unavailable");
   assert.equal(item.source, "workforce");
-  assert.deepEqual(item.action, { label: "Review agent", path: `/agents/${rhea.id}` });
+  assert.deepEqual(item.action, { label: "Review agent", path: `/workforce/${rhea.id}` });
   assert.deepEqual(view.workforce.unavailable, [{ agentId: rhea.id, name: "Rhea", status: "paused" }]);
 });
 
