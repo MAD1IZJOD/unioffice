@@ -4,7 +4,7 @@ import test from "node:test";
 import { cleanExternalText, cleanLabel, cleanUrl } from "./sanitize.js";
 
 test("invisible and direction-changing characters are removed", () => {
-  const hidden = "Please​ review‮ gnirts‬⁦ now﻿";
+  const hidden = "Please\u200B review\u202E gnirts\u202C\u2066 now\u0007\uFEFF";
   const { text } = cleanExternalText(hidden, 1000);
 
   assert.equal(text, "Please review gnirts now");
@@ -32,7 +32,7 @@ test("long text is cut with an explicit marker and its real length", () => {
 });
 
 test("labels are one bounded line", () => {
-  assert.equal(cleanLabel("  Fix\n\nthe   build ​ "), "Fix the build");
+  assert.equal(cleanLabel("  Fix\n\nthe   build \u200B "), "Fix the build");
   assert.equal(cleanLabel("y".repeat(300), 10).length, 10);
   assert.equal(cleanLabel(42), "");
 });
