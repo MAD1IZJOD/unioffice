@@ -13,6 +13,7 @@ import type {
   AgentStatus,
   AgentType,
   ArtifactId,
+  ConnectionId,
   Event,
   KnowledgeConflictId,
   KnowledgeSourceType,
@@ -172,6 +173,12 @@ import {
   type MemberService,
 } from "./access/member-service.js";
 import { LastOwnerError, MemberConflictError } from "@unioffice/database";
+import {
+  ConnectionNotFoundError,
+  ConnectionStateError,
+  ConnectionValidationError,
+  type ConnectionService,
+} from "./connections/connection-service.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -187,6 +194,10 @@ export interface ApiServices {
   accessResolver: Pick<AccessResolver, "resolve" | "organizationsFor">;
   streamTickets: StreamTickets;
   memberService: MemberService;
+  connectionService: Pick<
+    ConnectionService,
+    "overview" | "get" | "startAuthorization" | "completeAuthorization" | "setCapabilities" | "disconnect"
+  >;
   applicationService: WorkApplicationService;
   workService: WorkService;
   workExecutionService: WorkExecutionService;
@@ -215,7 +226,21 @@ export function buildApiServer(
   services: ApiServices,
 ) {
   const app = Fastify({
-    logger: true,
+    logger: {
+      // Request lines are logged without the values of parameters that are
+      // credentials in all but name: an OAuth callback's code and state, and
+      // the live channel's ticket. The path and method are enough to debug.
+      serializers: {
+        req(request) {
+          return {
+            method: request.method,
+            url: redactUrl(request.url),
+            host: request.host,
+            remoteAddress: request.ip,
+          };
+        },
+      },
+    },
     // Every legitimate request here is small - an objective, a briefing, a
     // policy's scope arrays. The framework default is 1MB, which is room for
     // a caller to hand the planner an enormous prompt or bloat a row; 256KB
@@ -282,6 +307,11 @@ export function buildApiServer(
       const route = request.routeOptions.url;
 
       if (request.method === "OPTIONS" || route === "/health") return;
+
+      // A provider sends the browser back here with no session attached. The
+      // callback proves who it belongs to with its single-use state instead,
+      // and reads nothing an unauthenticated request could otherwise reach.
+      if (route === CONNECTION_CALLBACK_ROUTE) return;
 
       // The live channel cannot send headers, so a browser opens it with a
       // single-use ticket bought by a signed-in request. The ticket names who
@@ -982,6 +1012,77 @@ export function buildApiServer(
       };
     });
 
+    // ---------------------------------------------------------------------
+    // Connections.
+    //
+    // External systems the organization has authorized. Everyone reads what
+    // reaches them; owners and admins connect, change and disconnect, with
+    // their membership re-read before each. No response here ever carries a
+    // token, a client secret or anything a provider sent back.
+    // ---------------------------------------------------------------------
+
+    instance.get("/connections", async (request) => {
+      return services.connectionService.overview(accessOf(request));
+    });
+
+    instance.get("/connections/:id", async (request) => {
+      return {
+        connection: await services.connectionService.get(accessOf(request), parameterUuid(request.params) as ConnectionId),
+      };
+    });
+
+    instance.post("/connections/:provider/authorize", { config: { rateLimit: CONNECTION_WRITE_LIMIT } }, async (request) => {
+      const body = onlyFields(objectBody(request.body), ["organizationId", "workspaceId", "repositoryAccess"]);
+      const workspaceId = typeof body.workspaceId === "string" && UUID_PATTERN.test(body.workspaceId)
+        ? (body.workspaceId as WorkspaceId)
+        : undefined;
+      const access = await confirmAllowed(services, request, "connections.manage", workspaceId);
+
+      return services.connectionService.startAuthorization(access, {
+        provider: fieldOf(request.params, "provider"),
+        workspaceId: body.workspaceId,
+        repositoryAccess: body.repositoryAccess,
+      });
+    });
+
+    instance.get(CONNECTION_CALLBACK_ROUTE, { config: { rateLimit: CONNECTION_CALLBACK_LIMIT } }, async (request, reply) => {
+      const provider = fieldOf(request.params, "provider");
+      const location = await services.connectionService.completeAuthorization(
+        typeof provider === "string" ? provider : "",
+        {
+          code: fieldOf(request.query, "code"),
+          state: fieldOf(request.query, "state"),
+          error: fieldOf(request.query, "error"),
+        },
+      );
+
+      return reply
+        .header("cache-control", "no-store")
+        .redirect(location, 303);
+    });
+
+    instance.post("/connections/:id/capabilities", { config: { rateLimit: CONNECTION_WRITE_LIMIT } }, async (request) => {
+      const body = onlyFields(objectBody(request.body), ["organizationId", "capabilities"]);
+      const access = await confirmAllowed(services, request, "connections.manage");
+
+      return {
+        connection: await services.connectionService.setCapabilities(
+          access,
+          parameterUuid(request.params) as ConnectionId,
+          body.capabilities,
+        ),
+      };
+    });
+
+    instance.post("/connections/:id/disconnect", { config: { rateLimit: CONNECTION_WRITE_LIMIT } }, async (request) => {
+      if (request.body !== undefined && request.body !== null) {
+        onlyFields(objectBody(request.body), ["organizationId"]);
+      }
+
+      const access = await confirmAllowed(services, request, "connections.manage");
+      return services.connectionService.disconnect(access, parameterUuid(request.params) as ConnectionId);
+    });
+
     instance.get("/organization", async (request) => {
       const query = objectBody(request.query);
 
@@ -1510,6 +1611,48 @@ const KNOWLEDGE_SEARCH_LIMIT = { max: 60, timeWindow: "1 minute" };
 const KNOWLEDGE_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
 const KNOWLEDGE_DERIVE_LIMIT = { max: 5, timeWindow: "1 minute" };
 const MEMBER_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
+
+const CONNECTION_WRITE_LIMIT = { max: 20, timeWindow: "1 minute" };
+
+const CONNECTION_CALLBACK_LIMIT = { max: 30, timeWindow: "1 minute" };
+
+const CONNECTION_CALLBACK_ROUTE = "/connections/oauth/:provider/callback";
+
+const REDACTED_QUERY_PARAMETERS = new Set(["code", "state", "ticket", "access_token", "refresh_token", "token"]);
+
+/** A URL fit for a log line: the values of credential-like parameters are removed. */
+export function redactUrl(url: string): string {
+  const index = url.indexOf("?");
+
+  if (index === -1) {
+    return url;
+  }
+
+  const params = new URLSearchParams(url.slice(index + 1));
+
+  for (const key of [...params.keys()]) {
+    if (REDACTED_QUERY_PARAMETERS.has(key.toLowerCase())) {
+      params.set(key, "[redacted]");
+    }
+  }
+
+  return `${url.slice(0, index)}?${params.toString()}`;
+}
+
+/**
+ * Refuses fields a route does not take. For the few routes that change
+ * something sensitive, an unexpected field is a mistake or an attempt to set
+ * what the caller may not - either way, better refused than ignored.
+ */
+function onlyFields(body: Record<string, unknown>, allowed: readonly string[]): Record<string, unknown> {
+  const unexpected = Object.keys(body).filter((key) => !allowed.includes(key));
+
+  if (unexpected.length > 0) {
+    throw new ApiError(400, `Unexpected field: ${unexpected[0]!.slice(0, 64)}.`);
+  }
+
+  return body;
+}
 
 /** The verified caller. Only the sign-in hook sets it. */
 function accessOf(request: { access?: Access }): Access {
@@ -2256,13 +2399,18 @@ function statusForError(error: Error): number {
     error instanceof KnowledgeNotFoundError ||
     error instanceof MissionTemplateNotFoundError ||
     error instanceof MissionNotFoundError ||
-    error instanceof MemberNotFoundError
+    error instanceof MemberNotFoundError ||
+    error instanceof ConnectionNotFoundError
   ) {
     return 404;
   }
 
-  if (error instanceof MemberValidationError) {
+  if (error instanceof MemberValidationError || error instanceof ConnectionValidationError) {
     return 400;
+  }
+
+  if (error instanceof ConnectionStateError) {
+    return 409;
   }
 
   if (

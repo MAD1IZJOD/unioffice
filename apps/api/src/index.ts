@@ -69,6 +69,7 @@ export async function createApiServer() {
     // process that issued them.
     streamTickets: new StreamTickets(),
     memberService: runtime.memberService,
+    connectionService: runtime.connectionService,
     applicationService: runtime.applicationService,
     workService: runtime.workService,
     workExecutionService: runtime.workExecutionService,
