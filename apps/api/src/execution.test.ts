@@ -28,6 +28,8 @@ import type {
 
 import { InMemoryKnowledgeRepository } from "@unioffice/database";
 
+import type { AgentToolCall } from "@unioffice/agents";
+
 import { KnowledgeExtractor } from "@unioffice/memory";
 
 import type {
@@ -1370,4 +1372,172 @@ test("a knowledge outage never fails the step it was meant to inform", async () 
 
   assert.equal(result.status, "completed");
   assert.equal(artifactRepository.artifacts.size, 1);
+});
+
+test("an external call is audited by what happened, never by what was read or written", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder, repository: eventRepository } = createRecorder();
+  const task = makeTask("task-external-audit" as TaskId, { status: "ready" });
+
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: "Summarised the plan.",
+        toolCalls: [
+          {
+            toolId: "drive_read_file",
+            input: undefined,
+            external: { provider: "google_drive", access: "read" },
+            audit: { action: "file.read", summary: "Drive document accessed", resource: { fileId: "1AbCdEfGhIjK" } },
+            status: "completed",
+            startedAt: new Date(),
+            completedAt: new Date(),
+          },
+          {
+            toolId: "github_create_issue",
+            input: undefined,
+            external: { provider: "github", access: "write" },
+            audit: { action: "issue.created", summary: "GitHub issue created", resource: { repository: "acme/app", issue: 12 } },
+            status: "completed",
+            startedAt: new Date(),
+            completedAt: new Date(),
+          },
+          {
+            toolId: "github_issue",
+            input: undefined,
+            external: { provider: "github", access: "read" },
+            error: { code: "TOOL_EXECUTION_FAILED", message: "That was not found, or the connected account cannot see it." },
+            status: "failed",
+            startedAt: new Date(),
+            completedAt: new Date(),
+          },
+        ] as AgentToolCall[],
+        metadata: {},
+      };
+    },
+  };
+
+  const result = await new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+  ).executeTask(task.id);
+
+  const audit = eventRepository.events.filter((event) => event.type.startsWith("external.") || event.type.startsWith("tool."));
+  assert.deepEqual(audit.map((event) => event.type), ["external.read", "external.write", "tool.failed"]);
+  assert.equal(audit[0]?.payload.summary, "Drive document accessed");
+  assert.deepEqual(audit[1]?.payload.resource, { repository: "acme/app", issue: 12 });
+  assert.equal("input" in audit[0]!.payload, false);
+  assert.equal("output" in audit[1]!.payload, false);
+  assert.equal(audit[2]?.payload.provider, "github");
+
+  const execution = result.metadata.execution as { externalSources: Array<{ toolId: string }> };
+  assert.deepEqual(execution.externalSources.map((source) => source.toolId), ["drive_read_file", "github_create_issue"]);
+});
+
+test("a step is handed only the external writes a person approved for it", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder } = createRecorder();
+  const handed: Array<string[] | undefined> = [];
+
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      handed.push(request.task.approvedTools);
+      return { workId: request.workId, taskId: request.taskId, agentId: request.agentId, status: "completed", output: "ok", toolCalls: [], metadata: {} };
+    },
+  };
+
+  const service = new TaskExecutionService(taskRepository, new MemoryArtifactRepository(), workRepository, agentRepository, engine, recorder);
+  const routing = { requiredTools: ["github_create_issue", "github_create_branch"] };
+
+  const approved = makeTask("task-approved" as TaskId, {
+    status: "ready",
+    metadata: { routing, approval: { required: true, status: "approved", externalWrites: ["github_create_issue"] } },
+  });
+  const pending = makeTask("task-pending" as TaskId, {
+    status: "ready",
+    metadata: { routing, approval: { required: true, status: "pending", externalWrites: ["github_create_issue"] } },
+  });
+  const unapproved = makeTask("task-unapproved" as TaskId, { status: "ready", metadata: { routing } });
+
+  for (const entry of [approved, pending, unapproved]) {
+    await taskRepository.create(entry);
+    await service.executeTask(entry.id);
+  }
+
+  assert.deepEqual(handed, [["github_create_issue"], [], []]);
+});
+
+test("a step that read from another system is not mined for company knowledge", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder } = createRecorder();
+  const fabric = knowledgeFabric(
+    recorder,
+    { workRepository, taskRepository, artifactRepository },
+    JSON.stringify({ knowledge: [] }),
+  );
+
+  const task = makeTask("task-drive-read" as TaskId, { title: "Summarise the drive plan", status: "ready" });
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: onboardingFinding,
+        toolCalls: [{
+          toolId: "drive_read_file",
+          input: undefined,
+          external: { provider: "google_drive", access: "read" },
+          audit: { action: "file.read", summary: "Drive document accessed" },
+          status: "completed",
+          startedAt: new Date(),
+          completedAt: new Date(),
+        }],
+        metadata: {},
+      };
+    },
+  };
+
+  const result = await new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+    { recall: fabric.recall, capture: fabric.capture },
+  ).executeTask(task.id);
+
+  assert.equal(result.status, "completed");
+  assert.equal(artifactRepository.artifacts.size, 1, "the answer is still kept as the step's artifact");
+  assert.equal(fabric.extractionCalls.length, 0);
+  assert.equal(fabric.store.memories.size, 0);
 });

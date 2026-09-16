@@ -19,6 +19,7 @@ import type {
 } from "@unioffice/database";
 
 import type {
+  AgentToolCall,
   RecalledKnowledgeItem,
 } from "@unioffice/agents";
 
@@ -196,6 +197,7 @@ export class TaskExecutionService {
             description: runningTask.description,
             dependencies: await this.dependencyResults(runningTask),
             requiredTools: requiredToolsFromTask(runningTask),
+            approvedTools: approvedExternalWrites(runningTask),
           },
           context: {
             taskMetadata: runningTask.metadata,
@@ -209,15 +211,19 @@ export class TaskExecutionService {
           workId: runningTask.workId,
           taskId: runningTask.id,
           agentId: agent.id,
-          type: toolCall.status === "completed" ? "tool.completed" : "tool.failed",
-          payload: {
-            toolId: toolCall.toolId,
-            input: toolCall.input,
-            output: toolCall.output,
-            error: toolCall.error,
-          },
+          ...toolCallEvent(toolCall),
         });
       }
+
+      const externalSources = result.toolCalls
+        .filter((toolCall) => toolCall.external && toolCall.status === "completed")
+        .map((toolCall) => ({
+          toolId: toolCall.toolId,
+          provider: toolCall.external!.provider,
+          access: toolCall.external!.access,
+          action: toolCall.audit?.action,
+          resource: toolCall.audit?.resource,
+        }));
 
       const completedAt = new Date();
       const status =
@@ -244,6 +250,8 @@ export class TaskExecutionService {
             error: result.error,
             metadata: result.metadata,
             toolCalls: result.toolCalls,
+            // Where outside information came from, by reference only.
+            ...(externalSources.length > 0 ? { externalSources } : {}),
           },
           // Which knowledge this step was handed, by reference. The full
           // record of why lives on the recall rows; this is what lets a step
@@ -286,13 +294,20 @@ export class TaskExecutionService {
           },
         });
 
-        await this.captureKnowledge(
-          work,
-          resolvedTask,
-          agent,
-          result.output,
-          persisted.artifactId,
-        );
+        // A step that read from another system is not mined for company
+        // knowledge automatically. Its answer can carry a document's or an
+        // issue's content - untrusted, and not the company's to memorise
+        // without someone choosing to. It stays in the step and its artifact,
+        // with its sources, where a person can propose it deliberately.
+        if (externalSources.length === 0) {
+          await this.captureKnowledge(
+            work,
+            resolvedTask,
+            agent,
+            result.output,
+            persisted.artifactId,
+          );
+        }
       } else if (persistedTask.status === "failed") {
         await this.eventRecorder.record({
           organizationId: agent.organizationId,
@@ -509,6 +524,70 @@ function errorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : String(error);
+}
+
+/**
+ * The external writes a person approved this step for - exactly what the
+ * approval named, and only once it is granted. Never read from anything a
+ * model produced.
+ */
+function approvedExternalWrites(task: Task): string[] {
+  const approval = task.metadata.approval;
+
+  if (typeof approval !== "object" || approval === null) {
+    return [];
+  }
+
+  const { status, externalWrites } = approval as { status?: unknown; externalWrites?: unknown };
+
+  return status === "approved" && Array.isArray(externalWrites)
+    ? externalWrites.filter((toolId): toolId is string => typeof toolId === "string")
+    : [];
+}
+
+/**
+ * The audit line for one tool call.
+ *
+ * A local tool's input and output are kept as before. An external call keeps
+ * only what the tool itself said happened - "GitHub pull request created",
+ * with the repository and number - so neither a document read from a drive
+ * nor text written to GitHub is copied into the event log.
+ */
+function toolCallEvent(toolCall: AgentToolCall): {
+  type: "tool.completed" | "tool.failed" | "external.read" | "external.write";
+  payload: Record<string, unknown>;
+} {
+  if (!toolCall.external) {
+    return {
+      type: toolCall.status === "completed" ? "tool.completed" : "tool.failed",
+      payload: {
+        toolId: toolCall.toolId,
+        input: toolCall.input,
+        output: toolCall.output,
+        error: toolCall.error,
+      },
+    };
+  }
+
+  const reference = {
+    toolId: toolCall.toolId,
+    provider: toolCall.external.provider,
+    access: toolCall.external.access,
+  };
+
+  if (toolCall.status !== "completed") {
+    return { type: "tool.failed", payload: { ...reference, error: toolCall.error } };
+  }
+
+  return {
+    type: toolCall.external.access === "write" ? "external.write" : "external.read",
+    payload: {
+      ...reference,
+      action: toolCall.audit?.action,
+      summary: toolCall.audit?.summary,
+      resource: toolCall.audit?.resource,
+    },
+  };
 }
 
 function requiredToolsFromTask(task: Task): string[] {
