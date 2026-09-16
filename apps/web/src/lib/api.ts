@@ -1611,6 +1611,89 @@ export async function updateWorkspace(
   return data.workspace;
 }
 
+/* --------------------------------------------------------------------------
+   The workforce.
+
+   Who works for the organization, what each of them is doing, what they may
+   use and what they have done. Status, current work and outcomes are read by
+   the API from the same task rows Mission Control reads; nothing here is
+   computed in the browser.
+   -------------------------------------------------------------------------- */
+
+/** Only the states the backend records. */
+export type WorkforcePresence = "working" | "waiting" | "available" | "paused" | "unavailable";
+
+export interface WorkforceMember {
+  id: string;
+  name: string;
+  description: string;
+  type: AgentSummary["type"];
+  status: AgentSummary["status"];
+  presence: WorkforcePresence;
+  capabilities: string[];
+  tools: Array<{ id: string; name: string; description: string; registered: boolean }>;
+  workspace?: { id: string; name: string; slug: string };
+  current?: {
+    missionId: string;
+    missionName: string;
+    taskTitle: string;
+    state: "working" | "waiting";
+    since?: string;
+  };
+  /** Busy on a mission outside the caller's workspaces. */
+  workingElsewhere: boolean;
+  upcomingSteps: number;
+  lastOutcome?: {
+    missionId: string;
+    missionName: string;
+    taskTitle: string;
+    outcome: "completed" | "failed";
+    at: string;
+  };
+  recent: { completed: number; failed: number };
+}
+
+export interface Workforce {
+  organizationId: string;
+  generatedAt: string;
+  missionWindow: number;
+  summary: Record<WorkforcePresence, number> & { total: number };
+  members: WorkforceMember[];
+}
+
+export interface AgentProfile {
+  member: WorkforceMember;
+  history: Array<{
+    taskId: string;
+    taskTitle: string;
+    status: TaskStatus;
+    missionId: string;
+    missionName: string;
+    at: string;
+  }>;
+  artifacts: Array<{ id: string; name: string; type: string; missionId?: string; createdAt: string }>;
+  activity: Array<{ id: string; type: string; at: string; summary: string; missionId?: string }>;
+  governance: {
+    tools: Array<{
+      toolId: string;
+      name: string;
+      access: "allowed" | "requires_approval" | "denied";
+      risk: RiskLevel;
+      policyNames: string[];
+      explanation: string;
+    }>;
+    policies: Array<{ id: string; name: string; effect: "allow" | "require_approval" | "deny"; risk: RiskLevel }>;
+  };
+}
+
+export async function fetchWorkforce(): Promise<Workforce> {
+  return get<Workforce>(scoped("/workforce"));
+}
+
+export async function fetchAgentProfile(agentId: string): Promise<AgentProfile> {
+  return get<AgentProfile>(scoped(`/workforce/${encodeURIComponent(agentId)}`));
+}
+
 export async function fetchAgent(agentId: string): Promise<AgentDetail> {
   return get<AgentDetail>(scoped(`/agents/${agentId}`), 60_000);
 }

@@ -108,7 +108,7 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
   {
     label: "Workforce",
     entries: [
-      { label: "Agents", path: "/agents", icon: Users },
+      { label: "Workforce", path: "/workforce", icon: Users },
       { label: "Tools", path: "/tools", icon: Wrench },
       { label: "Organization", path: "/organization", icon: Network },
       { label: "Members", path: "/members", icon: UserCog },
@@ -160,7 +160,7 @@ function locate(pathname: string): { group: string; title: string } {
     return { group: "Workforce", title: "Workspace" };
   }
 
-  if (pathname.startsWith("/agents/")) {
+  if (pathname.startsWith("/workforce/")) {
     return { group: "Workforce", title: "Agent" };
   }
 
@@ -394,7 +394,7 @@ export default function App() {
     const agents = (data?.workforce.roster ?? []).map((agent) => ({
       key: `agent:${agent.agentId}`,
       label: `${agent.name} — ${profileOf(agent).label}`,
-      path: `/agents/${agent.agentId}`,
+      path: `/workforce/${agent.agentId}`,
       icon: Users,
       kind: "Agent",
     }));

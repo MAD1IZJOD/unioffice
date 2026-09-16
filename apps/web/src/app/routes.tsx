@@ -4,7 +4,6 @@ import App from "../App";
 import SessionGate from "./SessionGate";
 import Activity from "../pages/Activity";
 import Agent from "../pages/Agent";
-import Agents from "../pages/Agents";
 import Approvals from "../pages/Approvals";
 import Artifacts from "../pages/Artifacts";
 import Brain from "../pages/Brain";
@@ -18,6 +17,7 @@ import Room from "../pages/Room";
 import TemplateMission from "../pages/TemplateMission";
 import Organization from "../pages/Organization";
 import Tools from "../pages/Tools";
+import Workforce from "../pages/Workforce";
 import Workspace from "../pages/Workspace";
 
 /**
@@ -48,8 +48,14 @@ export const router = createBrowserRouter([
         path: "work/:workId",
         loader: ({ params }) => redirect(`/missions/${params.workId ?? ""}`),
       },
-      { path: "agents", element: <Agents /> },
-      { path: "agents/:agentId", element: <Agent /> },
+      { path: "workforce", element: <Workforce /> },
+      { path: "workforce/:agentId", element: <Agent /> },
+      // Agents became the workforce. Links to the old paths keep working.
+      { path: "agents", loader: () => redirect("/workforce") },
+      {
+        path: "agents/:agentId",
+        loader: ({ params }) => redirect(`/workforce/${params.agentId ?? ""}`),
+      },
       { path: "tools", element: <Tools /> },
       { path: "brain", element: <Brain /> },
       { path: "brain/:knowledgeId", element: <KnowledgeEntry /> },

@@ -1,4 +1,19 @@
-import type { AgentSummary } from "./api";
+import type { AgentSummary, WorkforcePresence } from "./api";
+import type { Tone } from "./tone";
+
+/** How each state the backend records is said, and coloured. */
+export const PRESENCE: Record<WorkforcePresence, { label: string; tone: Tone }> = {
+  working: { label: "Working", tone: "active" },
+  waiting: { label: "Waiting on a decision", tone: "warning" },
+  available: { label: "Available", tone: "live" },
+  paused: { label: "Paused", tone: "idle" },
+  unavailable: { label: "Unavailable", tone: "idle" },
+};
+
+/** A capability as the planner stores it, read as words. */
+export function capabilityLabel(capability: string): string {
+  return capability.replace(/_/g, " ");
+}
 
 /**
  * What kind of work an agent does, derived from the capabilities the backend

@@ -1,0 +1,163 @@
+/* --------------------------------------------------------------------------
+   Workforce
+
+   A roster read like a crew board: one row per worker, scanned left to right
+   as who, how they are, what they are doing, what they can do and use.
+   -------------------------------------------------------------------------- */
+
+.workers {
+  overflow: hidden;
+  margin-bottom: 30px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  background: var(--line-subtle);
+}
+
+.worker {
+  display: grid;
+  gap: 8px 18px;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--surface-1);
+  grid-template-areas:
+    "mark who status"
+    "now now now"
+    "kit kit kit"
+    "foot foot foot";
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+}
+
+.worker + .worker {
+  border-top: 1px solid var(--line-subtle);
+}
+
+@media (min-width: 1000px) {
+  .worker {
+    grid-template-areas:
+      "mark who status now kit"
+      "mark who foot now kit";
+    grid-template-columns: 30px minmax(120px, 0.9fr) 170px minmax(0, 1.8fr) minmax(0, 1.5fr);
+  }
+}
+
+.worker-mark {
+  display: inline-flex;
+  grid-area: mark;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--tone-line);
+  border-radius: var(--radius-sm);
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+
+.worker-who {
+  display: flex;
+  grid-area: who;
+  min-width: 0;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+}
+
+.worker-who:hover .worker-name {
+  color: #84b4fb;
+}
+
+.worker-name {
+  color: var(--ink-primary);
+  font-size: 13.5px;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+  transition: color 130ms ease;
+}
+
+.worker-role {
+  margin-top: 3px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.worker-status {
+  grid-area: status;
+  justify-self: start;
+}
+
+.worker-now {
+  display: flex;
+  grid-area: now;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 10px;
+  border-left: 2px solid var(--tone-line);
+}
+
+.worker-mission {
+  overflow: hidden;
+  color: var(--ink-primary);
+  font-size: 11.5px;
+  font-weight: 560;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-mission:hover {
+  color: #84b4fb;
+}
+
+.worker-mission-past {
+  color: var(--ink-secondary);
+  font-weight: 500;
+}
+
+.worker-task {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-kit {
+  display: flex;
+  grid-area: kit;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.worker-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 5px;
+}
+
+.worker-tokens .token {
+  padding: 3px 8px;
+  font-size: 9px;
+}
+
+.worker-foot {
+  display: flex;
+  grid-area: foot;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.workers-note {
+  margin-top: -14px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+}
