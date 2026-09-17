@@ -348,7 +348,7 @@ describe("the Command Center", () => {
     renderPage(() => json(200, view({
       summary: { running: 1, blocked: 1, needsYou: 1, finishedToday: 0, failedToday: 0, setAside: 0, total: 2 },
       running: [card("m1", { name: "Close the books", team: [{ agentId: "a1", name: "Harvey", state: "working" }] })],
-      blocked: [card("m2", { name: "Hire an analyst", phase: "blocked", team: [{ agentId: "a2", name: "Jamie", state: "waiting" }] })],
+      blocked: [card("m2", { name: "Hire an analyst", phase: "waiting_approval", team: [{ agentId: "a2", name: "Jamie", state: "waiting" }] })],
       workforce: {
         total: 4,
         active: 3,
