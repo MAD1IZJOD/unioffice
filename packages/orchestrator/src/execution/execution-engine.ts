@@ -43,6 +43,8 @@ export interface ExecutionRequest {
     requiredTools?: string[];
     /** External write tools a person approved this step for. */
     approvedTools?: string[];
+    /** The skill the step follows, resolved on the server. */
+    skill?: AgentExecutionContext["task"]["skill"];
   };
 
   context: Record<string, unknown>;

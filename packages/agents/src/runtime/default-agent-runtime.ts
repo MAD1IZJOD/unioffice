@@ -27,6 +27,8 @@ import {
   KNOWLEDGE_TRUST_BOUNDARY,
 } from "./knowledge-context.js";
 
+import { renderSkillProcedure } from "@unioffice/skills";
+
 export interface DefaultAgentRuntimeOptions {
   model?: string;
 
@@ -397,6 +399,12 @@ export class DefaultAgentRuntime
         context.task.dependencies,
         MAX_DEPENDENCY_CHARS,
       ),
+
+      // How this kind of work is done, when the step follows a skill. Rendered
+      // as its own delimited section with a note that it is configuration,
+      // not rules - a skill is text people wrote, and nothing in it can change
+      // the system message, the tools or the approvals.
+      context.task.skill ? renderSkillProcedure(context.task.skill) : "",
 
       // Its own delimited, escaped section - never folded into the
       // operational context below, which is serialized as plain data and has

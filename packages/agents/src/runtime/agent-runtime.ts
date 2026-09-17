@@ -3,6 +3,7 @@ import type {
 } from "../definitions/agent-definition.js";
 
 import type {
+  SkillField,
   AgentId,
   OrganizationId,
   TaskId,
@@ -42,6 +43,12 @@ export interface AgentExecutionContext {
      * the only thing that lets an external write run.
      */
     approvedTools?: string[];
+
+    /**
+     * The skill this step follows, resolved on the server for the mission's
+     * workspace. Its procedure reaches the model as labelled configuration.
+     */
+    skill?: AgentStepSkill;
   };
 
   context: Record<string, unknown>;
@@ -53,6 +60,15 @@ export interface AgentExecutionContext {
    * escaped section the runtime builds for it.
    */
   knowledge?: RecalledKnowledgeItem[];
+}
+
+export interface AgentStepSkill {
+  slug: string;
+  name: string;
+  version: number;
+  instructions: string;
+  inputs: SkillField[];
+  outputs: SkillField[];
 }
 
 export interface AgentDependencyResult {
