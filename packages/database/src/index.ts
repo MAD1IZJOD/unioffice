@@ -42,3 +42,4 @@ export * from "./repositories/in-memory-skill-repository.js";
 export * from "./repositories/supabase-skill-repository.js";
 export * from "./repositories/skill-version-repository.js";
 export * from "./repositories/in-memory-skill-version-repository.js";
+export * from "./repositories/supabase-skill-version-repository.js";
