@@ -41,6 +41,8 @@ export class SupabaseAgentRepository
             agent.capabilities,
           tool_ids:
             agent.toolIds,
+          skills:
+            agent.skills ?? [],
           created_at:
             agent.createdAt.toISOString(),
           updated_at:
@@ -158,6 +160,9 @@ export class SupabaseAgentRepository
             agent.capabilities,
           tool_ids:
             agent.toolIds,
+          // Left alone when the caller did not read or set skills, so an
+          // update built without them never clears an agent's assignments.
+          ...(agent.skills !== undefined ? { skills: agent.skills } : {}),
           updated_at:
             agent.updatedAt.toISOString(),
           metadata:
@@ -218,6 +223,9 @@ export class SupabaseAgentRepository
 
       toolIds:
         row.tool_ids ?? [],
+
+      skills:
+        Array.isArray(row.skills) ? row.skills : [],
 
       createdAt:
         new Date(row.created_at),
