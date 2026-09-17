@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-import type { Session } from "@supabase/supabase-js";
+import type { Session } from "@supabase/auth-js";
 
-import { supabase } from "./supabase";
+import { supabaseAuth } from "./supabase";
 
 export type SessionState =
   | { status: "unconfigured" }
@@ -15,19 +15,19 @@ export type SessionState =
  * is close to expiring. Null when nobody is signed in.
  */
 export async function accessToken(): Promise<string | null> {
-  const client = supabase();
+  const client = supabaseAuth();
   if (!client) return null;
 
-  const { data } = await client.auth.getSession();
+  const { data } = await client.getSession();
   return data.session?.access_token ?? null;
 }
 
 /** Hands the browser to Google, which returns it here signed in. */
 export async function signInWithGoogle(): Promise<void> {
-  const client = supabase();
+  const client = supabaseAuth();
   if (!client) throw new Error("Sign-in is not configured for this environment.");
 
-  const { error } = await client.auth.signInWithOAuth({
+  const { error } = await client.signInWithOAuth({
     provider: "google",
     options: { redirectTo: window.location.origin },
   });
@@ -37,10 +37,10 @@ export async function signInWithGoogle(): Promise<void> {
 
 /** Emails a one-time sign-in link. No password is ever set or asked for. */
 export async function sendSignInLink(email: string): Promise<void> {
-  const client = supabase();
+  const client = supabaseAuth();
   if (!client) throw new Error("Sign-in is not configured for this environment.");
 
-  const { error } = await client.auth.signInWithOtp({
+  const { error } = await client.signInWithOtp({
     email,
     options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
   });
@@ -49,7 +49,7 @@ export async function sendSignInLink(email: string): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
-  await supabase()?.auth.signOut();
+  await supabaseAuth()?.signOut();
 }
 
 const UNAUTHORIZED = "unioffice:unauthorized";
@@ -73,26 +73,26 @@ function stateOf(session: Session | null): SessionState {
 /** Who is signed in, kept current as they sign in, out, or their token refreshes. */
 export function useSession(): SessionState {
   const [state, setState] = useState<SessionState>(() =>
-    supabase() ? { status: "loading" } : { status: "unconfigured" });
+    supabaseAuth() ? { status: "loading" } : { status: "unconfigured" });
 
   useEffect(() => {
-    const client = supabase();
+    const client = supabaseAuth();
     if (!client) return;
 
     let active = true;
 
-    void client.auth.getSession().then(({ data }) => {
+    void client.getSession().then(({ data }) => {
       if (active) setState(stateOf(data.session));
     });
 
-    const { data } = client.auth.onAuthStateChange((_event, session) => {
+    const { data } = client.onAuthStateChange((_event, session) => {
       if (active) setState(stateOf(session));
     });
 
     const stopListening = onUnauthorized(() => {
       // A token the API will not take is either expired past refreshing or
       // revoked. Asking the client again settles which.
-      void client.auth.getSession().then(({ data: current }) => {
+      void client.getSession().then(({ data: current }) => {
         if (active) setState(stateOf(current.session));
       });
     });

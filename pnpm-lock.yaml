@@ -264,7 +264,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@supabase/supabase-js':
+      '@supabase/auth-js':
         specifier: ^2.116.0
         version: 2.116.0
       lucide-react:
