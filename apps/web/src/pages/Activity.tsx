@@ -14,10 +14,11 @@ import {
 
 import {
   Connecting,
-  Failure,
   PageOpening,
   Quiet,
+  ReadFailure,
   Reading,
+  StaleNotice,
 } from "../components/primitives";
 
 interface LogEntry {
@@ -141,25 +142,15 @@ export default function Activity() {
         ))}
       </div>
 
+      {activity.error && activity.data && <StaleNotice error={activity.error} onRetry={activity.reload} />}
+
       {activity.loading ? (
         <Connecting what="Reading the company log…" />
-      ) : activity.error ? (
-        <Failure
-          headline={
-            activity.error.isOffline
-              ? "The company is unreachable"
-              : "The log could not be read"
-          }
-          detail={activity.error.message}
-          action={
-            <button
-              type="button"
-              onClick={activity.reload}
-              className="button-ghost"
-            >
-              Try again
-            </button>
-          }
+      ) : activity.error && !activity.data ? (
+        <ReadFailure
+          what="the activity log"
+          error={activity.error}
+          onRetry={activity.reload}
         />
       ) : visible.length === 0 ? (
         described.length === 0 ? (
