@@ -1,8 +1,17 @@
-# UNI-OFFICE
+# UNIOFFICE 2.0
 
-An AI-native company operating system: you give the company an objective, it
-plans the work, routes each task to the specialist agent holding the right
-tools, executes it, and keeps consequential steps behind your approval.
+An AI-native operating system for companies: you give the company an
+objective, it plans the work, routes each step to the agent that holds the
+right skills and tools, executes it under governance, keeps what it learns, and
+stops for a person wherever a person is required.
+
+Documentation lives in [`docs/`](docs/architecture/README.md): the
+[system overview](docs/architecture/system-overview.md),
+[skills](docs/skills/README.md), [features](docs/product/features.md),
+[governance and approvals](docs/governance/README.md),
+[the Company Brain](docs/memory/README.md), [agents](docs/agents/agent-model.md)
+and [workflows](docs/workflows/workflow-model.md). Release notes are in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Running locally
 
@@ -153,6 +162,24 @@ or one working in a workspace the caller was not given, reads as not found; a
 mission the caller cannot open is never named, only that the agent is busy.
 An agent's model instructions, task outputs, tool inputs and raw failure text
 never leave the server - on the workforce, or anywhere else an agent is named.
+
+## Skills
+
+A tool is something an agent can execute; a skill is how a kind of work is done
+well - the procedure, what it works from and produces, the tools and
+capabilities it needs, and whether each step needs a person. 22 system skills
+ship with UNIOFFICE; owners and admins adapt them or write their own for the
+company or one workspace (Workforce -> Skills).
+
+- A skill grants nothing. An agent can only be assigned a skill whose tools and
+  capabilities it already holds.
+- The planner may name a skill for a step, and the step goes only to an agent
+  holding it. A skill set to require approval holds every step that follows it
+  for an owner or admin; no policy can lower that.
+- The procedure reaches the model as labelled configuration that cannot change
+  its rules, tools or approvals.
+
+See [docs/skills](docs/skills/README.md).
 
 ## Connections
 
@@ -306,9 +333,13 @@ These are real gaps, listed so the UI does not have to pretend otherwise.
   outside that vocabulary (`mathematical_analysis` rather than `calculation`).
   The delegator then correctly refuses the task and the run fails with "No
   eligible agent is authorized for...". Retry replans and usually succeeds.
-- **Memory retrieval is keyword and importance based.** There are no
-  embeddings and no semantic similarity, and the Company Brain says so rather
-  than drawing a graph it cannot back up.
+- **Semantic recall needs a local embedding model.** Without one, knowledge
+  is recalled by keyword, importance and recency only, and the Company Brain
+  feature reports itself as limited.
+- **Stored workflows cannot be edited or run yet.** A mission's plan is its
+  workflow; the workflow tables exist for reusable workflows to come.
+- **A skill's approval covers the step.** As with external writes, a person
+  approves the step that follows the skill, before the agent writes its answer.
 - **Agents have no general internet access.** Beyond the three local tools,
   they reach only the GitHub and Google Drive connections the organization made,
   through tools they were granted.
@@ -331,9 +362,19 @@ These are real gaps, listed so the UI does not have to pretend otherwise.
 ```
 pnpm typecheck
 pnpm test
-pnpm --filter web lint
-pnpm --filter web build
+pnpm lint
+pnpm build
 ```
+
+The database posture - RLS enabled and forced, no policies, no privileges for
+browser roles, indexed foreign keys - is checked against the linked project
+with:
+
+```
+pnpm exec supabase db query --linked -f supabase/checks/posture.sql
+```
+
+It returns one row per violation; no rows is the expected state.
 
 ## Security
 
