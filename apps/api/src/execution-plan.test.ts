@@ -223,7 +223,7 @@ test("a step shows the skill it follows by name and version, and nothing else of
     task("b"),
   ]);
 
-  assert.deepEqual(plan.nodes[0]!.skill, { slug: "financial-analysis", name: "Financial analysis", version: 3 });
+  assert.deepEqual(plan.nodes[0]!.skill, { slug: "financial-analysis", name: "Financial analysis", version: 3, scope: "system" });
   assert.equal(plan.nodes[1]!.skill, undefined);
   assert.doesNotMatch(JSON.stringify(plan), /SHOULD NOT LEAVE/);
 });

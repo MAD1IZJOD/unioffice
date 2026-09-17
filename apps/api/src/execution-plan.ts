@@ -53,7 +53,7 @@ export interface ExecutionNode {
   requiredCapabilities: string[];
 
   /** The skill the step follows, as routing recorded it. Name and version only. */
-  skill?: { slug: string; name: string; version: number };
+  skill?: { slug: string; name: string; version: number; scope: "system" | "organization" | "workspace" };
 
   startedAt?: Date;
   completedAt?: Date;
@@ -302,7 +302,12 @@ function routedSkill(task: Task): ExecutionNode["skill"] {
   const skill = (task.metadata.routing as { skill?: Record<string, unknown> } | undefined)?.skill;
 
   return skill && typeof skill.slug === "string" && typeof skill.name === "string" && typeof skill.version === "number"
-    ? { slug: skill.slug, name: skill.name, version: skill.version }
+    ? {
+        slug: skill.slug,
+        name: skill.name,
+        version: skill.version,
+        scope: skill.scope === "organization" || skill.scope === "workspace" ? skill.scope : "system",
+      }
     : undefined;
 }
 
