@@ -266,6 +266,7 @@ export function createExecutionRuntime(config: ApiConfig) {
       description: tool.description,
     })),
     knowledgeRecallService,
+    skillService,
   );
 
   const taskExecutionService = new TaskExecutionService(
@@ -279,6 +280,7 @@ export function createExecutionRuntime(config: ApiConfig) {
       recall: knowledgeRecallService,
       capture: knowledgeCaptureService,
     },
+    skillService,
   );
 
   const workApprovalService = new WorkApprovalService(

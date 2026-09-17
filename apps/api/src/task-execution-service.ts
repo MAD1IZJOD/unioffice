@@ -1,6 +1,7 @@
 import type {
   Agent,
   Artifact,
+  Skill,
   ArtifactId,
   Task,
   TaskId,
@@ -75,6 +76,9 @@ export class TaskExecutionService {
 
     private readonly knowledge?:
       TaskKnowledge,
+
+    /** Resolves the skill a step follows at the moment it runs. */
+    private readonly skills?: { effective(organizationId: Work["organizationId"], workspaceId?: Work["workspaceId"]): Promise<Map<string, Skill>> },
   ) {}
 
   async executeTask(
@@ -173,11 +177,18 @@ export class TaskExecutionService {
     });
 
     try {
-      const knowledge = await this.recallKnowledge(
-        work,
-        runningTask,
-        agent,
-      );
+      // The skill is resolved now rather than trusted from planning, so an
+      // edit or an archive since then is honoured. If it no longer resolves
+      // the step runs without a procedure; it never runs with a stale one.
+      const skill = await this.skillFor(work, runningTask);
+
+      const knowledge = skill?.memory === "none"
+        ? []
+        : await this.recallKnowledge(
+            work,
+            runningTask,
+            agent,
+          );
 
       const result =
         await this.executionEngine.execute({
@@ -198,6 +209,16 @@ export class TaskExecutionService {
             dependencies: await this.dependencyResults(runningTask),
             requiredTools: requiredToolsFromTask(runningTask),
             approvedTools: approvedExternalWrites(runningTask),
+            skill: skill
+              ? {
+                  slug: skill.slug,
+                  name: skill.name,
+                  version: skill.version,
+                  instructions: skill.instructions,
+                  inputs: skill.inputs,
+                  outputs: skill.outputs,
+                }
+              : undefined,
           },
           context: {
             taskMetadata: runningTask.metadata,
@@ -252,6 +273,7 @@ export class TaskExecutionService {
             toolCalls: result.toolCalls,
             // Where outside information came from, by reference only.
             ...(externalSources.length > 0 ? { externalSources } : {}),
+            ...(skill ? { skill: { slug: skill.slug, version: skill.version, scope: skill.scope } } : {}),
           },
           // Which knowledge this step was handed, by reference. The full
           // record of why lives on the recall rows; this is what lets a step
@@ -359,6 +381,17 @@ export class TaskExecutionService {
 
       return persistedTask;
     }
+  }
+
+  private async skillFor(work: Work, task: Task): Promise<Skill | undefined> {
+    const routing = task.metadata.routing as { skill?: { slug?: unknown } } | undefined;
+    const slug = routing?.skill?.slug;
+
+    if (!this.skills || typeof slug !== "string") {
+      return undefined;
+    }
+
+    return (await this.skills.effective(work.organizationId, work.workspaceId)).get(slug);
   }
 
   private async recallKnowledge(

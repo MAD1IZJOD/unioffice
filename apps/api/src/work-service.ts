@@ -1,7 +1,9 @@
 import type {
+  Skill,
   Task,
   Work,
   WorkId,
+  WorkspaceId,
 } from "@unioffice/core";
 
 import type {
@@ -56,6 +58,12 @@ export class WorkService {
      * Absent, planning works exactly as it did before knowledge existed.
      */
     private readonly knowledgeRecall?: Pick<KnowledgeRecallService, "recallForPlanning">,
+
+    /**
+     * The skills that apply to a mission. Absent, planning works exactly as
+     * it did before skills existed.
+     */
+    private readonly skills?: { effective(organizationId: Work["organizationId"], workspaceId?: WorkspaceId): Promise<Map<string, Skill>> },
   ) {}
 
   async planWork(
@@ -129,6 +137,14 @@ export class WorkService {
         availableAgents.flatMap((agent) => agent.capabilities),
       )];
 
+      // Only skills some available agent actually holds are offered, so the
+      // planner cannot pick one that nobody could be given.
+      const effectiveSkills = this.skills
+        ? await this.skills.effective(updatedWork.organizationId, updatedWork.workspaceId)
+        : new Map<string, Skill>();
+      const heldSlugs = new Set(availableAgents.flatMap((agent) => agent.skills ?? []));
+      const offeredSkills = [...effectiveSkills.values()].filter((skill) => heldSlugs.has(skill.slug));
+
       // Objective, then recall, then plan. The orchestrator is the actor the
       // recall is governed and recorded for - it is the one reading it.
       const recalled = await this.recallForPlanning(
@@ -153,6 +169,14 @@ export class WorkService {
           availableTools: this.availableTools,
 
           availableCapabilities,
+
+          availableSkills: offeredSkills.map((skill) => ({
+            slug: skill.slug,
+            name: skill.name,
+            description: skill.description,
+            requiredTools: skill.requiredTools,
+            requiredCapabilities: skill.requiredCapabilities,
+          })),
 
           briefing: briefingOf(updatedWork),
 
@@ -195,6 +219,13 @@ export class WorkService {
 
         const now = new Date();
 
+        // The skill as it was when the step was routed: which version, from
+        // which scope, and whether it needs a person. Recorded here, from the
+        // server's own resolution, so governance reads it from the step
+        // rather than from anything the planner wrote.
+        const appliedSlug = typeof delegation.metadata.skill === "string" ? delegation.metadata.skill : undefined;
+        const applied = appliedSlug ? effectiveSkills.get(appliedSlug) : undefined;
+
         const task: Task = {
           id: plannedTask.id,
 
@@ -236,6 +267,16 @@ export class WorkService {
                 plannedTask.requiredTools ?? [],
               suggestedAgentType:
                 plannedTask.suggestedAgentType,
+              skill: applied
+                ? {
+                    slug: applied.slug,
+                    name: applied.name,
+                    version: applied.version,
+                    scope: applied.scope,
+                    approval: applied.approval,
+                    memory: applied.memory,
+                  }
+                : undefined,
             },
 
             delegation:
