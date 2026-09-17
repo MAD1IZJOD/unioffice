@@ -1056,8 +1056,8 @@ async function request<T>(
   } catch (error) {
     throw new ApiError(
       (error as Error)?.name === "AbortError"
-        ? "The request took too long and was cancelled."
-        : "Could not reach the UNI-OFFICE API.",
+        ? "UNIOFFICE took too long to answer, so the request was stopped. Try again."
+        : "UNIOFFICE can't reach its server right now. Check your connection and try again.",
       0,
     );
   } finally {
@@ -1071,13 +1071,34 @@ async function request<T>(
       | { error?: { message?: string } }
       | null;
 
-    throw new ApiError(
-      body?.error?.message ?? `Request failed with status ${response.status}.`,
-      response.status,
-    );
+    throw new ApiError(humaneMessage(response.status, body?.error?.message), response.status);
   }
 
   return response.json() as Promise<T>;
+}
+
+/**
+ * What a person reads when a request fails.
+ *
+ * The API's own message is kept for anything the person can act on - a
+ * refusal, a validation problem, a conflict. A server fault never carries a
+ * useful message (the API deliberately says nothing about its internals), so
+ * it becomes a plain sentence about what to do instead.
+ */
+export function humaneMessage(status: number, message: string | undefined): string {
+  if (status >= 500) {
+    return "UNIOFFICE couldn't complete that right now. Nothing was lost - try again in a moment.";
+  }
+
+  if (status === 429) {
+    return message ?? "That was asked too often in a short time. Wait a moment and try again.";
+  }
+
+  if (status === 401) {
+    return "Your session has ended. Sign in again to continue.";
+  }
+
+  return message ?? "That request could not be completed.";
 }
 
 function get<T>(path: string, timeoutMs?: number): Promise<T> {
@@ -1129,7 +1150,8 @@ export type Permission =
   | "approvals.decide"
   | "knowledge.propose"
   | "knowledge.curate"
-  | "connections.manage";
+  | "connections.manage"
+  | "skills.manage";
 
 /** Who is signed in and where they stand, as the API resolved it. */
 export interface Me {
@@ -1666,6 +1688,16 @@ export interface AgentProfile {
     }>;
     policies: Array<{ id: string; name: string; effect: "allow" | "require_approval" | "deny"; risk: RiskLevel }>;
   };
+  /** Assigned skills, as they resolve where the agent works. */
+  skills: Array<{
+    slug: string;
+    name: string;
+    category: SkillCategory | null;
+    scope: SkillScope | null;
+    approval: "none" | "required" | null;
+    usable: boolean;
+    note: string;
+  }>;
   /** External systems the agent holds tools for, and whether it can use each now. */
   systems: Array<{
     provider: ConnectionProvider;
@@ -1715,6 +1747,8 @@ export async function updateAgent(
     /** null takes the agent out of its workspace. */
     workspaceId?: string | null;
     status?: AgentSummary["status"];
+    /** Skill slugs, replacing the agent's current set. */
+    skills?: string[];
   },
 ): Promise<AgentSummary> {
   const data = await post<{ agent: AgentSummary }>(
@@ -1726,8 +1760,25 @@ export async function updateAgent(
   return data.agent;
 }
 
-export async function fetchPendingApprovals(): Promise<ApprovalItem[]> {
-  const data = await get<{ approvals: ApprovalItem[] }>(scoped("/approvals"));
+/** What the server says about an approval, for the person deciding it. */
+export interface ApprovalBriefing {
+  mission: { id: string; objective: string; workspace: string | null } | null;
+  step: { title: string; description: string } | null;
+  agent: { id: string; name: string } | null;
+  requestedBy: "external_write" | "skill" | "policy" | "planner";
+  policy: { id: string; name: string } | null;
+  skill: string | null;
+  externalWrites: string[];
+  tools: string[];
+  risk: RiskLevel | null;
+  onApprove: string;
+  onReject: string;
+  decidedBy: "owners_and_admins" | "members";
+  youCanDecide: boolean;
+}
+
+export async function fetchPendingApprovals(): Promise<Array<ApprovalItem & { briefing?: ApprovalBriefing }>> {
+  const data = await get<{ approvals: Array<ApprovalItem & { briefing?: ApprovalBriefing }> }>(scoped("/approvals"));
 
   return data.approvals;
 }
@@ -2067,4 +2118,123 @@ export async function disconnectConnection(
     { organizationId: organizationId() },
     READ_TIMEOUT_MS,
   );
+}
+
+/* --------------------------------------------------------------------------
+   Features
+   --------------------------------------------------------------------------
+   What the product can do here, for this person, as the server has it
+   configured. Navigation is built from this. */
+
+export type FeatureArea = "command" | "work" | "workforce" | "knowledge" | "company";
+
+export interface FeatureItem {
+  id: string;
+  name: string;
+  description: string;
+  area: FeatureArea;
+  path: string;
+  dependsOn: string[];
+  status: "available" | "limited" | "needs_configuration";
+  note: string | null;
+}
+
+export interface FeatureCatalog {
+  product: { name: string; version: string };
+  features: FeatureItem[];
+}
+
+export async function fetchFeatures(): Promise<FeatureCatalog> {
+  return get<FeatureCatalog>(scoped("/features"));
+}
+
+/* --------------------------------------------------------------------------
+   Skills
+   --------------------------------------------------------------------------
+   What the workforce knows how to do. A skill grants nothing: an agent must
+   already hold every tool and capability one needs. */
+
+export type SkillScope = "system" | "organization" | "workspace";
+export type SkillStatus = "draft" | "active" | "archived";
+export type SkillCategory = "engineering" | "research" | "finance" | "people" | "communication" | "operations";
+
+export interface SkillField {
+  name: string;
+  type: "text" | "number" | "list" | "table";
+  description: string;
+  required: boolean;
+}
+
+export interface SkillItem {
+  id: string;
+  scope: SkillScope;
+  workspace: { id: string; name: string } | null;
+  slug: string;
+  name: string;
+  description: string;
+  category: SkillCategory;
+  version: number;
+  status: SkillStatus;
+  instructions: string;
+  inputs: SkillField[];
+  outputs: SkillField[];
+  requiredTools: string[];
+  requiredCapabilities: string[];
+  approval: "none" | "required";
+  memory: "recall" | "none";
+  overrides: "system" | "organization" | null;
+  overriddenBy: { id: string; name: string } | null;
+  agents: Array<{ id: string; name: string; fits: boolean; missingTools: string[]; missingCapabilities: string[] }>;
+  updatedAt: string;
+}
+
+export type SkillDraft = Pick<
+  SkillItem,
+  "slug" | "name" | "description" | "category" | "instructions" | "inputs" | "outputs" | "requiredTools" | "requiredCapabilities" | "approval" | "memory"
+>;
+
+export async function fetchSkills(): Promise<SkillItem[]> {
+  const { skills } = await get<{ skills: SkillItem[] }>(scoped("/skills"));
+  return skills;
+}
+
+export async function fetchSkill(reference: string): Promise<SkillItem> {
+  const { skill } = await get<{ skill: SkillItem }>(scoped(`/skills/${encodeURIComponent(reference)}`));
+  return skill;
+}
+
+export async function createSkill(
+  draft: SkillDraft,
+  options: { workspaceId?: string; status: "draft" | "active" },
+): Promise<SkillItem> {
+  const { skill } = await post<{ skill: SkillItem }>(
+    "/skills",
+    {
+      organizationId: organizationId(),
+      ...draft,
+      scope: options.workspaceId ? "workspace" : "organization",
+      workspaceId: options.workspaceId,
+      status: options.status,
+    },
+    READ_TIMEOUT_MS,
+  );
+  return skill;
+}
+
+export async function updateSkill(id: string, changes: Partial<SkillDraft>, expectedVersion: number): Promise<SkillItem> {
+  const { skill } = await post<{ skill: SkillItem }>(
+    `/skills/${encodeURIComponent(id)}`,
+    { organizationId: organizationId(), ...changes, expectedVersion },
+    READ_TIMEOUT_MS,
+  );
+  return skill;
+}
+
+export async function setSkillStatus(id: string, status: SkillStatus, expectedVersion: number): Promise<SkillItem> {
+  const { skill } = await post<{ skill: SkillItem }>(
+    `/skills/${encodeURIComponent(id)}/status`,
+    { organizationId: organizationId(), status, expectedVersion },
+    READ_TIMEOUT_MS,
+  );
+  return skill;
 }

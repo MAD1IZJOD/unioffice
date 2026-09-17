@@ -90,12 +90,12 @@ describe("the template chooser on the mission page", () => {
     expect(screen.getByLabelText("The objective")).toBeDefined();
   });
 
-  it("shows the API's error when the templates cannot be read", async () => {
+  it("says plainly when the templates cannot be read", async () => {
     renderPage(() =>
       json(500, { error: { code: "INTERNAL_ERROR", message: "An internal error occurred." } }),
     );
 
-    expect(await within(templateSection()).findByText("An internal error occurred.")).toBeDefined();
+    expect(await within(templateSection()).findByText(/UNIOFFICE couldn't complete that right now/)).toBeDefined();
   });
 
   it("choosing a template opens its configuration", async () => {

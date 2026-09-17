@@ -133,7 +133,7 @@ describe("the Command Center", () => {
     });
 
     expect(await screen.findByText("Mission Control could not be read")).toBeDefined();
-    expect(screen.getByText("An internal error occurred.")).toBeDefined();
+    expect(screen.getByText(/UNIOFFICE couldn't complete that right now/)).toBeDefined();
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }));
 

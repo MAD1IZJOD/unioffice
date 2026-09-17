@@ -50,6 +50,7 @@ const tony: AgentProfile = {
     ],
     policies: [{ id: "p1", name: "Data changes need a person", effect: "require_approval", risk: "high" }],
   },
+  skills: [],
   systems: [],
 };
 

@@ -104,14 +104,14 @@ describe("starting a mission from a template", () => {
     );
   });
 
-  it("shows the API's message when the template cannot be read", async () => {
+  it("says plainly when the template cannot be read", async () => {
     api({
       template: () => json(500, { error: { code: "INTERNAL_ERROR", message: "An internal error occurred." } }),
     });
 
     renderAt("/missions/new/prepare-a-financial-review");
 
-    expect(await screen.findByText("An internal error occurred.")).toBeDefined();
+    expect(await screen.findByText(/UNIOFFICE couldn't complete that right now/)).toBeDefined();
     expect(screen.queryByRole("button", { name: /Start mission/ })).toBeNull();
   });
 
