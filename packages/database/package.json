@@ -10,7 +10,7 @@
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.4",
+    "@supabase/supabase-js": "^2.116.0",
     "@unioffice/core": "workspace:*"
   }
 }
