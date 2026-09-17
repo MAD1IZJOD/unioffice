@@ -737,3 +737,30 @@
     transition: none;
   }
 }
+
+/* A feature that works only in part, or not until the server is configured.
+   Quiet by design: it is information for whoever opens it, not an alarm. */
+.nav-status {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+}
+
+.nav-status-limited {
+  background: var(--warning-muted);
+}
+
+.nav-status-needs_configuration {
+  border: 1px solid var(--ink-faint);
+  background: transparent;
+}
+
+/* Said once, above the page, while the device has no connection. */
+.shell-banner {
+  padding: var(--space-2) var(--space-6);
+  border-bottom: 1px solid var(--red-line);
+  background: var(--surface-alert);
+  color: var(--red-pale);
+  font-size: var(--text-sm);
+}

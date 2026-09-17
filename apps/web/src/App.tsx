@@ -1,27 +1,20 @@
 import {
-  Activity,
   ArrowRight,
   Boxes,
   Brain,
   ChevronRight,
   CircleAlert,
   Clock,
-  Command as CommandIcon,
-  FileOutput,
   LayoutGrid,
   LogOut,
   Menu,
-  Network,
-  Plug,
   Plus,
   RotateCcw,
   Scale,
   Search,
   ShieldAlert,
-  UserCog,
   UserX,
   Users,
-  Wrench,
   X,
 } from "lucide-react";
 
@@ -29,9 +22,17 @@ import type { LucideIcon } from "lucide-react";
 
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
-import type { AttentionItem, MissionControl } from "./lib/api";
+import { fetchFeatures, type AttentionItem, type FeatureCatalog } from "./lib/api";
+import {
+  buildNavigation,
+  FALLBACK_FEATURES,
+  locate,
+  type NavigationContext,
+  type NavigationGroup,
+} from "./lib/navigation";
+import { useResource } from "./lib/useResource";
 
 import {
   useMissionControlResource,
@@ -50,91 +51,6 @@ import { signOut } from "./lib/session";
 import { toneClass } from "./lib/tone";
 import { profileOf } from "./lib/workforce";
 
-interface NavEntry {
-  label: string;
-  path: string;
-  icon: LucideIcon;
-  /** Where the number beside this surface comes from, if it has one. */
-  badge?: (context: ShellContext) => number;
-}
-
-interface ShellContext {
-  missionControl?: MissionControl;
-}
-
-/**
- * Five groups, named for what you are doing rather than for which table the
- * surface reads.
- *
- * The old rail had Approvals under "Operate", Artifacts under "Output" and
- * Tools under "System", which meant three of the five headings described the
- * product's internals. These describe the company: you command it, it does
- * work, it has a workforce, it knows things, and it produces things.
- *
- * Nothing was dropped to make the list shorter. Tools and Governance moved
- * next to the workforce they constrain rather than into a drawer marked
- * System, which is where capabilities go to be forgotten.
- */
-const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
-  {
-    label: "Command",
-    entries: [
-      { label: "Command Center", path: "/command", icon: CommandIcon },
-    ],
-  },
-  {
-    label: "Work",
-    entries: [
-      {
-        label: "Missions",
-        path: "/missions",
-        icon: LayoutGrid,
-        // Missions that are moving or stuck; finished ones need no badge.
-        badge: ({ missionControl }) =>
-          (missionControl?.summary.running ?? 0) + (missionControl?.summary.blocked ?? 0),
-      },
-      {
-        label: "Approvals",
-        path: "/approvals",
-        icon: ShieldAlert,
-        // The rail counts what needs a person, which is the same number the
-        // drawer and the Command Center show, because all three now read it
-        // from the same place.
-        badge: ({ missionControl }) =>
-          missionControl?.attention.items.filter((item) => item.kind === "decision").length ??
-          0,
-      },
-    ],
-  },
-  {
-    label: "Company",
-    entries: [
-      { label: "Workforce", path: "/workforce", icon: Users },
-      { label: "Tools", path: "/tools", icon: Wrench },
-      { label: "Organization", path: "/organization", icon: Network },
-      { label: "Members", path: "/members", icon: UserCog },
-      { label: "Governance", path: "/governance", icon: Scale },
-    ],
-  },
-  {
-    label: "Brain",
-    entries: [
-      { label: "What it knows", path: "/brain", icon: Brain },
-      { label: "Activity", path: "/activity", icon: Activity },
-    ],
-  },
-  {
-    label: "Outputs",
-    entries: [{ label: "Artifacts", path: "/artifacts", icon: FileOutput }],
-  },
-  {
-    label: "Settings",
-    entries: [{ label: "Connections", path: "/settings/connections", icon: Plug }],
-  },
-];
-
-const ALL_ENTRIES = NAV_GROUPS.flatMap((group) => group.entries);
-
 const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   decision: ShieldAlert,
   governance: Scale,
@@ -147,53 +63,18 @@ const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   recovering: RotateCcw,
 };
 
-/** The group a route belongs to, shown as context in the header. */
-function locate(pathname: string): { group: string; title: string } {
-  if (pathname === "/missions/new") {
-    return { group: "Work", title: "Open a mission" };
-  }
-
-  if (pathname.startsWith("/missions/new/")) {
-    return { group: "Work", title: "Start from a template" };
-  }
-
-  if (pathname.startsWith("/missions/")) {
-    return { group: "Work", title: "Execution room" };
-  }
-
-  if (pathname.startsWith("/workspaces/")) {
-    return { group: "Company", title: "Workspace" };
-  }
-
-  if (pathname.startsWith("/workforce/")) {
-    return { group: "Company", title: "Agent" };
-  }
-
-  if (pathname.startsWith("/settings/connections/")) {
-    return { group: "Settings", title: "Connection" };
-  }
-
-  for (const group of NAV_GROUPS) {
-    const entry = group.entries.find((candidate) => candidate.path === pathname);
-
-    if (entry) {
-      return { group: group.label, title: entry.label };
-    }
-  }
-
-  return { group: "Command", title: "Command Center" };
-}
-
 function Navigation({
+  groups,
   context,
   onNavigate,
 }: {
-  context: ShellContext;
+  groups: NavigationGroup[];
+  context: NavigationContext;
   onNavigate?: () => void;
 }) {
   return (
-    <nav>
-      {NAV_GROUPS.map((group) => (
+    <nav aria-label="Main">
+      {groups.map((group) => (
         <div key={group.label}>
           <div className="sidebar-section-label">{group.label}</div>
 
@@ -219,6 +100,14 @@ function Navigation({
                       />
 
                       <span>{entry.label}</span>
+
+                      {entry.status !== "available" && (
+                        <span
+                          className={`nav-status nav-status-${entry.status}`}
+                          title={entry.note ?? undefined}
+                          aria-label={entry.status === "limited" ? "Limited" : "Needs configuration"}
+                        />
+                      )}
 
                       {count > 0 && <span className="nav-badge">{count}</span>}
                     </>
@@ -263,7 +152,7 @@ function UserCard() {
   );
 }
 
-function Brand({ onNavigate }: { onNavigate?: () => void }) {
+function Brand({ onNavigate, version }: { onNavigate?: () => void; version: string }) {
   return (
     <NavLink
       to="/command"
@@ -275,8 +164,8 @@ function Brand({ onNavigate }: { onNavigate?: () => void }) {
       </span>
 
       <span>
-        <span className="brand-name block">UNI-OFFICE</span>
-        <span className="brand-subtitle block">OPERATING SYSTEM</span>
+        <span className="brand-name block">UNIOFFICE</span>
+        <span className="brand-subtitle block">OPERATING SYSTEM {version}</span>
       </span>
     </NavLink>
   );
@@ -298,9 +187,20 @@ export default function App() {
   // activity rather than once per surface.
   const missionControl = useMissionControlResource();
 
+  // What the product can do here, for this person. Rarely changes, so it is
+  // read once and refreshed occasionally; until it answers, the rail shows
+  // the product's own surfaces.
+  const featureCatalog = useResource<FeatureCatalog>(useCallback(() => fetchFeatures(), []), { pollMs: 300_000 });
+  const groups = useMemo(
+    () => buildNavigation(featureCatalog.data?.features ?? FALLBACK_FEATURES),
+    [featureCatalog.data],
+  );
+  const version = featureCatalog.data?.product.version ?? "2.0";
+  const online = useOnline();
+
   const queue = missionControl.data?.attention;
   const attentionItems = useMemo(() => queue?.items ?? [], [queue]);
-  const context = useMemo<ShellContext>(
+  const context = useMemo<NavigationContext>(
     () => ({ missionControl: missionControl.data }),
     [missionControl.data],
   );
@@ -392,7 +292,7 @@ export default function App() {
         kind: "Needs you",
       }));
 
-    const surfaces = ALL_ENTRIES.map((entry) => ({
+    const surfaces = groups.flatMap((group) => group.entries).map((entry) => ({
       key: `surface:${entry.path}`,
       label: entry.label,
       path: entry.path,
@@ -416,20 +316,20 @@ export default function App() {
       ...agents,
       ...recent,
     ].filter((entry) => !needle || entry.label.toLowerCase().includes(needle));
-  }, [paletteQuery, missionControl.data, attentionItems]);
+  }, [paletteQuery, missionControl.data, attentionItems, groups]);
 
-  const { group, title } = locate(location.pathname);
+  const { group, title } = locate(location.pathname, groups);
   const attentionCount = queue?.actionCount ?? 0;
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <Brand />
+          <Brand version={version} />
         </div>
 
         <div className="sidebar-content">
-          <Navigation context={context} />
+          <Navigation groups={groups} context={context} />
         </div>
 
         <div className="sidebar-footer">
@@ -450,7 +350,7 @@ export default function App() {
         className={`mobile-sidebar ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className="sidebar-brand justify-between">
-          <Brand onNavigate={() => setMobileOpen(false)} />
+          <Brand version={version} onNavigate={() => setMobileOpen(false)} />
 
           <button
             type="button"
@@ -464,6 +364,7 @@ export default function App() {
 
         <div className="sidebar-content">
           <Navigation
+            groups={groups}
             context={context}
             onNavigate={() => setMobileOpen(false)}
           />
@@ -480,7 +381,7 @@ export default function App() {
           <Menu size={17} />
         </button>
 
-        <span className="mobile-brand">UNI-OFFICE</span>
+        <span className="mobile-brand">UNIOFFICE</span>
 
         <div className="flex items-center gap-2">
           {/* On a phone the attention queue outranks search, so it stays in
@@ -557,18 +458,21 @@ export default function App() {
             </div>
 
             <div
-              className={`system-status${missionControl.error ? " system-status-down" : ""}`}
-              title={missionControl.error?.message}
+              className={`system-status${!online || missionControl.error ? " system-status-down" : ""}`}
+              role="status"
+              title={!online ? "This device has no network connection." : missionControl.error?.message}
             >
               <span
-                className={`pill-dot ${missionControl.error ? "tone-error" : "tone-active"}`}
+                className={`pill-dot ${!online || missionControl.error ? "tone-error" : "tone-active"}`}
               />
               <span>
-                {missionControl.error
+                {!online
                   ? "OFFLINE"
-                  : missionControl.loading
-                    ? "CONNECTING"
-                    : "OPERATIONAL"}
+                  : missionControl.error
+                    ? "RECONNECTING"
+                    : missionControl.loading
+                      ? "CONNECTING"
+                      : "OPERATIONAL"}
               </span>
             </div>
           </div>
@@ -576,6 +480,12 @@ export default function App() {
 
         {/* Keyed on the path so every navigation replays the page's entrance
             rather than swapping content inside a static frame. */}
+        {!online && (
+          <div className="shell-banner" role="alert">
+            This device is offline. What is on screen may be out of date; UNIOFFICE will refresh when the connection returns.
+          </div>
+        )}
+
         <section className="page-surface" key={location.pathname}>
           <Outlet context={outletContext} />
         </section>
@@ -748,5 +658,21 @@ function AttentionPanel({
         </div>
       )}
     </div>
+  );
+}
+
+/** Whether the browser believes it has a network connection, kept current. */
+function useOnline(): boolean {
+  return useSyncExternalStore(
+    (notify) => {
+      window.addEventListener("online", notify);
+      window.addEventListener("offline", notify);
+      return () => {
+        window.removeEventListener("online", notify);
+        window.removeEventListener("offline", notify);
+      };
+    },
+    () => navigator.onLine,
+    () => true,
   );
 }
