@@ -23,6 +23,7 @@ import { toneClass } from "../../lib/tone";
 import { AgentMark } from "../AgentMark";
 import { ResultBody } from "../ResultBody";
 import { Chip, StatusPill } from "../primitives";
+import { Link } from "react-router-dom";
 
 /**
  * The floor.
@@ -157,6 +158,16 @@ function Step({
 
           <span className="step-meta">
             <span className="step-agent">{agent ?? "Unassigned"}</span>
+
+            {node.skill && (
+              <Link
+                to={node.skill.scope === "system" ? `/skills/${encodeURIComponent(`system:${node.skill.slug}`)}` : "/skills"}
+                className="skill-tag"
+                title={`Follows the ${node.skill.name} skill, version ${node.skill.version}`}
+              >
+                {node.skill.name}
+              </Link>
+            )}
 
             {node.requiredTools.map((tool) => (
               <span key={tool} className="tool-tag">

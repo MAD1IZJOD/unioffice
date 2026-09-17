@@ -1844,6 +1844,19 @@
 
 /* Tool grants are the hard boundary in this product, so they read as
    machine facts rather than as decorative badges. */
+/* The skill a step follows: the way of working, beside the tools it uses. */
+.skill-tag {
+  padding: 1px 5px;
+  border: 1px solid var(--blue-line);
+  border-radius: 3px;
+  background: var(--blue-soft);
+  color: var(--blue-ink);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
 .tool-tag {
   padding: 1px 5px;
   border: 1px solid var(--line);

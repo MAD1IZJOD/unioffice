@@ -525,6 +525,8 @@ export interface ExecutionNode {
   toolCallCount: number;
   requiredTools: string[];
   requiredCapabilities: string[];
+  /** The skill the step follows, when it follows one. */
+  skill?: { slug: string; name: string; version: number; scope: "system" | "organization" | "workspace" };
   startedAt?: string;
   completedAt?: string;
   durationMs?: number;
