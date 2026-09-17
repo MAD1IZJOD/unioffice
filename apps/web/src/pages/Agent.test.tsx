@@ -222,4 +222,37 @@ describe("an agent's profile", () => {
     expect(await screen.findByText("This agent could not be opened")).toBeDefined();
     expect(screen.getByRole("button", { name: "Try again" })).toBeDefined();
   });
+
+  it("shows the connected systems it holds tools for, and whether it can really use them", async () => {
+    open("viewer", () => json(200, {
+      ...tony,
+      systems: [
+        {
+          provider: "github",
+          name: "GitHub",
+          state: "ready",
+          account: "octo-dev",
+          scope: "company",
+          tools: [
+            { toolId: "github_issue", name: "GitHub issue", access: "read", usable: true, note: "Available." },
+            { toolId: "github_create_issue", name: "Create GitHub issue", access: "write", usable: false, note: "The connection does not allow this." },
+          ],
+        },
+        { provider: "google_drive", name: "Google Drive", state: "not_connected", tools: [{ toolId: "drive_read_file", name: "Read Drive document", access: "read", usable: false, note: "No connection reaches this agent." }] },
+      ],
+    }));
+    await screen.findByRole("heading", { name: "Tony" });
+
+    const systems = section("Connected systems");
+    expect(within(systems).getByText("Can use")).toBeDefined();
+    expect(within(systems).getByText("Not connected")).toBeDefined();
+    expect(within(systems).getByText(/Create GitHub issue: not usable - the connection does not allow this/)).toBeDefined();
+  });
+
+  it("shows no connected systems for an agent holding no external tools", async () => {
+    open("owner");
+    await screen.findByRole("heading", { name: "Tony" });
+
+    expect(screen.queryByRole("region", { name: "Connected systems" })).toBeNull();
+  });
 });

@@ -120,7 +120,7 @@ export default function Agent() {
     );
   }
 
-  const { member, history, artifacts, activity, governance } = profile.data;
+  const { member, history, artifacts, activity, governance, systems } = profile.data;
   const presence = PRESENCE[member.presence];
   const orchestrator = member.type === "orchestrator";
   const unregistered = member.tools.filter((tool) => !tool.registered);
@@ -299,6 +299,34 @@ export default function Agent() {
                   or refuse it.
                 </p>
               </section>
+
+              {systems.length > 0 && (
+                <section className="dossier-block" aria-label="Connected systems">
+                  <div className="dossier-question">Connected systems it can reach</div>
+
+                  <div className="agent-tools">
+                    {systems.map((system) => (
+                      <div key={system.provider} className={`agent-tool ${toneClass[SYSTEM_STATE[system.state].tone]}`}>
+                        <span className="agent-tool-name">{system.name}</span>
+                        <StatusPill tone={SYSTEM_STATE[system.state].tone}>{SYSTEM_STATE[system.state].label}</StatusPill>
+                        <span className="agent-tool-why">
+                          {system.account
+                            ? `Through ${system.account}, connected for ${system.scope === "workspace" ? "its workspace" : "the organization"}. `
+                            : "No connection reaches this agent. "}
+                          {system.tools
+                            .map((tool) => `${tool.name}: ${tool.usable ? tool.note : `not usable - ${tool.note.toLowerCase()}`}`)
+                            .join(" ")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="dossier-answer">
+                    Holding a tool is not access. The organization's connection has to reach this agent and allow what the
+                    tool does, and <Link to="/settings/connections">connections</Link> are managed in settings.
+                  </p>
+                </section>
+              )}
 
               <section className="dossier-block" aria-label="Rules">
                 <div className="dossier-question">Rules that apply</div>
@@ -693,3 +721,10 @@ function Fact({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
+const SYSTEM_STATE: Record<AgentProfile["systems"][number]["state"], { label: string; tone: Tone }> = {
+  ready: { label: "Can use", tone: "live" },
+  not_connected: { label: "Not connected", tone: "idle" },
+  needs_attention: { label: "Needs reconnecting", tone: "warning" },
+  not_enabled: { label: "Not allowed", tone: "idle" },
+};
