@@ -17,10 +17,11 @@ import { useResource } from "../lib/useResource";
 
 import {
   Connecting,
-  Failure,
   PageOpening,
   Quiet,
+  ReadFailure,
   Reading,
+  StaleNotice,
   StatusPill,
 } from "../components/primitives";
 
@@ -204,26 +205,16 @@ export default function Missions() {
           </label>
         </div>
 
+        {missions.error && missions.data && <StaleNotice error={missions.error} onRetry={missions.reload} />}
+
         {missions.loading ? (
           <Connecting what="Fetching the company's missions…" />
-        ) : missions.error ? (
-          <Failure
-            headline={
-              missions.error.isOffline
-                ? "The company is unreachable"
-                : "That read failed"
-            }
-            detail={missions.error.message}
+        ) : missions.error && !missions.data ? (
+          <ReadFailure
+            what="the missions"
+            error={missions.error}
+            onRetry={missions.reload}
             consequence="Missions already on the queue keep running; this page just cannot see them."
-            action={
-              <button
-                type="button"
-                onClick={missions.reload}
-                className="button-ghost"
-              >
-                Try again
-              </button>
-            }
           />
         ) : visible.length === 0 ? (
           total === 0 ? (
