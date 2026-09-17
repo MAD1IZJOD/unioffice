@@ -90,6 +90,59 @@ export function sourceLabel(sourceType: KnowledgeSourceType): string {
   }
 }
 
+/**
+ * Why a piece of knowledge exists, in one sentence a person can weigh.
+ *
+ * Where it came from, and whether anyone has confirmed it. Anything derived
+ * by the system and not yet reviewed says so plainly: the company's memory is
+ * not allowed to present an AI's conclusion as settled fact.
+ */
+export function whyItExists(
+  item: Pick<KnowledgeItem, "sourceType" | "status" | "reviewedAt" | "createdBy">,
+  names: { author?: string } = {},
+): { origin: string; standing: string; unconfirmed: boolean } {
+  const person = names.author ?? "a person";
+
+  const origin = (() => {
+    switch (item.sourceType) {
+      case "user":
+        return `Added by ${person}`;
+      case "task":
+        return "Learned from completed work";
+      case "artifact":
+        return item.reviewedAt ? "Extracted from an artifact and approved" : "Extracted from an artifact";
+      case "approval":
+        return "Recorded from an approval decision";
+      case "agent":
+        return "Proposed by an agent";
+      default:
+        return "Learned from a mission";
+    }
+  })();
+
+  const derived = item.sourceType !== "user" && item.sourceType !== "approval";
+
+  if (item.status === "archived") {
+    return { origin, standing: "Archived - kept for the record, no longer handed to agents.", unconfirmed: false };
+  }
+
+  if (item.reviewedAt) {
+    return { origin, standing: "Confirmed by a person.", unconfirmed: false };
+  }
+
+  if (derived) {
+    return {
+      origin,
+      standing: item.status === "proposed"
+        ? "Derived by the system and not yet reviewed - treat it as a claim, not a fact."
+        : "Derived by the system and never reviewed by a person - weigh it accordingly.",
+      unconfirmed: true,
+    };
+  }
+
+  return { origin, standing: item.status === "proposed" ? "Waiting for review." : "Recorded directly.", unconfirmed: false };
+}
+
 /** "user:…", "agent:…" or "system", said as who rather than as an id. */
 export function actorLabel(actor?: string): string {
   if (!actor) return "unrecorded";
