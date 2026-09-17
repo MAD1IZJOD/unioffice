@@ -14,10 +14,11 @@ import { safeStringify } from "../lib/events";
 import {
   Chapter,
   Connecting,
-  Failure,
   PageOpening,
   Quiet,
+  ReadFailure,
   Reading,
+  StaleNotice,
   StatusPill,
 } from "../components/primitives";
 
@@ -71,21 +72,15 @@ export default function Tools() {
         }
       />
 
+      {tools.error && tools.data && <StaleNotice error={tools.error} onRetry={tools.reload} />}
+
       {tools.loading ? (
         <Connecting what="Reading the tool registry…" />
-      ) : tools.error ? (
-        <Failure
-          headline={
-            tools.error.isOffline
-              ? "The company is unreachable"
-              : "The registry could not be read"
-          }
-          detail={tools.error.message}
-          action={
-            <button type="button" onClick={tools.reload} className="button-ghost">
-              Try again
-            </button>
-          }
+      ) : tools.error && !tools.data ? (
+        <ReadFailure
+          what="the tools"
+          error={tools.error}
+          onRetry={tools.reload}
         />
       ) : (tools.data?.length ?? 0) === 0 ? (
         <Quiet
