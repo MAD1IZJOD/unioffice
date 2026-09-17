@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   Network,
+  Plug,
   Plus,
   RotateCcw,
   Scale,
@@ -126,6 +127,10 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
     label: "Outputs",
     entries: [{ label: "Artifacts", path: "/artifacts", icon: FileOutput }],
   },
+  {
+    label: "Settings",
+    entries: [{ label: "Connections", path: "/settings/connections", icon: Plug }],
+  },
 ];
 
 const ALL_ENTRIES = NAV_GROUPS.flatMap((group) => group.entries);
@@ -162,6 +167,10 @@ function locate(pathname: string): { group: string; title: string } {
 
   if (pathname.startsWith("/workforce/")) {
     return { group: "Company", title: "Agent" };
+  }
+
+  if (pathname.startsWith("/settings/connections/")) {
+    return { group: "Settings", title: "Connection" };
   }
 
   for (const group of NAV_GROUPS) {

@@ -8,6 +8,8 @@ import Approvals from "../pages/Approvals";
 import Artifacts from "../pages/Artifacts";
 import Brain from "../pages/Brain";
 import Command from "../pages/Command";
+import Connection from "../pages/Connection";
+import Connections from "../pages/Connections";
 import Governance from "../pages/Governance";
 import KnowledgeEntry from "../pages/KnowledgeEntry";
 import Members from "../pages/Members";
@@ -66,6 +68,9 @@ export const router = createBrowserRouter([
       { path: "members", element: <Members /> },
       { path: "workspaces/:workspaceId", element: <Workspace /> },
       { path: "governance", element: <Governance /> },
+      { path: "settings", loader: () => redirect("/settings/connections") },
+      { path: "settings/connections", element: <Connections /> },
+      { path: "settings/connections/:connectionId", element: <Connection /> },
     ],
   },
 ]);
