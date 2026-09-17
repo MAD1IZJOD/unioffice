@@ -1684,7 +1684,7 @@ const CONNECTION_WRITE_LIMIT = { max: 20, timeWindow: "1 minute" };
 
 const SKILL_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
 
-export const PRODUCT_VERSION = "2.0";
+export const PRODUCT_VERSION = "2.1";
 
 /** A stored skill's uuid, or a system skill as system:<slug>. */
 function skillReference(params: unknown): string {

@@ -79,6 +79,6 @@ test("GET /features answers for the signed-in person only", async () => {
   const response = await app.inject({ method: "GET", url: "/features" });
   assert.equal(response.statusCode, 200);
   const body = response.json();
-  assert.equal(body.product.version, "2.0");
+  assert.equal(body.product.version, "2.1");
   assert.equal(body.features.find((feature: { id: string }) => feature.id === "connections").status, "needs_configuration");
 });

@@ -21,7 +21,7 @@ function features(overrides: (feature: FeatureItem) => FeatureItem = (feature) =
 
 function open(path: string, list: FeatureItem[] = features()) {
   stubNetwork((call) => {
-    if (call.url.pathname === "/features") return json(200, { product: { name: "UNIOFFICE", version: "2.0" }, features: list });
+    if (call.url.pathname === "/features") return json(200, { product: { name: "UNIOFFICE", version: "2.1" }, features: list });
     return json(503, { error: { code: "UNAVAILABLE", message: "Not in this test." } });
   });
 
@@ -49,7 +49,7 @@ describe("the shell", () => {
     expect(within(rail).getByText("Workforce")).toBeDefined();
     expect(within(rail).getByRole("link", { name: /Skills/ }).getAttribute("href")).toBe("/skills");
     expect(await within(rail).findByLabelText("Needs configuration")).toBeDefined();
-    expect(screen.getAllByText("OPERATING SYSTEM 2.0").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("OPERATING SYSTEM 2.1").length).toBeGreaterThan(0);
   });
 
   it("hides a feature the server does not list for this person", async () => {

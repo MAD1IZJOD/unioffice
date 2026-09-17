@@ -195,7 +195,7 @@ export default function App() {
     () => buildNavigation(featureCatalog.data?.features ?? FALLBACK_FEATURES),
     [featureCatalog.data],
   );
-  const version = featureCatalog.data?.product.version ?? "2.0";
+  const version = featureCatalog.data?.product.version ?? "2.1";
   const online = useOnline();
 
   const queue = missionControl.data?.attention;
