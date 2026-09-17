@@ -261,6 +261,19 @@ export default function Command() {
 
         <Chapter
           index="02"
+          title="What the agents are doing"
+          action={
+            <Link to="/workforce" className="button-quiet">
+              The workforce
+              <ArrowRight size={11} />
+            </Link>
+          }
+        />
+
+        <AgentActivity control={data} />
+
+        <Chapter
+          index="03"
           title="Recently finished"
           action={
             <Link to="/artifacts" className="button-quiet">
@@ -285,7 +298,7 @@ export default function Command() {
         <div className="grid gap-x-9 gap-y-0 lg:grid-cols-2">
           <section className="min-w-0" aria-label="What happened">
             <Chapter
-              index="03"
+              index="04"
               title="What happened"
               action={
                 <Link to="/activity" className="button-quiet">
@@ -299,7 +312,7 @@ export default function Command() {
 
           <section className="min-w-0" aria-label="What the company knows">
             <Chapter
-              index="04"
+              index="05"
               title="What the company knows"
               action={
                 <Link to="/brain" className="button-quiet">
@@ -691,6 +704,56 @@ function SignalGroup({
     <div className={`signal-group${tone ? ` signal-group-${tone}` : ""}`} role="group" aria-label={title}>
       <div className="signal-group-title">{title}</div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Each agent, and what it is doing right now, from the teams of the missions
+ * in flight. Nothing is estimated: an agent on no running or blocked mission
+ * is available, and one that is paused or disabled says so.
+ */
+function AgentActivity({ control }: { control: MissionControl }) {
+  const inFlight = [...control.running, ...control.blocked];
+
+  const rows = control.workforce.roster.map((agent) => {
+    const assignments = inFlight.flatMap((card) =>
+      card.team
+        .filter((member) => member.agentId === agent.agentId && (member.state === "working" || member.state === "waiting"))
+        .map((member) => ({ card, state: member.state })));
+
+    const working = assignments.find((entry) => entry.state === "working");
+    const waiting = assignments.find((entry) => entry.state === "waiting");
+
+    return agent.status !== "active"
+      ? { agent, tone: "idle" as Tone, label: agent.status === "paused" ? "Paused" : "Disabled", card: undefined }
+      : working
+        ? { agent, tone: "active" as Tone, label: "Working", card: working.card }
+        : waiting
+          ? { agent, tone: "warning" as Tone, label: "Waiting on a decision", card: waiting.card }
+          : { agent, tone: "idle" as Tone, label: "Available", card: undefined };
+  });
+
+  if (rows.length === 0) {
+    return <Quiet line="No agents work for this organization yet." detail="Missions need an orchestrator and at least one specialist." />;
+  }
+
+  // Busy agents first, so the section answers "who is doing what" before
+  // listing who is free.
+  const rank = (label: string) => (label === "Working" ? 0 : label === "Waiting on a decision" ? 1 : label === "Available" ? 2 : 3);
+  rows.sort((left, right) => rank(left.label) - rank(right.label) || left.agent.name.localeCompare(right.agent.name));
+
+  return (
+    <div className="ledger" role="list" aria-label="Agents">
+      {rows.map(({ agent, tone, label, card }) => (
+        <div key={agent.agentId} className={`agent-activity-row ${toneClass[tone]}`} role="listitem" aria-label={agent.name}>
+          <Link to={`/workforce/${agent.agentId}`} className="agent-activity-name">{agent.name}</Link>
+          <StatusPill tone={tone} pulse={label === "Working"}>{label}</StatusPill>
+          <span className="agent-activity-detail">
+            {card ? <Link to={`/missions/${card.id}`}>{missionTitle(card)}</Link> : "No step in flight"}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

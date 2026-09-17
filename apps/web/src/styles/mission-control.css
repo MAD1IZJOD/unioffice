@@ -351,3 +351,39 @@ a.outcome-text:hover {
     margin: 6px 0 0;
   }
 }
+
+/* One line per agent: who, what state, and which mission. */
+.agent-activity-row {
+  display: grid;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row-height);
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--line-subtle);
+  grid-template-columns: 140px auto minmax(0, 1fr);
+}
+
+.agent-activity-name {
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.agent-activity-detail {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .agent-activity-row {
+    grid-template-columns: 1fr auto;
+    padding: var(--space-2) 0;
+  }
+
+  .agent-activity-detail {
+    grid-column: 1 / -1;
+  }
+}

@@ -343,4 +343,34 @@ describe("the Command Center", () => {
     await waitFor(() => expect(screen.getByText("Watching live")).toBeDefined());
     expect(calls).toHaveLength(0);
   });
+
+  it("says what each agent is doing, busiest first, from the missions in flight", async () => {
+    renderPage(() => json(200, view({
+      summary: { running: 1, blocked: 1, needsYou: 1, finishedToday: 0, failedToday: 0, setAside: 0, total: 2 },
+      running: [card("m1", { name: "Close the books", team: [{ agentId: "a1", name: "Harvey", state: "working" }] })],
+      blocked: [card("m2", { name: "Hire an analyst", phase: "blocked", team: [{ agentId: "a2", name: "Jamie", state: "waiting" }] })],
+      workforce: {
+        total: 4,
+        active: 3,
+        working: 1,
+        unavailable: [{ agentId: "a4", name: "Peter", status: "paused" }],
+        roster: [
+          { agentId: "a3", name: "Mike", type: "specialist", status: "active", capabilities: [] },
+          { agentId: "a4", name: "Peter", type: "specialist", status: "paused", capabilities: [] },
+          { agentId: "a2", name: "Jamie", type: "specialist", status: "active", capabilities: [] },
+          { agentId: "a1", name: "Harvey", type: "specialist", status: "active", capabilities: [] },
+        ],
+      },
+    })));
+
+    const agents = await screen.findByRole("list", { name: "Agents" });
+    const rows = within(agents).getAllByRole("listitem");
+
+    expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual(["Harvey", "Jamie", "Mike", "Peter"]);
+    expect(within(rows[0]!).getByText("Working")).toBeDefined();
+    expect(within(rows[0]!).getByRole("link", { name: /Close the books/ })).toBeDefined();
+    expect(within(rows[1]!).getByText("Waiting on a decision")).toBeDefined();
+    expect(within(rows[2]!).getByText("Available")).toBeDefined();
+    expect(within(rows[3]!).getByText("Paused")).toBeDefined();
+  });
 });
