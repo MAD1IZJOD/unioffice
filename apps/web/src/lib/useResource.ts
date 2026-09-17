@@ -88,11 +88,26 @@ export function useResource<T>(
       };
     }
 
-    const interval = setInterval(() => void run(), pollMs);
+    // A hidden tab does not poll. Nobody is looking, and a dozen background
+    // tabs each re-reading every few seconds is real load on the API for
+    // nothing. When the tab comes back it reads at once rather than waiting
+    // out the rest of an interval with stale data on screen.
+    const hidden = () => typeof document !== "undefined" && document.visibilityState === "hidden";
+
+    const interval = setInterval(() => {
+      if (!hidden()) void run();
+    }, pollMs);
+
+    const onVisibility = () => {
+      if (!hidden()) void run();
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       activeRequest.current += 1;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [enabled, pollMs, run]);
 
