@@ -37,3 +37,5 @@ export * from "./repositories/in-memory-membership-repository.js";
 export * from "./repositories/connection-repository.js";
 export * from "./repositories/supabase-connection-repository.js";
 export * from "./repositories/in-memory-connection-repository.js";
+export * from "./repositories/skill-repository.js";
+export * from "./repositories/in-memory-skill-repository.js";
