@@ -1,13 +1,19 @@
 /* ==========================================================================
-   UNI-OFFICE design tokens
+   UNIOFFICE 2.0 design tokens
 
    Black carries the interface. Blue and red are semantic, never decorative:
    blue is the system thinking - agents working, data moving, state that is
    live. Red is pressure - a decision waiting on a person, something blocked,
    something that failed. If a colour appears, it means something.
+
+   Every value a surface needs comes from here: colour, type, space, radius,
+   elevation, motion, focus, layering and density. A component reaching for a
+   raw hex or pixel value is a component the system cannot change later.
    ========================================================================== */
 
 :root {
+  color-scheme: dark;
+
   /* Surfaces. Near-black through graphite; each step is deliberately small so
      elevation reads as depth rather than as a stack of floating cards. */
   --surface-0: #06070a;
@@ -15,15 +21,21 @@
   --surface-2: #0e1116;
   --surface-3: #13171e;
   --surface-4: #191e26;
+  /* Things that float above the page: the palette, drawers, menus. */
+  --surface-overlay: #0c0f14;
 
   --line-subtle: #161a21;
   --line: #1e232b;
   --line-strong: #2a313c;
 
+  /* Text, in five steps of emphasis. Ghost is for the quietest machine facts
+     and never for anything a person has to read to act. */
   --ink-primary: #f2f4f7;
   --ink-secondary: #a7b0bd;
   --ink-muted: #6f7887;
   --ink-faint: #535b68;
+  --ink-ghost: #3a4250;
+  --ink-inverse: #06070a;
 
   /* Blue - intelligence, activity, live system state. */
   --blue: #3b82f6;
@@ -36,6 +48,7 @@
      turns into a colour wheel; the difference is weight and motion. */
   --red: #e5484d;
   --red-ink: #ff7176;
+  --red-muted: #c9868a;
   --red-soft: rgba(229, 72, 77, 0.10);
   --red-line: rgba(229, 72, 77, 0.30);
 
@@ -46,17 +59,14 @@
   --success-soft: rgba(47, 158, 107, 0.09);
   --success-line: rgba(47, 158, 107, 0.24);
 
+  /* Caution that is not yet a demand on anyone - limited features, drafts. */
   --warning: #d99a2b;
+  --warning-muted: #c9a06a;
   --warning-soft: rgba(217, 154, 43, 0.09);
   --warning-line: rgba(217, 154, 43, 0.24);
 
-  /* Kept as aliases so anything still reaching for the old accent gets blue
-     rather than the retired cyan. */
-  --accent: var(--blue);
-  --accent-ink: var(--blue-ink);
-  --accent-soft: var(--blue-soft);
-  --accent-line: var(--blue-line);
-
+  /* Semantic names, so a surface says what it means rather than which hue
+     it happens to be. */
   --live: var(--success);
   --live-soft: var(--success-soft);
   --live-line: var(--success-line);
@@ -64,18 +74,99 @@
   --error-soft: var(--red-soft);
   --error-line: var(--red-line);
 
-  --focus: var(--blue-ink);
+  /* Kept as aliases for the handful of rules that still reach for the old
+     accent; they resolve to blue. */
+  --accent: var(--blue);
+  --accent-ink: var(--blue-ink);
+  --accent-soft: var(--blue-soft);
+  --accent-line: var(--blue-line);
+
+  /* Type. Hierarchy is carried by size, weight and colour rather than boxes. */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --text-2xs: 9px;
+  --text-xs: 10.5px;
+  --text-sm: 11.5px;
+  --text-md: 12.5px;
+  --text-lg: 15px;
+  --text-xl: 21px;
+  --text-display: clamp(34px, 5.2vw, 64px);
+  --leading-tight: 1.15;
+  --leading-snug: 1.4;
+  --leading-body: 1.65;
+  --tracking-tight: -0.028em;
+  --tracking-label: 0.18em;
+
+  /* Space, on a 4px grid. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+  --space-9: 72px;
 
   /* Corners stay tight. Soft, heavily rounded rectangles read as consumer
      SaaS; this is closer to instrumentation. */
   --radius-sm: 4px;
   --radius: 6px;
   --radius-lg: 8px;
+  --radius-pill: 999px;
 
-  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  /* Elevation. Only things that genuinely float get a shadow. */
+  --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line);
+  --shadow-raised: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  /* Motion. Short and purposeful; nothing moves just to look alive. */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --duration-fast: 120ms;
+  --duration: 200ms;
+  --duration-slow: 360ms;
+
+  /* Focus is always visible for keyboard users, and always the same. */
+  --focus: var(--blue-ink);
+  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--blue-ink);
+
+  --disabled-opacity: 0.45;
+
+  /* Layers, lowest first. */
+  --z-header: 30;
+  --z-rail: 40;
+  --z-overlay: 60;
+  --z-toast: 80;
+
+  /* Density: the height of one row of information. */
+  --row-height: 40px;
+  --row-height-compact: 32px;
 
   --rail-width: 236px;
   --header-height: 56px;
+}
+
+/* Keyboard focus, everywhere, from one rule. Components with their own focus
+   treatment still inherit the same ring. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+:where(button, input, select, textarea)[disabled] {
+  cursor: not-allowed;
+}
+
+/* Motion is decoration; anyone who asked for less gets none of it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -171,7 +262,7 @@
 }
 
 .tone-idle {
-  --tone: #3a4250;
+  --tone: var(--ink-ghost);
   --tone-soft: rgba(120, 129, 143, 0.08);
   --tone-line: rgba(120, 129, 143, 0.2);
 }
