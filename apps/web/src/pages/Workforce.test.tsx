@@ -192,7 +192,7 @@ describe("the workforce", () => {
   it("explains a failed read and offers to try again", async () => {
     open("owner", () => json(500, { error: { code: "INTERNAL_ERROR", message: "An internal error occurred." } }));
 
-    expect(await screen.findByText("The workforce could not be read")).toBeDefined();
+    expect(await screen.findByText("UNIOFFICE couldn't load the workforce")).toBeDefined();
     expect(screen.getByRole("button", { name: "Try again" })).toBeDefined();
   });
 });

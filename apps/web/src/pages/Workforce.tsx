@@ -29,7 +29,9 @@ import {
   Failure,
   PageOpening,
   Quiet,
+  ReadFailure,
   Reading,
+  StaleNotice,
   StatusPill,
 } from "../components/primitives";
 
@@ -108,18 +110,16 @@ export default function Workforce() {
         />
       )}
 
+      {workforce.error && workforce.data && <StaleNotice error={workforce.error} onRetry={workforce.reload} />}
+
       {workforce.loading ? (
         <Connecting what="Reading the workforce…" />
-      ) : workforce.error ? (
-        <Failure
-          headline={workforce.error.isOffline ? "The company is unreachable" : "The workforce could not be read"}
-          detail={workforce.error.message}
+      ) : workforce.error && !workforce.data ? (
+        <ReadFailure
+          what="the workforce"
+          error={workforce.error}
+          onRetry={workforce.reload}
           consequence={workforce.error.isOffline ? "Missions already running keep running on the worker." : undefined}
-          action={
-            <button type="button" onClick={workforce.reload} className="button-ghost">
-              Try again
-            </button>
-          }
         />
       ) : members.length === 0 ? (
         <Quiet
