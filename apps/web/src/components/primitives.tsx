@@ -408,6 +408,62 @@ export function Failure({
   );
 }
 
+/**
+ * A read that failed, said the same way everywhere.
+ *
+ * Which of three things happened decides the sentence: the server could not be
+ * reached, this person's access does not include it, or something else went
+ * wrong. Only the last offers a retry that could help - retrying a refusal
+ * would just be refused again.
+ */
+export function ReadFailure({
+  what,
+  error,
+  onRetry,
+  consequence,
+}: {
+  /** "the workforce", "the missions" */
+  what: string;
+  error: { status: number; message: string };
+  onRetry?: () => void;
+  consequence?: string;
+}) {
+  if (error.status === 403) {
+    return (
+      <Failure
+        headline={`Your access doesn't include ${what}`}
+        detail={error.message}
+        consequence="An owner or admin can change what your role can see."
+      />
+    );
+  }
+
+  return (
+    <Failure
+      headline={error.status === 0 ? "UNIOFFICE can't reach its server" : `UNIOFFICE couldn't load ${what}`}
+      detail={error.message}
+      consequence={consequence}
+      action={onRetry ? <button type="button" className="button-ghost" onClick={onRetry}>Try again</button> : undefined}
+    />
+  );
+}
+
+/**
+ * The page is still showing what it last read successfully, because the
+ * latest refresh failed. Better than blanking the page - but it must say so,
+ * or stale data reads as current.
+ */
+export function StaleNotice({ error, onRetry }: { error: { status: number; message: string }; onRetry: () => void }) {
+  return (
+    <div className="stale-notice" role="status">
+      <span>
+        {error.status === 0 ? "Can't reach UNIOFFICE right now" : "The latest refresh failed"} - showing what was last loaded.
+      </span>
+      <button type="button" className="button-quiet" onClick={onRetry}>Refresh</button>
+    </div>
+  );
+}
+
 export function Skeleton({
   rows = 3,
   className = "",
