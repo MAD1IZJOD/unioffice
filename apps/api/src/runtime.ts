@@ -9,6 +9,7 @@ import {
   SupabaseApprovalRepository,
   SupabaseArtifactRepository,
   SupabaseConnectionRepository,
+  SupabaseSkillRepository,
   SupabaseEventRepository,
   SupabaseExecutionJobRepository,
   SupabaseKnowledgeLinkRepository,
@@ -44,6 +45,7 @@ import { AgentDirectoryService } from "./agent-directory-service.js";
 import { createConnectionProviders } from "./connections/connection-providers.js";
 import { ConnectionResolver } from "./connections/connection-resolver.js";
 import { ConnectionService } from "./connections/connection-service.js";
+import { SkillService } from "./skills/skill-service.js";
 import { GovernanceOverviewService } from "./governance-overview-service.js";
 import { GovernanceService } from "./governance-service.js";
 import { GovernanceToolGuard } from "./governance-tool-guard.js";
@@ -100,6 +102,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const workspaceRepository = new SupabaseWorkspaceRepository(supabase);
   const membershipRepository = new SupabaseMembershipRepository(supabase);
   const connectionRepository = new SupabaseConnectionRepository(supabase);
+  const skillRepository = new SupabaseSkillRepository(supabase);
 
   // Tokens are checked with the auth server; what a verified person may do
   // comes from their membership, which only the API reads and writes.
@@ -144,6 +147,17 @@ export function createExecutionRuntime(config: ApiConfig) {
     eventRecorder,
     publicApiUrl: config.connect.publicApiUrl,
     webUrl: config.connect.webUrl,
+  });
+
+  // Skills are read by planning, delegation checks and execution, and written
+  // only through the service. Built after the registry so a skill's required
+  // tools are checked against the tools that actually exist.
+  const skillService = new SkillService({
+    skills: skillRepository,
+    agents: agentRepository,
+    workspaces: workspaceRepository,
+    tools: toolRegistry,
+    eventRecorder,
   });
 
   // Governance is built before the agent runtime because the runtime's tool
@@ -408,6 +422,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workspaceRepository,
     toolRegistry,
     eventRecorder,
+    skillService,
   );
 
   // The roster and each agent's profile, from the same lean reads Mission
@@ -446,6 +461,8 @@ export function createExecutionRuntime(config: ApiConfig) {
     membershipRepository,
     connectionRepository,
     connectionService,
+    skillRepository,
+    skillService,
     authenticator,
     accessResolver,
     memberService,

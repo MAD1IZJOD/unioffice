@@ -81,8 +81,8 @@ export function signedIn(principal: TestPrincipal = {}): Pick<ApiServices, "auth
 }
 
 export type TestServices =
-  Omit<ApiServices, "authenticator" | "accessResolver" | "streamTickets" | "memberService" | "workforceService" | "connectionService"> &
-  Partial<Pick<ApiServices, "authenticator" | "accessResolver" | "streamTickets" | "memberService" | "workforceService" | "connectionService">> &
+  Omit<ApiServices, "authenticator" | "accessResolver" | "streamTickets" | "memberService" | "workforceService" | "connectionService" | "skillService"> &
+  Partial<Pick<ApiServices, "authenticator" | "accessResolver" | "streamTickets" | "memberService" | "workforceService" | "connectionService" | "skillService">> &
   { developmentOrganizationId?: OrganizationId; role?: OrganizationRole };
 
 /**
@@ -99,6 +99,7 @@ export function buildTestServer(services: TestServices) {
     memberService: {} as ApiServices["memberService"],
     workforceService: {} as ApiServices["workforceService"],
     connectionService: {} as ApiServices["connectionService"],
+    skillService: {} as ApiServices["skillService"],
     ...rest,
   });
 

@@ -70,6 +70,7 @@ export async function createApiServer() {
     streamTickets: new StreamTickets(),
     memberService: runtime.memberService,
     connectionService: runtime.connectionService,
+    skillService: runtime.skillService,
     applicationService: runtime.applicationService,
     workService: runtime.workService,
     workExecutionService: runtime.workExecutionService,

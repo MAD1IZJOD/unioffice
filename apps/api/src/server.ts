@@ -174,6 +174,12 @@ import {
 } from "./access/member-service.js";
 import { LastOwnerError, MemberConflictError } from "@unioffice/database";
 import {
+  SkillNotFoundError,
+  SkillStateError,
+  SkillValidationError,
+  type SkillService,
+} from "./skills/skill-service.js";
+import {
   ConnectionNotFoundError,
   ConnectionStateError,
   ConnectionValidationError,
@@ -198,6 +204,7 @@ export interface ApiServices {
     ConnectionService,
     "overview" | "get" | "startAuthorization" | "completeAuthorization" | "setCapabilities" | "disconnect"
   >;
+  skillService: Pick<SkillService, "list" | "get" | "create" | "update" | "setStatus">;
   applicationService: WorkApplicationService;
   workService: WorkService;
   workExecutionService: WorkExecutionService;
@@ -1083,6 +1090,42 @@ export function buildApiServer(
       return services.connectionService.disconnect(access, parameterUuid(request.params) as ConnectionId);
     });
 
+    // ---------------------------------------------------------------------
+    // Skills.
+    //
+    // What the workforce knows how to do. Everyone reads the catalogue they
+    // can reach; owners and admins write the organization's own skills. The
+    // body of a change is validated field by field in the service, and
+    // nothing in it can set a scope, a version or an owner.
+    // ---------------------------------------------------------------------
+
+    instance.get("/skills", async (request) => {
+      return services.skillService.list(accessOf(request));
+    });
+
+    instance.get("/skills/:ref", async (request) => {
+      return { skill: await services.skillService.get(accessOf(request), skillReference(request.params)) };
+    });
+
+    instance.post("/skills", { config: { rateLimit: SKILL_WRITE_LIMIT } }, async (request, reply) => {
+      const access = await confirmAllowed(services, request, "skills.manage");
+      const skill = await services.skillService.create(access, objectBody(request.body));
+      return reply.status(201).send({ skill });
+    });
+
+    instance.post("/skills/:ref", { config: { rateLimit: SKILL_WRITE_LIMIT } }, async (request) => {
+      const access = await confirmAllowed(services, request, "skills.manage");
+      return { skill: await services.skillService.update(access, skillReference(request.params), objectBody(request.body)) };
+    });
+
+    instance.post("/skills/:ref/status", { config: { rateLimit: SKILL_WRITE_LIMIT } }, async (request) => {
+      const body = onlyFields(objectBody(request.body), ["organizationId", "status", "expectedVersion"]);
+      const access = await confirmAllowed(services, request, "skills.manage");
+      return {
+        skill: await services.skillService.setStatus(access, skillReference(request.params), body.status, body.expectedVersion),
+      };
+    });
+
     instance.get("/organization", async (request) => {
       const query = objectBody(request.query);
 
@@ -1209,6 +1252,10 @@ export function buildApiServer(
               ? null
               : (requiredText(body.workspaceId, "workspaceId") as WorkspaceId),
         status: parseAgentStatus(body.status),
+        skills:
+          body.skills === undefined
+            ? undefined
+            : stringArray(body.skills, "skills"),
       });
 
       return { agent: publicAgent(agent) };
@@ -1613,6 +1660,23 @@ const KNOWLEDGE_DERIVE_LIMIT = { max: 5, timeWindow: "1 minute" };
 const MEMBER_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
 
 const CONNECTION_WRITE_LIMIT = { max: 20, timeWindow: "1 minute" };
+
+const SKILL_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
+
+/** A stored skill's uuid, or a system skill as system:<slug>. */
+function skillReference(params: unknown): string {
+  const ref = fieldOf(params, "ref");
+
+  if (
+    typeof ref !== "string" ||
+    !(UUID_PATTERN.test(ref) || /^system:[a-z0-9]+(?:-[a-z0-9]+)*$/.test(ref)) ||
+    ref.length > 80
+  ) {
+    throw new ApiError(400, "That is not a skill reference.");
+  }
+
+  return ref;
+}
 
 const CONNECTION_CALLBACK_LIMIT = { max: 30, timeWindow: "1 minute" };
 
@@ -2400,16 +2464,21 @@ function statusForError(error: Error): number {
     error instanceof MissionTemplateNotFoundError ||
     error instanceof MissionNotFoundError ||
     error instanceof MemberNotFoundError ||
-    error instanceof ConnectionNotFoundError
+    error instanceof ConnectionNotFoundError ||
+    error instanceof SkillNotFoundError
   ) {
     return 404;
   }
 
-  if (error instanceof MemberValidationError || error instanceof ConnectionValidationError) {
+  if (
+    error instanceof MemberValidationError ||
+    error instanceof ConnectionValidationError ||
+    error instanceof SkillValidationError
+  ) {
     return 400;
   }
 
-  if (error instanceof ConnectionStateError) {
+  if (error instanceof ConnectionStateError || error instanceof SkillStateError) {
     return 409;
   }
 
