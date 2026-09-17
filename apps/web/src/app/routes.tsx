@@ -1,26 +1,22 @@
-import { createBrowserRouter, redirect } from "react-router-dom";
+import { createBrowserRouter, redirect, type RouteObject } from "react-router-dom";
 
 import App from "../App";
 import SessionGate from "./SessionGate";
-import Activity from "../pages/Activity";
-import Agent from "../pages/Agent";
-import Approvals from "../pages/Approvals";
-import Artifacts from "../pages/Artifacts";
-import Brain from "../pages/Brain";
 import Command from "../pages/Command";
-import Connection from "../pages/Connection";
-import Connections from "../pages/Connections";
-import Governance from "../pages/Governance";
-import KnowledgeEntry from "../pages/KnowledgeEntry";
-import Members from "../pages/Members";
-import MissionStart from "../pages/MissionStart";
-import Missions from "../pages/Missions";
-import Room from "../pages/Room";
-import TemplateMission from "../pages/TemplateMission";
-import Organization from "../pages/Organization";
-import Tools from "../pages/Tools";
-import Workforce from "../pages/Workforce";
-import Workspace from "../pages/Workspace";
+
+/**
+ * Loads a page's code the first time someone opens it.
+ *
+ * The Command Center is where everyone lands, so it ships with the shell.
+ * Every other surface is its own chunk: someone reviewing an approval does
+ * not download the governance composer, the Company Brain and the execution
+ * room first.
+ */
+function page(load: () => Promise<{ default: React.ComponentType }>): Pick<RouteObject, "lazy"> {
+  return {
+    lazy: async () => ({ Component: (await load()).default }),
+  };
+}
 
 /**
  * Work became Mission.
@@ -41,36 +37,36 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Command /> },
       { path: "command", element: <Command /> },
-      { path: "missions", element: <Missions /> },
-      { path: "missions/new", element: <MissionStart /> },
-      { path: "missions/new/:templateId", element: <TemplateMission /> },
-      { path: "missions/:missionId", element: <Room /> },
+      { path: "missions", ...page(() => import("../pages/Missions")) },
+      { path: "missions/new", ...page(() => import("../pages/MissionStart")) },
+      { path: "missions/new/:templateId", ...page(() => import("../pages/TemplateMission")) },
+      { path: "missions/:missionId", ...page(() => import("../pages/Room")) },
       { path: "work", loader: () => redirect("/missions") },
       {
         path: "work/:workId",
         loader: ({ params }) => redirect(`/missions/${params.workId ?? ""}`),
       },
-      { path: "workforce", element: <Workforce /> },
-      { path: "workforce/:agentId", element: <Agent /> },
+      { path: "workforce", ...page(() => import("../pages/Workforce")) },
+      { path: "workforce/:agentId", ...page(() => import("../pages/Agent")) },
       // Agents became the workforce. Links to the old paths keep working.
       { path: "agents", loader: () => redirect("/workforce") },
       {
         path: "agents/:agentId",
         loader: ({ params }) => redirect(`/workforce/${params.agentId ?? ""}`),
       },
-      { path: "tools", element: <Tools /> },
-      { path: "brain", element: <Brain /> },
-      { path: "brain/:knowledgeId", element: <KnowledgeEntry /> },
-      { path: "artifacts", element: <Artifacts /> },
-      { path: "approvals", element: <Approvals /> },
-      { path: "activity", element: <Activity /> },
-      { path: "organization", element: <Organization /> },
-      { path: "members", element: <Members /> },
-      { path: "workspaces/:workspaceId", element: <Workspace /> },
-      { path: "governance", element: <Governance /> },
+      { path: "tools", ...page(() => import("../pages/Tools")) },
+      { path: "brain", ...page(() => import("../pages/Brain")) },
+      { path: "brain/:knowledgeId", ...page(() => import("../pages/KnowledgeEntry")) },
+      { path: "artifacts", ...page(() => import("../pages/Artifacts")) },
+      { path: "approvals", ...page(() => import("../pages/Approvals")) },
+      { path: "activity", ...page(() => import("../pages/Activity")) },
+      { path: "organization", ...page(() => import("../pages/Organization")) },
+      { path: "members", ...page(() => import("../pages/Members")) },
+      { path: "workspaces/:workspaceId", ...page(() => import("../pages/Workspace")) },
+      { path: "governance", ...page(() => import("../pages/Governance")) },
       { path: "settings", loader: () => redirect("/settings/connections") },
-      { path: "settings/connections", element: <Connections /> },
-      { path: "settings/connections/:connectionId", element: <Connection /> },
+      { path: "settings/connections", ...page(() => import("../pages/Connections")) },
+      { path: "settings/connections/:connectionId", ...page(() => import("../pages/Connection")) },
     ],
   },
 ]);
