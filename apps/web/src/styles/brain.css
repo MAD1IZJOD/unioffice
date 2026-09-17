@@ -996,3 +996,15 @@ a.provenance-name:hover {
     animation: none;
   }
 }
+
+/* Why an entry exists, directly under its title. Unconfirmed system-derived
+   knowledge is marked, so it is never read as settled fact. */
+.entry-why {
+  margin-top: var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.entry-why-unconfirmed {
+  color: var(--warning-muted);
+}

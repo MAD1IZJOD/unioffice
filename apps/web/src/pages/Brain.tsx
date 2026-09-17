@@ -31,6 +31,7 @@ import {
   KNOWLEDGE_KINDS,
   kindLabel,
   sourceLabel,
+  whyItExists,
 } from "../lib/knowledge";
 
 import { useCan } from "../lib/access";
@@ -660,7 +661,8 @@ function Strata({
               <div className="min-w-0">
                 <Link to={`/brain/${item.id}`} className="learned-title">{item.title}</Link>
                 <div className="learned-source">
-                  {kindLabel(item.type)} · {sourceLabel(item.sourceType)}
+                  {kindLabel(item.type)} · {whyItExists(item).origin}
+                  {whyItExists(item).unconfirmed && " · unreviewed"}
                   {item.workId && (
                     <>
                       {" · "}

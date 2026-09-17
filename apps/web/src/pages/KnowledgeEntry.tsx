@@ -28,10 +28,11 @@ import {
   percent,
   reachLabel,
   sourceLabel,
+  whyItExists,
   WRITABLE_KINDS,
 } from "../lib/knowledge";
 
-import { useCan } from "../lib/access";
+import { useAccess, useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
 
 import { Chip, Connecting, Failure } from "../components/primitives";
@@ -50,6 +51,7 @@ import { ProvenanceTrail } from "../components/brain/ProvenanceTrail";
  * is filled in to make the page look complete.
  */
 export default function KnowledgeEntry() {
+  const me = useAccess();
   const { knowledgeId = "" } = useParams();
 
   const [busy, setBusy] = useState(false);
@@ -110,6 +112,9 @@ export default function KnowledgeEntry() {
 
   const data = detail.data;
   const { knowledge, provenance, related, usage } = data;
+  const why = whyItExists(knowledge, {
+    author: knowledge.createdBy && knowledge.createdBy === `user:${me?.me.user.id}` ? "you" : undefined,
+  });
   const extraction = provenance.extraction;
   const workspaceName = provenance.workspace?.name;
 
@@ -137,6 +142,9 @@ export default function KnowledgeEntry() {
       ) : (
         <>
           <h1 className="entry-title">{knowledge.title}</h1>
+          <p className={`entry-why${why.unconfirmed ? " entry-why-unconfirmed" : ""}`}>
+            {why.origin}. {why.standing}
+          </p>
           {knowledge.content !== knowledge.title && <p className="entry-content">{knowledge.content}</p>}
         </>
       )}
