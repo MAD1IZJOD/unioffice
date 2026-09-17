@@ -87,7 +87,12 @@ export type EventType =
   | "connection.needs_attention"
   | "connection.disconnected"
   | "external.read"
-  | "external.write";
+  | "external.write"
+  // Skills. What the workforce knows how to do, and who changed it.
+  | "skill.created"
+  | "skill.updated"
+  | "skill.archived"
+  | "skill.restored";
 
 export type EventActorType =
   | "user"
