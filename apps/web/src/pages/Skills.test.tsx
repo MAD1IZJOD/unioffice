@@ -72,12 +72,12 @@ function open(role: OrganizationRole, path: string, detail?: SkillItem) {
 }
 
 describe("the skills catalogue", () => {
-  it("groups skills by category, says who holds each, and offers a viewer nothing to write", async () => {
+  it("groups skills by category, says whether each can actually be used, and offers a viewer nothing to write", async () => {
     open("viewer", "/skills");
 
     const finance = await screen.findByRole("region", { name: "Finance" });
     const row = within(finance).getByRole("listitem", { name: "Financial analysis" });
-    expect(within(row).getByText("Held by Harvey")).toBeDefined();
+    expect(within(row).getByText("Harvey can run it")).toBeDefined();
     expect(within(row).getByText("calculator")).toBeDefined();
 
     expect(within(screen.getByRole("region", { name: "People" })).getByText("Every step needs approval")).toBeDefined();
@@ -104,6 +104,23 @@ describe("the skills catalogue", () => {
     await user.type(screen.getByLabelText("Search skills"), "people_operations");
     expect(screen.getByRole("listitem", { name: "Candidate screening" })).toBeDefined();
     expect(screen.queryByRole("listitem", { name: "Financial analysis" })).toBeNull();
+  });
+
+  it("separates the skills the workforce can actually use from the ones it cannot", async () => {
+    open("owner", "/skills");
+    const user = userEvent.setup();
+
+    await screen.findByRole("region", { name: "Finance" });
+
+    await user.selectOptions(screen.getByLabelText("Whether a skill can be used"), "ready");
+    expect(screen.getByRole("listitem", { name: "Financial analysis" })).toBeDefined();
+    expect(screen.queryByRole("listitem", { name: "Code review" })).toBeNull();
+
+    await user.selectOptions(screen.getByLabelText("Whether a skill can be used"), "not_ready");
+    expect(screen.queryByRole("listitem", { name: "Financial analysis" })).toBeNull();
+
+    const codeReview = screen.getByRole("listitem", { name: "Code review" });
+    expect(within(codeReview).getByText("No agent holds it")).toBeDefined();
   });
 });
 

@@ -40,3 +40,48 @@ export function matchesSkill(skill: SkillItem, query: string): boolean {
   return [skill.name, skill.slug, skill.description, ...skill.requiredTools, ...skill.requiredCapabilities]
     .some((value) => value.toLowerCase().includes(needle));
 }
+
+/**
+ * Whether the company can actually use a skill right now, and why not.
+ *
+ * A skill is only real when an agent holds it and already has everything it
+ * needs. "Held by Ledger" is not the same as "Ledger can run it", and the
+ * difference is the whole point of the catalogue, so it is said plainly
+ * rather than left to be worked out from a list of tools.
+ */
+export function skillReadiness(skill: Pick<SkillItem, "status" | "agents" | "overriddenBy">): {
+  ready: boolean;
+  line: string;
+  tone: Tone;
+} {
+  if (skill.status !== "active") {
+    return { ready: false, line: "Not in force, so no step can use it", tone: "idle" };
+  }
+
+  if (skill.overriddenBy) {
+    return { ready: false, line: `Replaced by ${skill.overriddenBy.name}`, tone: "idle" };
+  }
+
+  const ready = skill.agents.filter((agent) => agent.fits);
+
+  if (ready.length > 0) {
+    return {
+      ready: true,
+      line: ready.length === 1 ? `${ready[0]!.name} can run it` : `${ready.length} agents can run it`,
+      tone: "live",
+    };
+  }
+
+  if (skill.agents.length === 0) {
+    return { ready: false, line: "No agent holds it", tone: "warning" };
+  }
+
+  const short = skill.agents[0]!;
+  const missing = [...short.missingTools, ...short.missingCapabilities.map((entry) => entry.replace(/_/g, " "))];
+
+  return {
+    ready: false,
+    line: `${short.name} holds it but is missing ${missing.join(" and ")}`,
+    tone: "warning",
+  };
+}

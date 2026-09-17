@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 
 import { fetchSkills, type SkillCategory, type SkillItem } from "../lib/api";
 import { useCan } from "../lib/access";
-import { CATEGORY_LABEL, CATEGORY_ORDER, matchesSkill, skillPath, skillStanding } from "../lib/skills";
+import { CATEGORY_LABEL, CATEGORY_ORDER, matchesSkill, skillPath, skillReadiness, skillStanding } from "../lib/skills";
 import { useResource } from "../lib/useResource";
 
 import {
@@ -19,6 +19,7 @@ import {
 } from "../components/primitives";
 
 type ScopeFilter = "all" | "system" | "company";
+type ReadinessFilter = "all" | "ready" | "not_ready";
 
 /**
  * What the workforce knows how to do.
@@ -34,6 +35,7 @@ export default function Skills() {
 
   const [category, setCategory] = useState<SkillCategory | "all">("all");
   const [scope, setScope] = useState<ScopeFilter>("all");
+  const [readiness, setReadiness] = useState<ReadinessFilter>("all");
   const [query, setQuery] = useState("");
 
   const all = useMemo(() => skills.data ?? [], [skills.data]);
@@ -41,7 +43,8 @@ export default function Skills() {
   const shown = useMemo(() => all
     .filter((skill) => category === "all" || skill.category === category)
     .filter((skill) => scope === "all" || (scope === "system" ? skill.scope === "system" : skill.scope !== "system"))
-    .filter((skill) => matchesSkill(skill, query)), [all, category, scope, query]);
+    .filter((skill) => readiness === "all" || skillReadiness(skill).ready === (readiness === "ready"))
+    .filter((skill) => matchesSkill(skill, query)), [all, category, scope, readiness, query]);
 
   if (skills.error && !skills.data) {
     return (
@@ -57,8 +60,8 @@ export default function Skills() {
   }
 
   const live = all.filter((skill) => skill.status === "active" && !skill.overriddenBy);
-  const held = live.filter((skill) => skill.agents.length > 0);
   const gated = live.filter((skill) => skill.approval === "required");
+  const usable = live.filter((skill) => skillReadiness(skill).ready);
 
   return (
     <div className="fade-up">
@@ -76,7 +79,7 @@ export default function Skills() {
         meta={
           <>
             <Reading label="In force" value={skills.loading ? "—" : live.length} tone="active" />
-            <Reading label="Held by an agent" value={skills.loading ? "—" : held.length} tone="live" />
+            <Reading label="Ready to use" value={skills.loading ? "—" : usable.length} tone="live" />
             <Reading label="Need approval" value={skills.loading ? "—" : gated.length} tone="warning" />
           </>
         }
@@ -98,6 +101,12 @@ export default function Skills() {
               </button>
             ))}
           </div>
+
+          <select aria-label="Whether a skill can be used" className="config-input member-role" value={readiness} onChange={(event) => setReadiness(event.target.value as ReadinessFilter)}>
+            <option value="all">Ready or not</option>
+            <option value="ready">Ready to use</option>
+            <option value="not_ready">Not ready</option>
+          </select>
 
           <select aria-label="Where skills come from" className="config-input member-role" value={scope} onChange={(event) => setScope(event.target.value as ScopeFilter)}>
             <option value="all">Every source</option>
@@ -122,7 +131,7 @@ export default function Skills() {
         ) : shown.length === 0 ? (
           <Quiet
             line={all.length === 0 ? "No skills are available yet." : "No skill matches."}
-            detail={all.length === 0 ? "System skills ship with UNIOFFICE; if none are listed, the API could not provide them." : "Try another category, source or search."}
+            detail={all.length === 0 ? "System skills ship with UNIOFFICE; if none are listed, the API could not provide them." : "Try another category, source, readiness or search."}
           />
         ) : (
           CATEGORY_ORDER.filter((entry) => shown.some((skill) => skill.category === entry)).map((entry, index) => (
@@ -132,6 +141,7 @@ export default function Skills() {
               <div className="skill-list" role="list">
                 {shown.filter((skill) => skill.category === entry).map((skill) => {
                   const standing = skillStanding(skill);
+                  const ready = skillReadiness(skill);
 
                   return (
                     <Link key={skill.id} to={skillPath(skill)} className="skill-row" role="listitem" aria-label={skill.name}>
@@ -150,9 +160,7 @@ export default function Skills() {
 
                       <span className="skill-meta">
                         <StatusPill tone={standing.tone}>{standing.label}</StatusPill>
-                        <span className="t-meta">
-                          {skill.agents.length === 0 ? "No agent holds it" : skill.agents.length === 1 ? `Held by ${skill.agents[0]!.name}` : `Held by ${skill.agents.length} agents`}
-                        </span>
+                        <span className={`t-meta ${ready.ready ? "" : "text-warning"}`}>{ready.line}</span>
                         {skill.approval === "required" && (
                           <span className="t-meta">
                             <ShieldAlert size={10} className="mr-1 inline align-[-1px]" />
