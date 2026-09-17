@@ -34,6 +34,10 @@ export type ApprovalId = string & {
   readonly __brand: "ApprovalId";
 };
 
+export type ActionProposalId = string & {
+  readonly __brand: "ActionProposalId";
+};
+
 export type EventId = string & {
   readonly __brand: "EventId";
 };

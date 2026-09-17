@@ -17,3 +17,4 @@ export * from "./entities/workspace.js";
 export * from "./entities/membership.js";
 export * from "./entities/connection.js";
 export * from "./entities/skill.js";
+export * from "./entities/action-proposal.js";
