@@ -48,7 +48,7 @@ export class OllamaPlanner implements Planner {
           {
             role: "system",
             content: [
-              "You are the planning engine inside UNI-OFFICE.",
+              "You are the planning engine inside UNIOFFICE.",
               "Convert a user's objective into executable tasks.",
               "Return ONLY valid JSON.",
               "Do not use markdown.",

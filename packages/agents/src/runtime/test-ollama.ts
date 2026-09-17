@@ -21,7 +21,7 @@ const result =
         role: "user",
 
         content:
-          "Explain UNI-OFFICE in one sentence.",
+          "Explain UNIOFFICE in one sentence.",
       },
     ],
 

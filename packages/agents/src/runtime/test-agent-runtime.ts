@@ -33,7 +33,7 @@ const definition: AgentDefinition = {
 
   systemInstructions:
     [
-      "You are a research agent inside UNI-OFFICE.",
+      "You are a research agent inside UNIOFFICE.",
 
       "Analyze the user's task carefully.",
 
