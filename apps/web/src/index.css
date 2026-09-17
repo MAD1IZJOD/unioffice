@@ -12,6 +12,7 @@
 @import "./styles/session.css";
 @import "./styles/members.css";
 @import "./styles/connections.css";
+@import "./styles/skills.css";
 @import "./styles/workforce.css";
 
 /* The design tokens, as Tailwind utilities: text-ink-secondary, border-line,
