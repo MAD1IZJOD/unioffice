@@ -344,6 +344,18 @@ export interface ToolCallRecord {
   completedAt?: string;
 }
 
+/** The skill a step follows: which one, which version, and why it was chosen. */
+export interface StepSkill {
+  ref?: string;
+  slug: string;
+  name: string;
+  version: number;
+  scope: "system" | "organization" | "workspace";
+  approval: "none" | "required";
+  memory: "recall" | "none";
+  reasons?: string[];
+}
+
 export interface TaskItem {
   id: string;
   workId: string;
@@ -362,6 +374,10 @@ export interface TaskItem {
       requiredCapabilities?: string[];
       requiredTools?: string[];
       suggestedAgentType?: string;
+      /** The skill this step follows, pinned to the version it was planned around. */
+      skill?: StepSkill;
+      /** Why this step has no skill, when it could have had one. */
+      skillNote?: string;
     };
     delegation?: {
       delegation?: string;
@@ -375,6 +391,10 @@ export interface TaskItem {
       error?: { code: string; message: string };
       toolCalls?: ToolCallRecord[];
       metadata?: Record<string, unknown>;
+      /** The skill the step actually ran, as it was written then. */
+      skill?: { ref?: string; slug: string; version: number; scope: string };
+      /** Why the step ran without the skill it was planned around. */
+      skillNote?: string;
     };
     approval?: {
       required?: boolean;
@@ -525,8 +545,20 @@ export interface ExecutionNode {
   toolCallCount: number;
   requiredTools: string[];
   requiredCapabilities: string[];
-  /** The skill the step follows, when it follows one. */
-  skill?: { slug: string; name: string; version: number; scope: "system" | "organization" | "workspace" };
+  /** The skill the step follows, when it follows one, and why it was chosen. */
+  skill?: {
+    ref?: string;
+    slug: string;
+    name: string;
+    version: number;
+    scope: "system" | "organization" | "workspace";
+    approval?: "none" | "required";
+    reasons?: string[];
+  };
+  /** The version that actually ran, once the step has run. */
+  ranSkillVersion?: number;
+  /** Why this step has no skill, or ran without the one it was planned around. */
+  skillNote?: string;
   startedAt?: string;
   completedAt?: string;
   durationMs?: number;

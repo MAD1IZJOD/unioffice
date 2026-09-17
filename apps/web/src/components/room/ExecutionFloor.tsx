@@ -161,11 +161,11 @@ function Step({
 
             {node.skill && (
               <Link
-                to={node.skill.scope === "system" ? `/skills/${encodeURIComponent(`system:${node.skill.slug}`)}` : "/skills"}
+                to={skillHref(node.skill)}
                 className="skill-tag"
                 title={`Follows the ${node.skill.name} skill, version ${node.skill.version}`}
               >
-                {node.skill.name}
+                {node.skill.name} v{node.skill.version}
               </Link>
             )}
 
@@ -218,6 +218,8 @@ function Step({
             </div>
           )}
 
+          <Procedure node={node} />
+
           {node.blocks.length > 0 && (
             <p className="step-downstream">
               Feeds{" "}
@@ -256,6 +258,60 @@ function Step({
       )}
     </article>
   );
+}
+
+/**
+ * The way of working behind a step: which skill, pinned to which version,
+ * and the reasons the server chose it. When a step has no skill, the reason
+ * for that is worth as much as the choice itself, so it is shown the same way.
+ */
+function Procedure({ node }: { node: ExecutionNode }) {
+  if (!node.skill) {
+    return node.skillNote ? <p className="step-procedure-none">{node.skillNote}</p> : null;
+  }
+
+  const drifted =
+    node.ranSkillVersion !== undefined && node.ranSkillVersion !== node.skill.version;
+
+  return (
+    <div className="step-procedure">
+      <span className="detail-label">Procedure</span>
+
+      <p className="step-procedure-name">
+        <Link to={skillHref(node.skill)}>{node.skill.name}</Link>
+        <span className="step-procedure-version">
+          version {node.skill.version}
+          {node.skill.scope !== "system" ? ` · ${node.skill.scope}` : ""}
+          {node.skill.approval === "required" ? " · needs approval" : ""}
+        </span>
+      </p>
+
+      {node.skill.reasons && node.skill.reasons.length > 0 && (
+        <ul className="step-procedure-why">
+          {node.skill.reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      )}
+
+      {drifted && (
+        <p className="step-procedure-note">
+          Ran version {node.ranSkillVersion}, not the version this step was planned around.
+        </p>
+      )}
+
+      {node.skillNote && <p className="step-procedure-note">{node.skillNote}</p>}
+    </div>
+  );
+}
+
+/** Where a skill is read in full. System skills have a page of their own. */
+function skillHref(skill: NonNullable<ExecutionNode["skill"]>): string {
+  return skill.ref
+    ? `/skills/${encodeURIComponent(skill.ref)}`
+    : skill.scope === "system"
+      ? `/skills/${encodeURIComponent(`system:${skill.slug}`)}`
+      : "/skills";
 }
 
 /** Every tool this step actually called, with what went in and what came back. */

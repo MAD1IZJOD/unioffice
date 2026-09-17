@@ -211,19 +211,40 @@ test("duration is measured only when the step genuinely started and finished", (
   assert.equal(nodeOf(plan, "mid").durationMs, undefined);
 });
 
-test("a step shows the skill it follows by name and version, and nothing else of it", () => {
+test("a step shows the skill it follows, why, and nothing else of it", () => {
   const plan = buildExecutionPlan([
     task("a", {
       metadata: {
         routing: {
-          skill: { slug: "financial-analysis", name: "Financial analysis", version: 3, scope: "system", approval: "none", memory: "recall", instructions: "SHOULD NOT LEAVE" },
+          skill: {
+            ref: "system:financial-analysis",
+            slug: "financial-analysis",
+            name: "Financial analysis",
+            version: 3,
+            scope: "system",
+            approval: "none",
+            memory: "recall",
+            reasons: ["the step mentions financial, analysis", "Ledger holds it with everything it needs"],
+            instructions: "SHOULD NOT LEAVE",
+          },
         },
+        execution: { skill: { ref: "system:financial-analysis", slug: "financial-analysis", version: 3, scope: "system" } },
       },
     }),
-    task("b"),
+    task("b", { metadata: { routing: { skillNote: "Nothing matched this step closely enough to choose a skill for it." } } }),
   ]);
 
-  assert.deepEqual(plan.nodes[0]!.skill, { slug: "financial-analysis", name: "Financial analysis", version: 3, scope: "system" });
+  assert.deepEqual(plan.nodes[0]!.skill, {
+    ref: "system:financial-analysis",
+    slug: "financial-analysis",
+    name: "Financial analysis",
+    version: 3,
+    scope: "system",
+    approval: "none",
+    reasons: ["the step mentions financial, analysis", "Ledger holds it with everything it needs"],
+  });
+  assert.equal(plan.nodes[0]!.ranSkillVersion, 3, "the version that ran is the version it pinned");
   assert.equal(plan.nodes[1]!.skill, undefined);
+  assert.match(plan.nodes[1]!.skillNote ?? "", /Nothing matched this step/);
   assert.doesNotMatch(JSON.stringify(plan), /SHOULD NOT LEAVE/);
 });

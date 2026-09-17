@@ -52,8 +52,26 @@ export interface ExecutionNode {
   requiredTools: string[];
   requiredCapabilities: string[];
 
-  /** The skill the step follows, as routing recorded it. Name and version only. */
-  skill?: { slug: string; name: string; version: number; scope: "system" | "organization" | "workspace" };
+  /**
+   * The skill the step follows, as routing recorded it: which one, which
+   * version it is pinned to, and why the server chose it. Identity and
+   * reasons only - never the procedure itself.
+   */
+  skill?: {
+    ref?: string;
+    slug: string;
+    name: string;
+    version: number;
+    scope: "system" | "organization" | "workspace";
+    approval?: "none" | "required";
+    reasons?: string[];
+  };
+
+  /** The version that actually ran, when the step has run. */
+  ranSkillVersion?: number;
+
+  /** Why this step has no skill, or ran without the one it was planned around. */
+  skillNote?: string;
 
   startedAt?: Date;
   completedAt?: Date;
@@ -150,6 +168,8 @@ export function buildExecutionPlan(
       requiredTools: routingList(task, "requiredTools"),
       requiredCapabilities: routingList(task, "requiredCapabilities"),
       skill: routedSkill(task),
+      ranSkillVersion: ranSkillVersion(task),
+      skillNote: skillNote(task),
       startedAt: task.startedAt,
       completedAt: task.completedAt,
       durationMs:
@@ -303,12 +323,35 @@ function routedSkill(task: Task): ExecutionNode["skill"] {
 
   return skill && typeof skill.slug === "string" && typeof skill.name === "string" && typeof skill.version === "number"
     ? {
+        ref: typeof skill.ref === "string" ? skill.ref : undefined,
         slug: skill.slug,
         name: skill.name,
         version: skill.version,
         scope: skill.scope === "organization" || skill.scope === "workspace" ? skill.scope : "system",
+        approval: skill.approval === "required" ? "required" : "none",
+        reasons: Array.isArray(skill.reasons)
+          ? skill.reasons.filter((reason): reason is string => typeof reason === "string")
+          : undefined,
       }
     : undefined;
+}
+
+/** The version the step ran, which is the version it pinned. */
+function ranSkillVersion(task: Task): number | undefined {
+  const execution = task.metadata.execution as { skill?: { version?: unknown } } | undefined;
+  return typeof execution?.skill?.version === "number" ? execution.skill.version : undefined;
+}
+
+/**
+ * Why a step has no procedure behind it, in the words the server recorded:
+ * what execution found, if it has run, and otherwise what routing found.
+ */
+function skillNote(task: Task): string | undefined {
+  const execution = task.metadata.execution as { skillNote?: unknown } | undefined;
+  if (typeof execution?.skillNote === "string") return execution.skillNote;
+
+  const routing = task.metadata.routing as { skillNote?: unknown } | undefined;
+  return typeof routing?.skillNote === "string" ? routing.skillNote : undefined;
 }
 
 function routingList(task: Task, field: string): string[] {
