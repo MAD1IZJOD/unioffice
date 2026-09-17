@@ -173,6 +173,7 @@ import {
   type MemberService,
 } from "./access/member-service.js";
 import { LastOwnerError, MemberConflictError } from "@unioffice/database";
+import { featuresFor, type FeatureEnvironment } from "./features/feature-registry.js";
 import {
   SkillNotFoundError,
   SkillStateError,
@@ -205,6 +206,8 @@ export interface ApiServices {
     "overview" | "get" | "startAuthorization" | "completeAuthorization" | "setCapabilities" | "disconnect"
   >;
   skillService: Pick<SkillService, "list" | "get" | "create" | "update" | "setStatus">;
+  /** What this server is configured to do, for feature status. */
+  featureEnvironment: FeatureEnvironment;
   applicationService: WorkApplicationService;
   workService: WorkService;
   workExecutionService: WorkExecutionService;
@@ -1099,6 +1102,15 @@ export function buildApiServer(
     // nothing in it can set a scope, a version or an owner.
     // ---------------------------------------------------------------------
 
+    // What the product can do here, for this person. The navigation is built
+    // from this; each feature's own routes still check permissions.
+    instance.get("/features", async (request) => {
+      return {
+        product: { name: "UNIOFFICE", version: PRODUCT_VERSION },
+        features: featuresFor(accessOf(request), services.featureEnvironment),
+      };
+    });
+
     instance.get("/skills", async (request) => {
       return services.skillService.list(accessOf(request));
     });
@@ -1662,6 +1674,8 @@ const MEMBER_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
 const CONNECTION_WRITE_LIMIT = { max: 20, timeWindow: "1 minute" };
 
 const SKILL_WRITE_LIMIT = { max: 30, timeWindow: "1 minute" };
+
+export const PRODUCT_VERSION = "2.0";
 
 /** A stored skill's uuid, or a system skill as system:<slug>. */
 function skillReference(params: unknown): string {

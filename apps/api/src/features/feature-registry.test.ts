@@ -68,3 +68,17 @@ test("a result never shares state between callers", () => {
 
   assert.equal(featuresFor(person("owner"), configured)[0]!.dependsOn.includes("tampered"), false);
 });
+
+test("GET /features answers for the signed-in person only", async () => {
+  const { buildTestServer } = await import("../access/testing.js");
+  const app = buildTestServer({ developmentOrganizationId: "aaaaaaaa-0000-4000-8000-000000000001" as never, role: "viewer" } as never);
+
+  const signedOut = await app.inject({ method: "GET", url: "/features", headers: { authorization: "" } });
+  assert.equal(signedOut.statusCode, 401);
+
+  const response = await app.inject({ method: "GET", url: "/features" });
+  assert.equal(response.statusCode, 200);
+  const body = response.json();
+  assert.equal(body.product.version, "2.0");
+  assert.equal(body.features.find((feature: { id: string }) => feature.id === "connections").status, "needs_configuration");
+});

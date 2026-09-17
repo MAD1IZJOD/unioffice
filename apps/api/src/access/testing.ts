@@ -81,8 +81,8 @@ export function signedIn(principal: TestPrincipal = {}): Pick<ApiServices, "auth
 }
 
 export type TestServices =
-  Omit<ApiServices, "authenticator" | "accessResolver" | "streamTickets" | "memberService" | "workforceService" | "connectionService" | "skillService"> &
-  Partial<Pick<ApiServices, "authenticator" | "accessResolver" | "streamTickets" | "memberService" | "workforceService" | "connectionService" | "skillService">> &
+  Omit<ApiServices, "authenticator" | "accessResolver" | "streamTickets" | "memberService" | "workforceService" | "connectionService" | "skillService" | "featureEnvironment"> &
+  Partial<Pick<ApiServices, "authenticator" | "accessResolver" | "streamTickets" | "memberService" | "workforceService" | "connectionService" | "skillService" | "featureEnvironment">> &
   { developmentOrganizationId?: OrganizationId; role?: OrganizationRole };
 
 /**
@@ -100,6 +100,7 @@ export function buildTestServer(services: TestServices) {
     workforceService: {} as ApiServices["workforceService"],
     connectionService: {} as ApiServices["connectionService"],
     skillService: {} as ApiServices["skillService"],
+    featureEnvironment: { semanticRecall: true, connectionProviders: 0 },
     ...rest,
   });
 
