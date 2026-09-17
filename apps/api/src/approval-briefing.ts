@@ -1,7 +1,10 @@
 import type {
+  ActionProposal,
+  ActionProposalId,
   Agent,
   AgentId,
   ApprovalRequest,
+  OrganizationId,
   RiskLevel,
   Task,
   TaskId,
@@ -36,6 +39,17 @@ export interface ApprovalBriefing {
   requestedBy: "external_write" | "skill" | "policy" | "planner";
   policy: { id: string; name: string } | null;
   skill: string | null;
+  /**
+   * The exact action this decision is about, as it was written down when the
+   * approval was raised. This, not the step, is what is being approved.
+   */
+  proposal: {
+    id: ActionProposalId;
+    /** What would happen, in one sentence. */
+    summary: string;
+    /** The skill and the version it is pinned to. */
+    skill: { name: string; version: number } | null;
+  } | null;
   /** External systems the step will change, by tool name. */
   externalWrites: string[];
   /** Every tool the step needs. */
@@ -54,6 +68,10 @@ export interface ApprovalBriefingDependencies {
   agents: { findById(id: AgentId): Promise<Agent | null> };
   workspaces: { findById(id: WorkspaceId): Promise<Workspace | null> };
   tools: Pick<ToolRegistry, "get">;
+  /** Where the proposal an approval was granted against is read from. */
+  proposals?: {
+    findById(id: ActionProposalId, organizationId: OrganizationId): Promise<ActionProposal | null>;
+  };
 }
 
 export async function briefApprovals(
@@ -77,10 +95,17 @@ export async function briefApprovals(
   const workspace = memo((id: WorkspaceId) => dependencies.workspaces.findById(id));
 
   return Promise.all(approvals.map(async (approval) => {
-    const [step, mission, assignee] = await Promise.all([
+    const proposalId = typeof approval.metadata?.proposalId === "string"
+      ? (approval.metadata.proposalId as ActionProposalId)
+      : undefined;
+
+    const [step, mission, assignee, proposal] = await Promise.all([
       approval.taskId ? task(approval.taskId) : Promise.resolve(null),
       work(approval.workId),
       approval.agentId ? agent(approval.agentId) : Promise.resolve(null),
+      proposalId && dependencies.proposals
+        ? dependencies.proposals.findById(proposalId, access.organizationId).catch(() => null)
+        : Promise.resolve(null),
     ]);
 
     // Nothing from another organization is ever described, even if an id
@@ -121,8 +146,19 @@ export async function briefApprovals(
         requestedBy,
         policy: policyId ? { id: policyId, name: policyName ?? "A policy" } : null,
         skill,
-        externalWrites: externalWrites.map(toolName),
-        tools: stringsOf(routing.requiredTools).map(toolName),
+        proposal: proposal
+          ? {
+              id: proposal.id,
+              summary: clip(proposal.summary, 500),
+              skill: proposal.action.skill
+                ? { name: proposal.action.skill.name, version: proposal.action.skill.version }
+                : null,
+            }
+          : null,
+        // What the approval covers is the proposal's own list of tools, not
+        // whatever the step says now: those are the tools that were approved.
+        externalWrites: (proposal?.action.externalWrites ?? externalWrites).map(toolName),
+        tools: (proposal?.action.tools ?? stringsOf(routing.requiredTools)).map(toolName),
         risk: isRisk(metadata.risk) ? metadata.risk : isRisk(governance.risk) ? governance.risk : null,
         onApprove: externalWrites.length > 0
           ? `${ownAgent?.name ?? "The agent"} runs this step and may use ${externalWrites.map(toolName).join(", ")} once, changing something outside the company. Steps that depend on it continue.`

@@ -77,6 +77,7 @@ export async function createApiServer() {
       agents: runtime.agentRepository,
       workspaces: runtime.workspaceRepository,
       tools: runtime.toolRegistry,
+      proposals: runtime.actionProposalRepository,
     },
     featureEnvironment: {
       semanticRecall: Boolean(config.embeddingModel),

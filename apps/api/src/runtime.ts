@@ -480,6 +480,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     connectionProviders,
     skillRepository,
     skillService,
+    actionProposalRepository,
     authenticator,
     accessResolver,
     memberService,

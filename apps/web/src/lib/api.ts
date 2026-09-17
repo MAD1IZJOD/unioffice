@@ -1802,6 +1802,12 @@ export interface ApprovalBriefing {
   requestedBy: "external_write" | "skill" | "policy" | "planner";
   policy: { id: string; name: string } | null;
   skill: string | null;
+  /** The exact action being decided, as it was written down. */
+  proposal: {
+    id: string;
+    summary: string;
+    skill: { name: string; version: number } | null;
+  } | null;
   externalWrites: string[];
   tools: string[];
   risk: RiskLevel | null;

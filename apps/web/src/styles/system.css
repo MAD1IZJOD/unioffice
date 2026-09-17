@@ -1760,6 +1760,39 @@
   margin: 0;
 }
 
+/* The action itself. Given the most weight on the card, because it is the
+   thing being decided: everything else is context around it. */
+.approval-proposal {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--ink-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.approval-proposal-summary {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.approval-proposal-skill {
+  margin: 6px 0 0;
+  color: var(--ink-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.approval-proposal-bound {
+  margin: 8px 0 0;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+
 /* The data and tools a decision covers, when the server could describe them. */
 .approval-involves {
   margin-top: var(--space-3);

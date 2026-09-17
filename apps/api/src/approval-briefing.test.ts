@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  ActionProposal,
+  ActionProposalId,
   Agent,
   AgentId,
   ApprovalId,
@@ -67,8 +69,33 @@ function dependencies(overrides: { work?: Work; agent?: Agent } = {}) {
     agents: { async findById() { return overrides.agent ?? tony; } },
     workspaces: { async findById() { return null; } },
     tools,
+    proposals: {
+      async findById(id: ActionProposalId, organizationId: OrganizationId) {
+        return id === proposal.id && organizationId === proposal.organizationId ? proposal : null;
+      },
+    },
   };
 }
+
+/** What Tony would actually do, as it was written down for the decision. */
+const proposal: ActionProposal = {
+  id: "proposal-1" as ActionProposalId,
+  organizationId: orgA,
+  workId: mission.id,
+  taskId: step.id,
+  agentId: tony.id,
+  summary: 'Tony would carry out "Open the issue" following Issue filing version 2, using Create GitHub issue. This changes something outside the company through Create GitHub issue.',
+  action: {
+    step: { title: step.title, description: step.description },
+    agent: { id: tony.id, name: "Tony" },
+    skill: { ref: "system:issue-filing", slug: "issue-filing", name: "Issue filing", version: 2 },
+    tools: ["github_create_issue"],
+    externalWrites: ["github_create_issue"],
+    objective: mission.objective,
+  },
+  hash: "a".repeat(64),
+  createdAt: now,
+};
 
 function approval(metadata: Record<string, unknown>): ApprovalRequest {
   return {
@@ -126,4 +153,26 @@ test("nothing from another organization is described, and no agent instructions 
   assert.equal(briefed!.briefing.step, null);
   assert.equal(briefed!.briefing.agent, null);
   assert.doesNotMatch(JSON.stringify(briefed), /SECRET PROMPT/);
+});
+
+test("a decision is about the action that was written down, not the step as it stands", async () => {
+  const [briefed] = await briefApprovals(
+    dependencies(),
+    person("admin"),
+    [approval({ externalWrites: ["github_create_issue"], proposalId: proposal.id })],
+  );
+
+  const briefing = briefed!.briefing;
+
+  assert.equal(briefing.proposal?.id, proposal.id);
+  assert.match(briefing.proposal?.summary ?? "", /following Issue filing version 2/);
+  assert.deepEqual(briefing.proposal?.skill, { name: "Issue filing", version: 2 });
+  assert.deepEqual(briefing.tools, ["Create GitHub issue"], "the tools that were approved, not the ones the step lists now");
+});
+
+test("an approval raised before proposals were kept still reads", async () => {
+  const [briefed] = await briefApprovals(dependencies(), person("admin"), [approval({ policyId: "p1" })]);
+
+  assert.equal(briefed!.briefing.proposal, null);
+  assert.equal(briefed!.briefing.step?.title, "Open the issue");
 });

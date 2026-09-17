@@ -173,6 +173,21 @@ export default function Approvals() {
                   </StatusPill>
                 </div>
 
+                {briefing?.proposal && (
+                  <div className="approval-proposal">
+                    <span className="t-eyebrow">What you are approving</span>
+                    <p className="approval-proposal-summary">{briefing.proposal.summary}</p>
+                    {briefing.proposal.skill && (
+                      <p className="approval-proposal-skill">
+                        {briefing.proposal.skill.name}, version {briefing.proposal.skill.version}
+                      </p>
+                    )}
+                    <p className="approval-proposal-bound">
+                      This decision covers exactly this. If the step changes before it runs, it comes back to you.
+                    </p>
+                  </div>
+                )}
+
                 <dl className="approval-facts">
                   <div>
                     <dt className="t-eyebrow">Why it stopped</dt>

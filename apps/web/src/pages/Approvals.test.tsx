@@ -88,6 +88,11 @@ describe("an approval with the server's briefing", () => {
         requestedBy: "external_write" as const,
         policy: null,
         skill: null,
+        proposal: {
+          id: "p0000000-0000-4000-8000-000000000001",
+          summary: 'Tony would carry out "Open the issue" following Issue filing version 2, using Create GitHub issue.',
+          skill: { name: "Issue filing", version: 2 },
+        },
         externalWrites: ["Create GitHub issue"],
         tools: ["Create GitHub issue"],
         risk: "high" as const,
@@ -132,5 +137,13 @@ describe("an approval with the server's briefing", () => {
     await screen.findByRole("article", { name: "Open the issue" });
     expect(screen.queryByRole("button", { name: "Approve and continue" })).toBeNull();
     expect(screen.getByText("An owner or admin decides this step.")).toBeDefined();
+  });
+
+  it("shows the exact action being decided, and says the decision is bound to it", async () => {
+    openWith("admin", true);
+
+    expect(await screen.findByText(/following Issue filing version 2/)).toBeDefined();
+    expect(screen.getByText("Issue filing, version 2")).toBeDefined();
+    expect(screen.getByText(/If the step changes before it runs, it comes back to you/)).toBeDefined();
   });
 });
