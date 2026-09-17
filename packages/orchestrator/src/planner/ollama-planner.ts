@@ -53,7 +53,9 @@ export class OllamaPlanner implements Planner {
               "Return ONLY valid JSON.",
               "Do not use markdown.",
               "Return an object with a tasks array.",
-              "Each task must contain ref, title, description, dependsOn, requiredCapabilities, requiredTools, suggestedAgentType, requiresApproval and approvalReason.",
+              availableSkills.length > 0
+                ? "Each task must contain ref, title, description, dependsOn, requiredCapabilities, requiredTools, skill, suggestedAgentType, requiresApproval and approvalReason. skill is the slug of one available skill, or null."
+                : "Each task must contain ref, title, description, dependsOn, requiredCapabilities, requiredTools, suggestedAgentType, requiresApproval and approvalReason.",
               "ref must be a unique short identifier such as research or analysis.",
               "dependsOn must contain task refs, never UUIDs.",
               "assignedAgentId is optional and must be one of the available agent IDs when present.",
@@ -71,7 +73,7 @@ export class OllamaPlanner implements Planner {
                 : "No tools are currently available; requiredTools must always be an empty array.",
               availableSkills.length > 0
                 ? [
-                    "A task may name ONE skill - a way of doing a kind of work the company has defined - in a skill field, using an exact slug from this list. Name a skill only when the task is clearly that kind of work; otherwise omit skill.",
+                    "A skill is a way of doing a kind of work that the company has defined. When a task is that kind of work, set its skill to the exact slug from this list - the task is then done the company's way, by an agent that holds the skill. When no skill fits, set skill to null.",
                     "Available skills:",
                     ...availableSkills.map((skill) => `- ${skill.slug}: ${skill.name} - ${skill.description}`),
                   ].join("\n")

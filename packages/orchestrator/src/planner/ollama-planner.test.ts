@@ -562,3 +562,27 @@ test("a named skill is kept only when offered, and its requirements are folded i
   assert.deepEqual(plan.tasks[1]!.requiredTools, []);
   assert.equal(plan.tasks[2]!.skill, undefined);
 });
+
+test("the planner is told skill is part of each task only when skills are offered", async () => {
+  const prompts: string[] = [];
+  const provider: ModelProvider = {
+    async generate(request) {
+      prompts.push(request.messages[0]!.content);
+      return {
+        model: "test",
+        content: JSON.stringify({ tasks: [{ ref: "a", title: "A", description: "a", ...taskFields(), skill: null, dependsOn: [] }] }),
+        metadata: {},
+      };
+    },
+  };
+
+  const planner = new OllamaPlanner(provider);
+  const base = { workId: "work-1" as WorkId, objective: "Analyse Q3", availableAgentIds: [agentId], context: {} };
+
+  await planner.plan({ ...base, availableSkills: [{ slug: "financial-analysis", name: "Financial analysis", description: "Analyse figures.", requiredTools: [], requiredCapabilities: [] }] });
+  await planner.plan(base);
+
+  assert.match(prompts[0]!, /requiredTools, skill, suggestedAgentType/);
+  assert.match(prompts[0]!, /- financial-analysis: Financial analysis/);
+  assert.doesNotMatch(prompts[1]!, /skill/);
+});
