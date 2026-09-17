@@ -39,3 +39,4 @@ export * from "./repositories/supabase-connection-repository.js";
 export * from "./repositories/in-memory-connection-repository.js";
 export * from "./repositories/skill-repository.js";
 export * from "./repositories/in-memory-skill-repository.js";
+export * from "./repositories/supabase-skill-repository.js";
