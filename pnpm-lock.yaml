@@ -409,6 +409,12 @@ importers:
         specifier: workspace:*
         version: link:../workflows
 
+  packages/skills:
+    dependencies:
+      '@unioffice/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/tools: {}
 
   packages/workflows:
