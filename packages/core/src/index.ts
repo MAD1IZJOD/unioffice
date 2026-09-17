@@ -16,3 +16,4 @@ export * from "./value-objects/entity-id.js";
 export * from "./entities/workspace.js";
 export * from "./entities/membership.js";
 export * from "./entities/connection.js";
+export * from "./entities/skill.js";
