@@ -337,7 +337,7 @@ function recoveringItem(job: ExecutionJob, work: WorkSummary | undefined): Atten
       ? "Picked back up after a worker stopped"
       : `Retrying on attempt ${job.attempts + 1}`,
     detail: publicFailureReason(job.lastError) ?? clip(work.objective, 200),
-    consequence: "UNI-OFFICE is handling this. A worker resumes it without you.",
+    consequence: "UNIOFFICE is handling this. A worker resumes it without you.",
     action: { label: "Watch it", path: missionPath(job.workId) },
     acknowledgeable: false,
     workId: job.workId,

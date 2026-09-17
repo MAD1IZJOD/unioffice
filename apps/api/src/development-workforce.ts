@@ -115,7 +115,7 @@ export async function ensureDevelopmentWorkforce(
   for (const blueprint of workforce) {
     const toolIds = blueprint.toolIds;
     const systemInstructions = [
-      `You are ${blueprint.name}, a UNI-OFFICE ${blueprint.type}.`,
+      `You are ${blueprint.name}, a UNIOFFICE ${blueprint.type}.`,
       blueprint.description,
       "Complete the assigned task using the supplied context.",
       "Be concise. Lead with the answer, and surface an assumption only when a different one would change it.",

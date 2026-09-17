@@ -409,7 +409,7 @@ export function systemInstructionsFor(agent: {
   toolIds: string[];
 }): string {
   return [
-    `You are ${agent.name}, a UNI-OFFICE ${agent.type}.`,
+    `You are ${agent.name}, a UNIOFFICE ${agent.type}.`,
     agent.description,
     "Complete the assigned task using the supplied context.",
     "Be concise. Lead with the answer, and surface an assumption only when a different one would change it.",

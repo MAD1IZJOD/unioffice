@@ -117,7 +117,7 @@ test("does not rewrite an agent that already matches the blueprint", async () =>
     metadata: {
       developmentSeed: true,
       systemInstructions: [
-        "You are Harvey, a UNI-OFFICE specialist.",
+        "You are Harvey, a UNIOFFICE specialist.",
         "Runs the numbers exactly. Calculation, financial analysis and quantitative decision support.",
         "Complete the assigned task using the supplied context.",
         "Be concise. Lead with the answer, and surface an assumption only when a different one would change it.",
