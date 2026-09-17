@@ -11,6 +11,7 @@
 @import "./styles/mission-control.css";
 @import "./styles/session.css";
 @import "./styles/members.css";
+@import "./styles/connections.css";
 @import "./styles/workforce.css";
 
 :root {

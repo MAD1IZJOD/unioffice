@@ -1,0 +1,119 @@
+/* --------------------------------------------------------------------------
+   Connections: the external systems the organization has authorized.
+   -------------------------------------------------------------------------- */
+
+.connection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--line);
+}
+
+.connection-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface-1);
+}
+
+.connection-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.connection-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-secondary);
+}
+
+.connection-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.connection-detail {
+  display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-left: 40px;
+}
+
+.connection-facts {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--line);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.connection-fact {
+  padding: 10px 12px;
+  background: var(--surface-1);
+}
+
+.connection-fact-label {
+  color: var(--ink-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.connection-fact-value {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--ink-primary);
+  font-size: 12.5px;
+}
+
+.connection-capability {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+
+.connection-capability + .connection-capability {
+  margin-top: 6px;
+}
+
+.connection-capability input {
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .connection-actions {
+    padding-left: 0;
+  }
+}

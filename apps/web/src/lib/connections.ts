@@ -1,4 +1,6 @@
-import type { ConnectionItem } from "./api";
+import { FolderOpen, GitBranch, type LucideIcon } from "lucide-react";
+
+import type { ConnectionItem, ConnectionProvider } from "./api";
 import type { Tone } from "./tone";
 
 /**
@@ -9,6 +11,11 @@ import type { Tone } from "./tone";
  * fixed code when a round trip ends badly - and it only ever turns that code
  * into one of the sentences below, never into text taken from the address.
  */
+
+export const PROVIDER_ICON: Record<ConnectionProvider, LucideIcon> = {
+  github: GitBranch,
+  google_drive: FolderOpen,
+};
 
 export const CONNECTION_STATUS: Record<ConnectionItem["status"], { label: string; tone: Tone }> = {
   active: { label: "Connected", tone: "live" },
