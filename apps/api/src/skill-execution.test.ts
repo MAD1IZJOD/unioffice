@@ -15,6 +15,8 @@ import type {
   WorkId,
 } from "@unioffice/core";
 
+import { skillRefOf } from "@unioffice/core";
+
 import type { PlanningContext } from "@unioffice/orchestrator";
 import { systemSkills } from "@unioffice/skills";
 import { createDefaultToolRegistry } from "@unioffice/tools";
@@ -80,8 +82,11 @@ function governance(policies: Policy[] = []) {
   );
 }
 
-const effective = (skills: Skill[]) => ({
+const effective = (skills: Skill[], recorded: Skill[] = []) => ({
   async effective() { return new Map(skills.map((skill) => [skill.slug, skill])); },
+  async pinned(_organizationId: unknown, ref: string, version: number) {
+    return recorded.find((skill) => skillRefOf(skill) === ref && skill.version === version) ?? null;
+  },
 });
 
 test("a skill that needs approval holds its steps, a policy cannot lower that, and a deny still wins", async () => {
@@ -121,7 +126,7 @@ test("a skill's approval is decided by an owner or admin", () => {
   assert.equal(isGovernedByPolicy(approval), true);
 });
 
-function executionHarness(skills: Skill[]) {
+function executionHarness(skills: Skill[], recorded: Skill[] = []) {
   const tasks = new Map<TaskId, Task>();
   let handed: Parameters<ConstructorParameters<typeof TaskExecutionService>[4]["execute"]>[0] | undefined;
   let recalls = 0;
@@ -146,24 +151,62 @@ function executionHarness(skills: Skill[]) {
       recall: { async recallForStep() { recalls += 1; return { items: [] } as never; } },
       capture: { async captureFromTask() { return undefined as never; } },
     },
-    effective(skills),
+    effective(skills, recorded),
   );
 
   return { service, tasks, handed: () => handed, recalls: () => recalls };
 }
 
-test("a step runs with the skill as it is now, and without recall when the skill says so", async () => {
+test("a step runs the version it was planned around, not the one published since", async () => {
   const base = systemSkills().find((skill) => skill.slug === "candidate-screening")!;
-  const edited = { ...base, version: 4, instructions: "The current procedure." };
-  const harness = executionHarness([edited]);
+  const asPlanned = { ...base, version: 1, instructions: "The procedure this mission was planned around." };
+  const published = { ...base, version: 4, instructions: "The procedure as rewritten last week." };
+  const harness = executionHarness([published], [asPlanned]);
 
-  harness.tasks.set("task-1" as TaskId, step({ slug: "candidate-screening", name: base.name, version: 1, scope: "system", approval: "required", memory: "none" }));
+  harness.tasks.set("task-1" as TaskId, step({
+    ref: "system:candidate-screening",
+    slug: "candidate-screening",
+    name: base.name,
+    version: 1,
+    scope: "system",
+    approval: "required",
+    memory: "none",
+  }));
   const result = await harness.service.executeTask("task-1" as TaskId);
 
-  assert.equal(harness.handed()?.task.skill?.version, 4);
-  assert.equal(harness.handed()?.task.skill?.instructions, "The current procedure.");
+  assert.equal(harness.handed()?.task.skill?.version, 1);
+  assert.equal(harness.handed()?.task.skill?.instructions, "The procedure this mission was planned around.");
   assert.equal(harness.recalls(), 0, "memory: none skips recall");
-  assert.deepEqual((result.metadata.execution as { skill: unknown }).skill, { slug: "candidate-screening", version: 4, scope: "system" });
+  assert.deepEqual((result.metadata.execution as { skill: unknown }).skill, {
+    ref: "system:candidate-screening",
+    slug: "candidate-screening",
+    version: 1,
+    scope: "system",
+  });
+});
+
+test("a step runs the live skill when it is still the version that was pinned", async () => {
+  const base = systemSkills().find((skill) => skill.slug === "candidate-screening")!;
+  const harness = executionHarness([{ ...base, version: 2, instructions: "Unchanged since planning." }]);
+
+  harness.tasks.set("task-1" as TaskId, step({ slug: "candidate-screening", name: base.name, version: 2, scope: "system", approval: "none", memory: "none" }));
+  await harness.service.executeTask("task-1" as TaskId);
+
+  assert.equal(harness.handed()?.task.skill?.instructions, "Unchanged since planning.");
+});
+
+test("a pinned version nobody kept is not swapped for a different one", async () => {
+  const base = systemSkills().find((skill) => skill.slug === "candidate-screening")!;
+  const harness = executionHarness([{ ...base, version: 4, instructions: "A rewritten procedure." }]);
+
+  harness.tasks.set("task-1" as TaskId, step({ slug: "candidate-screening", name: base.name, version: 1, scope: "system", approval: "none", memory: "none" }));
+  const result = await harness.service.executeTask("task-1" as TaskId);
+
+  assert.equal(harness.handed()?.task.skill, undefined, "a different version is never quietly substituted");
+  assert.match(
+    (result.metadata.execution as { skillNote: string }).skillNote,
+    /version 1, which this step was planned around, is no longer on record/,
+  );
 });
 
 test("a skill that no longer resolves is not used, and recall happens as usual", async () => {

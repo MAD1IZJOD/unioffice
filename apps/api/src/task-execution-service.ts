@@ -3,6 +3,8 @@ import type {
   Artifact,
   Skill,
   ArtifactId,
+  OrganizationId,
+  SkillRef,
   Task,
   TaskId,
   Work,
@@ -10,6 +12,7 @@ import type {
 
 import {
   createEntityId,
+  skillRefOf,
 } from "@unioffice/core";
 
 import type {
@@ -77,8 +80,13 @@ export class TaskExecutionService {
     private readonly knowledge?:
       TaskKnowledge,
 
-    /** Resolves the skill a step follows at the moment it runs. */
-    private readonly skills?: { effective(organizationId: Work["organizationId"], workspaceId?: Work["workspaceId"]): Promise<Map<string, Skill>> },
+    /** Loads the skill a step pinned when it was planned. */
+    private readonly skills?: {
+      effective(organizationId: Work["organizationId"], workspaceId?: Work["workspaceId"]): Promise<Map<string, Skill>>;
+
+      /** The exact version a step pinned, as it was written then. */
+      pinned?(organizationId: OrganizationId, ref: SkillRef, version: number): Promise<Skill | null>;
+    },
   ) {}
 
   async executeTask(
@@ -177,10 +185,11 @@ export class TaskExecutionService {
     });
 
     try {
-      // The skill is resolved now rather than trusted from planning, so an
-      // edit or an archive since then is honoured. If it no longer resolves
-      // the step runs without a procedure; it never runs with a stale one.
-      const skill = await this.skillFor(work, runningTask);
+      // The step runs the version of the skill it pinned when it was planned,
+      // not whatever the skill says today. A skill that has since been
+      // archived is not run at all, and the step says so rather than quietly
+      // going ahead without the procedure it was planned around.
+      const { skill, note: skillNote } = await this.skillFor(work, runningTask);
 
       const knowledge = skill?.memory === "none"
         ? []
@@ -273,7 +282,10 @@ export class TaskExecutionService {
             toolCalls: result.toolCalls,
             // Where outside information came from, by reference only.
             ...(externalSources.length > 0 ? { externalSources } : {}),
-            ...(skill ? { skill: { slug: skill.slug, version: skill.version, scope: skill.scope } } : {}),
+            ...(skill
+              ? { skill: { ref: skillRefOf(skill), slug: skill.slug, version: skill.version, scope: skill.scope } }
+              : {}),
+            ...(skillNote ? { skillNote } : {}),
           },
           // Which knowledge this step was handed, by reference. The full
           // record of why lives on the recall rows; this is what lets a step
@@ -383,15 +395,50 @@ export class TaskExecutionService {
     }
   }
 
-  private async skillFor(work: Work, task: Task): Promise<Skill | undefined> {
-    const routing = task.metadata.routing as { skill?: { slug?: unknown } } | undefined;
-    const slug = routing?.skill?.slug;
+  /**
+   * The skill this step pinned, exactly as it was written then.
+   *
+   * The version is settled at planning and never moves: publishing a new
+   * version of a skill changes what later missions do, not what this one is
+   * part way through. The skill still has to be live - one that has been
+   * archived or replaced since is not run, and the step carries the reason.
+   */
+  private async skillFor(work: Work, task: Task): Promise<{ skill?: Skill; note?: string }> {
+    const routing = task.metadata.routing as
+      | { skill?: { ref?: unknown; slug?: unknown; name?: unknown; version?: unknown } }
+      | undefined;
+    const pin = routing?.skill;
+    const slug = typeof pin?.slug === "string" ? pin.slug : undefined;
 
-    if (!this.skills || typeof slug !== "string") {
-      return undefined;
+    if (!this.skills || !slug) {
+      return {};
     }
 
-    return (await this.skills.effective(work.organizationId, work.workspaceId)).get(slug);
+    const name = typeof pin?.name === "string" ? pin.name : slug;
+    const live = (await this.skills.effective(work.organizationId, work.workspaceId)).get(slug);
+
+    if (!live) {
+      return { note: `${name} is no longer available here, so this step ran without it.` };
+    }
+
+    const version = typeof pin?.version === "number" ? pin.version : undefined;
+
+    if (version === undefined || version === live.version) {
+      return { skill: live };
+    }
+
+    const ref = typeof pin?.ref === "string" ? pin.ref : skillRefOf(live);
+    const pinned = this.skills.pinned
+      ? await this.skills.pinned(work.organizationId, ref, version)
+      : null;
+
+    if (pinned) {
+      return { skill: pinned };
+    }
+
+    return {
+      note: `${name} version ${version}, which this step was planned around, is no longer on record, so this step ran without it.`,
+    };
   }
 
   private async recallKnowledge(
