@@ -126,6 +126,23 @@ export interface Skill {
   updatedAt: Date;
 }
 
+/**
+ * How a step names a skill for all time.
+ *
+ * A stored skill is referenced by its id; a system skill lives in code rather
+ * than in a table, so it is referenced as system:<slug>. Together with a
+ * version this identifies exactly one immutable definition.
+ */
+export type SkillRef = string;
+
+export function skillRefOf(skill: Pick<Skill, "id" | "scope" | "slug">): SkillRef {
+  return skill.scope === "system" ? `system:${skill.slug}` : skill.id;
+}
+
+export function isSystemSkillRef(ref: SkillRef): boolean {
+  return ref.startsWith("system:");
+}
+
 export const SKILL_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function isSkillSlug(value: unknown): value is string {
