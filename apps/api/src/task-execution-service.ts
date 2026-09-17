@@ -12,6 +12,7 @@ import type {
 
 import {
   createEntityId,
+  hashProposedAction,
   skillRefOf,
 } from "@unioffice/core";
 
@@ -34,6 +35,8 @@ import type {
 import {
   agentToDefinition,
 } from "./agent-definition.js";
+
+import { describeAction } from "./approvals/proposal-builder.js";
 
 import type {
   EventRecorder,
@@ -87,6 +90,9 @@ export class TaskExecutionService {
       /** The exact version a step pinned, as it was written then. */
       pinned?(organizationId: OrganizationId, ref: SkillRef, version: number): Promise<Skill | null>;
     },
+
+    /** Tool ids as people know them, for what an approval says. */
+    private readonly toolName?: (toolId: string) => string,
   ) {}
 
   async executeTask(
@@ -154,6 +160,16 @@ export class TaskExecutionService {
       throw new Error(
         `Agent does not belong to the work's organization: ${agent.id}`,
       );
+    }
+
+    // An approval was granted against one concrete action. If the step no
+    // longer describes that action - a different agent, a different skill or
+    // version, different tools - the decision does not cover what would
+    // happen now, and the step stops here rather than running on it.
+    const drifted = approvalDrift({ work, task, agent, toolName: this.toolName });
+
+    if (drifted) {
+      return this.stopForNewApproval(work, task, agent, drifted);
     }
 
     const startedAt = new Date();
@@ -393,6 +409,53 @@ export class TaskExecutionService {
 
       return persistedTask;
     }
+  }
+
+  /**
+   * Puts a step that has changed since it was approved back in front of a
+   * person.
+   *
+   * The old decision is kept, marked as no longer covering what the step
+   * would do, and the step goes back to pending: the gate raises a fresh
+   * approval against the action as it now stands. Nothing runs in between.
+   */
+  private async stopForNewApproval(
+    work: Work,
+    task: Task,
+    agent: Agent,
+    reason: string,
+  ): Promise<Task> {
+    const now = new Date();
+    const approval = task.metadata.approval as Record<string, unknown>;
+
+    const held = await this.taskRepository.update({
+      ...task,
+      status: "pending",
+      updatedAt: now,
+      metadata: {
+        ...task.metadata,
+        approval: {
+          ...approval,
+          status: "superseded",
+          required: true,
+          supersededAt: now.toISOString(),
+          supersededReason: reason,
+          proposalId: undefined,
+          proposalHash: undefined,
+        },
+      },
+    });
+
+    await this.eventRecorder.record({
+      organizationId: work.organizationId,
+      workId: work.id,
+      taskId: task.id,
+      agentId: agent.id,
+      type: "approval.superseded",
+      payload: { title: task.title, reason },
+    });
+
+    return held;
   }
 
   /**
@@ -682,4 +745,34 @@ function requiredToolsFromTask(task: Task): string[] {
   return Array.isArray(requiredTools)
     ? requiredTools.filter((tool): tool is string => typeof tool === "string")
     : [];
+}
+
+/**
+ * Whether the step still describes the action that was approved.
+ *
+ * Returns nothing when there is nothing to check - no approval, or an
+ * approval raised before proposals were recorded - and otherwise the sentence
+ * a person should read when it no longer matches.
+ */
+function approvalDrift(input: {
+  work: Work;
+  task: Task;
+  agent: Agent;
+  toolName?: (toolId: string) => string;
+}): string | undefined {
+  const approval = input.task.metadata.approval as
+    | { status?: unknown; proposalHash?: unknown }
+    | undefined;
+
+  if (approval?.status !== "approved" || typeof approval.proposalHash !== "string") {
+    return undefined;
+  }
+
+  const { summary, action } = describeAction(input);
+
+  if (hashProposedAction(action) === approval.proposalHash) {
+    return undefined;
+  }
+
+  return `What this step would do has changed since it was approved. It now reads: ${summary} It needs approving again.`;
 }

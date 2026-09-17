@@ -36,6 +36,9 @@ export type EventType =
   | "approval.requested"
   | "approval.approved"
   | "approval.rejected"
+  // A step that changed after it was approved. The decision that was given
+  // no longer covers what would happen, so it is put back to a person.
+  | "approval.superseded"
   | "artifact.created"
   | "artifact.updated"
   | "tool.called"

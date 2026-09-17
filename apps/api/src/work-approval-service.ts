@@ -1,5 +1,10 @@
 import {
   createEntityId,
+  hashProposedAction,
+  type ActionProposal,
+  type ActionProposalId,
+  type Agent,
+  type AgentId,
   type ApprovalId,
   type ApprovalRequest,
   type OrganizationId,
@@ -9,11 +14,13 @@ import {
 } from "@unioffice/core";
 
 import type {
+  ActionProposalRepository,
   ApprovalRepository,
   TaskRepository,
   WorkRepository,
 } from "@unioffice/database";
 
+import { describeAction } from "./approvals/proposal-builder.js";
 import type { EventRecorder } from "./event-recorder.js";
 
 export interface ApprovalCoordinator {
@@ -41,6 +48,15 @@ export class WorkApprovalService implements ApprovalCoordinator {
     private readonly taskRepository: TaskRepository,
     private readonly workRepository: WorkRepository,
     private readonly eventRecorder: EventRecorder,
+    /**
+     * Where the proposal an approval is granted against is kept. Absent, an
+     * approval is raised the way it was before proposals existed.
+     */
+    private readonly proposals?: ActionProposalRepository,
+    /** The agent the step is assigned to, so the proposal can name them. */
+    private readonly agents?: { findById(id: AgentId): Promise<Agent | null> },
+    /** Tool ids as people know them. */
+    private readonly toolName?: (toolId: string) => string,
   ) {}
 
   async requestApproval(work: Work, task: Task): Promise<Task> {
@@ -54,18 +70,28 @@ export class WorkApprovalService implements ApprovalCoordinator {
     }
 
     const now = new Date();
+
+    // What this step would do, as it stands, written down before anyone is
+    // asked about it. The approval is granted against this and nothing else:
+    // if the step later describes differently, that is a different action and
+    // this decision does not cover it.
+    const proposal = await this.propose(work, task, now);
+
     const request = await this.approvalRepository.create({
       id: createEntityId<"ApprovalId">() as ApprovalId,
       organizationId: work.organizationId,
       workId: work.id,
       taskId: task.id,
       agentId: task.assignedAgentId,
-      action: task.title,
-      resource: `task:${task.id}`,
+      action: proposal?.summary ?? task.title,
+      resource: proposal ? `proposal:${proposal.id}` : `task:${task.id}`,
       reason: approval.reason ?? "Human approval is required before this task can execute.",
       status: "pending",
       createdAt: now,
-      metadata: governingPolicy(approval),
+      metadata: {
+        ...governingPolicy(approval),
+        ...(proposal ? { proposalId: proposal.id, proposalHash: proposal.hash } : {}),
+      },
     });
 
     const waitingTask = await this.taskRepository.update({
@@ -80,6 +106,7 @@ export class WorkApprovalService implements ApprovalCoordinator {
           requestId: request.id,
           status: "pending",
           requestedAt: now.toISOString(),
+          ...(proposal ? { proposalId: proposal.id, proposalHash: proposal.hash } : {}),
         },
       },
     });
@@ -98,6 +125,33 @@ export class WorkApprovalService implements ApprovalCoordinator {
     });
 
     return waitingTask;
+  }
+
+  /**
+   * Writes down what the step would do. Nothing here decides anything: it
+   * records the action so the decision can be about that action rather than
+   * about the step in the abstract.
+   */
+  private async propose(work: Work, task: Task, now: Date): Promise<ActionProposal | undefined> {
+    if (!this.proposals) return undefined;
+
+    const agent = task.assignedAgentId && this.agents
+      ? ((await this.agents.findById(task.assignedAgentId)) ?? undefined)
+      : undefined;
+
+    const { summary, action } = describeAction({ work, task, agent, toolName: this.toolName });
+
+    return this.proposals.create({
+      id: createEntityId<"ActionProposalId">() as ActionProposalId,
+      organizationId: work.organizationId,
+      workId: work.id,
+      taskId: task.id,
+      agentId: task.assignedAgentId,
+      summary,
+      action,
+      hash: hashProposedAction(action),
+      createdAt: now,
+    });
   }
 
   async getApproval(id: ApprovalId): Promise<ApprovalRequest> {

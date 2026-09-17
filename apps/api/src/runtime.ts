@@ -9,6 +9,7 @@ import {
   SupabaseApprovalRepository,
   SupabaseArtifactRepository,
   SupabaseConnectionRepository,
+  SupabaseActionProposalRepository,
   SupabaseSkillRepository,
   SupabaseSkillVersionRepository,
   SupabaseEventRepository,
@@ -103,6 +104,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const workspaceRepository = new SupabaseWorkspaceRepository(supabase);
   const membershipRepository = new SupabaseMembershipRepository(supabase);
   const connectionRepository = new SupabaseConnectionRepository(supabase);
+  const actionProposalRepository = new SupabaseActionProposalRepository(supabase);
   const skillRepository = new SupabaseSkillRepository(supabase);
   const skillVersionRepository = new SupabaseSkillVersionRepository(supabase);
 
@@ -139,6 +141,10 @@ export function createExecutionRuntime(config: ApiConfig) {
   ]) {
     toolRegistry.register(tool);
   }
+
+  // Tool ids as people know them, for the sentences an approval is read from.
+  const toolName = (toolId: string) =>
+    toolRegistry.list().find((tool) => tool.id === toolId)?.name ?? toolId;
 
   const connectionService = new ConnectionService({
     connections: connectionRepository,
@@ -284,6 +290,7 @@ export function createExecutionRuntime(config: ApiConfig) {
       capture: knowledgeCaptureService,
     },
     skillService,
+    toolName,
   );
 
   const workApprovalService = new WorkApprovalService(
@@ -291,6 +298,9 @@ export function createExecutionRuntime(config: ApiConfig) {
     taskRepository,
     workRepository,
     eventRecorder,
+    actionProposalRepository,
+    agentRepository,
+    toolName,
   );
 
   const taskGovernanceGate = new PolicyTaskGovernanceGate(
