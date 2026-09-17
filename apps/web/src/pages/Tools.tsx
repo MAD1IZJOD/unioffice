@@ -94,7 +94,7 @@ export default function Tools() {
         />
       ) : (
         <>
-          <div className="border-t border-[#161a21]">
+          <div className="border-t border-line-subtle">
             {tools.data!.map((tool) => {
               const usage = usageById.get(tool.id);
               const authorized = agentsByTool(tool.id);

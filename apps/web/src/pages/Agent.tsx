@@ -406,8 +406,8 @@ export default function Agent() {
                   className="presence-row"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[11.5px] text-[#f2f4f7]">{artifact.name}</span>
-                    <span className="mt-1 block truncate text-[10px] text-[#6f7887]">
+                    <span className="block truncate text-[11.5px] text-ink-primary">{artifact.name}</span>
+                    <span className="mt-1 block truncate text-[10px] text-ink-muted">
                       {artifact.type} · {formatRelativeTime(artifact.createdAt)}
                     </span>
                   </span>
@@ -430,11 +430,11 @@ export default function Agent() {
 
                   <span className="min-w-0 flex-1">
                     {event.missionId ? (
-                      <Link to={`/missions/${event.missionId}`} className="block truncate text-[11px] text-[#a7b0bd] hover:text-[#84b4fb]">
+                      <Link to={`/missions/${event.missionId}`} className="block truncate text-[11px] text-ink-secondary hover:text-blue-ink">
                         {event.summary}
                       </Link>
                     ) : (
-                      <span className="block truncate text-[11px] text-[#a7b0bd]">{event.summary}</span>
+                      <span className="block truncate text-[11px] text-ink-secondary">{event.summary}</span>
                     )}
                   </span>
 
@@ -454,8 +454,8 @@ function CurrentWork({ member }: { member: WorkforceMember }) {
     return (
       <Link to={`/missions/${member.current.missionId}`} className="presence-row mt-3">
         <span className="min-w-0 flex-1">
-          <span className="block text-[12px] font-semibold text-[#f2f4f7]">{member.current.taskTitle}</span>
-          <span className="mt-1 block truncate text-[10.5px] text-[#6f7887]">{member.current.missionName}</span>
+          <span className="block text-[12px] font-semibold text-ink-primary">{member.current.taskTitle}</span>
+          <span className="mt-1 block truncate text-[10.5px] text-ink-muted">{member.current.missionName}</span>
         </span>
 
         <StatusPill tone={member.current.state === "working" ? "active" : "warning"} pulse={member.current.state === "working"}>

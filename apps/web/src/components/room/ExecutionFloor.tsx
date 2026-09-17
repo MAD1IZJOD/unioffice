@@ -264,9 +264,9 @@ function ToolCalls({
       {calls.map((call, index) => (
         <div key={`${call.toolId}-${index}`} className="tool-call">
           <div className="flex flex-wrap items-center gap-2">
-            <Wrench size={12} className="text-[#84b4fb]" />
+            <Wrench size={12} className="text-blue-ink" />
 
-            <span className="mono text-[10.5px] font-semibold text-[#f2f4f7]">
+            <span className="mono text-[10.5px] font-semibold text-ink-primary">
               {toolNameOf(room, call.toolId)}
             </span>
 

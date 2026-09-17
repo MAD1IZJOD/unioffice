@@ -303,7 +303,7 @@ export default function Missions() {
 
                     {typeof mission.metadata.executionError === "string" &&
                       !mission.metadata.interrupted && (
-                        <span className="ledger-preview text-[#c9868a]">
+                        <span className="ledger-preview text-red-muted">
                           {mission.metadata.executionError}
                         </span>
                       )}

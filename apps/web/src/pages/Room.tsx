@@ -496,7 +496,7 @@ export default function Room() {
                 <div className="callout callout-warning">
                   <div className="detail-label mb-1.5">Interrupted</div>
                   {failure}
-                  <div className="mt-2 text-[10.5px] text-[#c9a06a]">
+                  <div className="mt-2 text-[10.5px] text-warning-muted">
                     The process stopped, not the mission. Finished steps were
                     kept and it resumes from the first one that did not finish.
                   </div>
@@ -604,7 +604,7 @@ export default function Room() {
                   <div key={approval.id} className="settled-decision">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[12.5px] font-semibold text-[#f2f4f7]">
+                        <div className="text-[12.5px] font-semibold text-ink-primary">
                           {approval.action}
                         </div>
                         {stepNamed(approval.resource) !== approval.action && (
@@ -621,7 +621,7 @@ export default function Room() {
                       </StatusPill>
                     </div>
 
-                    <p className="mt-3 text-[11.5px] leading-[1.7] text-[#a7b0bd]">
+                    <p className="mt-3 text-[11.5px] leading-[1.7] text-ink-secondary">
                       {approval.reason}
                     </p>
 
@@ -705,7 +705,7 @@ export default function Room() {
                             {entry.knowledge.workId && entry.knowledge.workId !== work.id && (
                               <>
                                 {" · "}
-                                <Link to={`/missions/${entry.knowledge.workId}`} className="hover:text-[#84b4fb]">
+                                <Link to={`/missions/${entry.knowledge.workId}`} className="hover:text-blue-ink">
                                   learned in an earlier mission
                                 </Link>
                               </>

@@ -168,7 +168,7 @@ export default function Workspace() {
           {workspace.description ? (
             <p className="place-description">{workspace.description}</p>
           ) : (
-            <p className="place-description text-[#535b68] italic">
+            <p className="place-description text-ink-faint italic">
               This workspace has no description yet.
             </p>
           )}
@@ -436,11 +436,11 @@ export default function Workspace() {
                     className="presence-row"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[11.5px] text-[#f2f4f7]">
+                      <span className="block truncate text-[11.5px] text-ink-primary">
                         {artifact.name}
                       </span>
                       {artifact.metadata.content !== undefined && (
-                        <span className="mt-1 block truncate text-[10px] text-[#6f7887]">
+                        <span className="mt-1 block truncate text-[10px] text-ink-muted">
                           {excerptOf(artifact.metadata.content, 90)}
                         </span>
                       )}
@@ -476,7 +476,7 @@ export default function Workspace() {
                       />
 
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11px] text-[#a7b0bd]">
+                        <span className="block truncate text-[11px] text-ink-secondary">
                           {described.title}
                         </span>
                       </span>

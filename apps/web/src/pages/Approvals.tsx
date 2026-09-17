@@ -132,14 +132,14 @@ export default function Approvals() {
           }
         />
       ) : (
-        <div className="divide-y divide-[#161a21] border-t border-[#161a21]">
+        <div className="divide-y divide-line-subtle border-t border-line-subtle">
           {pending.map((approval) => (
             <div key={approval.id} className="approval-row">
               <div className="approval-row-head">
                 <span className="approval-marker" aria-hidden="true" />
 
                 <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-semibold leading-snug tracking-[-0.018em] text-[#f2f4f7]">
+                  <div className="text-[15px] font-semibold leading-snug tracking-[-0.018em] text-ink-primary">
                     {approval.action}
                   </div>
 
@@ -154,14 +154,14 @@ export default function Approvals() {
               <dl className="approval-facts">
                 <div>
                   <dt className="t-eyebrow">Why it stopped</dt>
-                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-[#a7b0bd]">
+                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
                     {approval.reason}
                   </dd>
                 </div>
 
                 <div>
                   <dt className="t-eyebrow">If you approve</dt>
-                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-[#a7b0bd]">
+                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
                     The task goes onto the durable queue, a worker picks it up,
                     and everything depending on it continues.
                   </dd>
@@ -169,7 +169,7 @@ export default function Approvals() {
 
                 <div>
                   <dt className="t-eyebrow">If you reject</dt>
-                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-[#a7b0bd]">
+                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
                     The decision is recorded against the run and the task stays
                     unexecuted. Nothing is deleted.
                   </dd>
@@ -240,18 +240,18 @@ export default function Approvals() {
                   {decision.decision === "approve" ? "approved" : "rejected"}
                 </StatusPill>
 
-                <span className="mono truncate text-[10px] text-[#535b68]">
+                <span className="mono truncate text-[10px] text-ink-faint">
                   {id}
                 </span>
 
-                <span className="mono ml-auto text-[9px] text-[#3a4250]">
+                <span className="mono ml-auto text-[9px] text-ink-ghost">
                   {formatRelativeTime(decision.at)}
                 </span>
               </div>
             ))}
           </div>
 
-          <p className="mt-5 max-w-[62ch] text-[10.5px] leading-[1.7] text-[#535b68]">
+          <p className="mt-5 max-w-[62ch] text-[10.5px] leading-[1.7] text-ink-faint">
             Decisions are durable. This list is only what you did since the page
             loaded — the permanent record, including who resolved each one, is
             in Activity.

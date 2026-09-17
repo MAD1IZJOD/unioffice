@@ -14,6 +14,33 @@
 @import "./styles/connections.css";
 @import "./styles/workforce.css";
 
+/* The design tokens, as Tailwind utilities: text-ink-secondary, border-line,
+   bg-surface-2 and so on. Pages use these rather than raw hex values, so a
+   token change reaches every surface. */
+@theme inline {
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+  --color-line-subtle: var(--line-subtle);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink-primary: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-ink-ghost: var(--ink-ghost);
+  --color-blue: var(--blue);
+  --color-blue-ink: var(--blue-ink);
+  --color-red: var(--red);
+  --color-red-ink: var(--red-ink);
+  --color-red-muted: var(--red-muted);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-muted: var(--warning-muted);
+}
+
 :root {
   font-family: var(--font-sans);
 

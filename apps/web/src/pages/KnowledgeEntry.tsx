@@ -336,17 +336,17 @@ export default function KnowledgeEntry() {
               <div className="entry-label">History</div>
               {related.mergedInto && (
                 <p className="t-body">
-                  Merged into <Link to={`/brain/${related.mergedInto.id}`} className="text-[#84b4fb]">{related.mergedInto.title}</Link>, which says the same thing
+                  Merged into <Link to={`/brain/${related.mergedInto.id}`} className="text-blue-ink">{related.mergedInto.title}</Link>, which says the same thing
                 </p>
               )}
               {related.supersededBy && (
                 <p className="t-body">
-                  Superseded by <Link to={`/brain/${related.supersededBy.id}`} className="text-[#84b4fb]">{related.supersededBy.title}</Link>
+                  Superseded by <Link to={`/brain/${related.supersededBy.id}`} className="text-blue-ink">{related.supersededBy.title}</Link>
                 </p>
               )}
               {related.supersedes && (
                 <p className="t-body">
-                  Replaces <Link to={`/brain/${related.supersedes.id}`} className="text-[#84b4fb]">{related.supersedes.title}</Link>
+                  Replaces <Link to={`/brain/${related.supersedes.id}`} className="text-blue-ink">{related.supersedes.title}</Link>
                 </p>
               )}
             </section>

@@ -327,7 +327,7 @@ function Outcome({ item }: { item: MissionDebriefItem }) {
   return (
     <>
       {words}
-      <Link to={`/brain/${target.id}`} className="hover:text-[#84b4fb]">
+      <Link to={`/brain/${target.id}`} className="hover:text-blue-ink">
         “{target.title}”
       </Link>
     </>

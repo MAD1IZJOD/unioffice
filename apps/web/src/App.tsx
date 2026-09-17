@@ -215,7 +215,7 @@ function Navigation({
                       <entry.icon
                         size={14}
                         strokeWidth={1.9}
-                        className={isActive ? "text-[#84b4fb]" : "opacity-70"}
+                        className={isActive ? "text-blue-ink" : "opacity-70"}
                       />
 
                       <span>{entry.label}</span>
@@ -244,7 +244,7 @@ function UserCard() {
       <span className="user-avatar">{(email[0] ?? "?").toUpperCase()}</span>
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[11.5px] font-semibold text-[#a7b0bd]" title={email}>
+        <span className="block truncate text-[11.5px] font-semibold text-ink-secondary" title={email}>
           {email || "Signed in"}
         </span>
         {role && <span className="t-machine block">{role.toUpperCase()}</span>}
@@ -514,7 +514,7 @@ export default function App() {
             <div className="topbar-eyebrow">
               <span>{group}</span>
               <ChevronRight size={9} />
-              <span className="text-[#6f7887]">{title}</span>
+              <span className="text-ink-muted">{title}</span>
             </div>
 
             <h1 className="topbar-title truncate">{title}</h1>
@@ -593,8 +593,8 @@ export default function App() {
             className="command-palette"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center gap-3 border-b border-[#1e232b] px-4 py-3.5">
-              <Search size={15} className="text-[#84b4fb]" />
+            <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
+              <Search size={15} className="text-blue-ink" />
 
               <input
                 autoFocus
@@ -626,17 +626,17 @@ export default function App() {
                   }
                 }}
                 placeholder="Open a mission, find one, or go to a surface…"
-                className="min-w-0 flex-1 bg-transparent text-[13px] text-[#f2f4f7] outline-none placeholder:text-[#535b68]"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink-primary outline-none placeholder:text-ink-faint"
               />
 
-              <kbd className="rounded-sm border border-[#2a313c] px-1.5 py-0.5 font-mono text-[8px] text-[#535b68]">
+              <kbd className="rounded-sm border border-line-strong px-1.5 py-0.5 font-mono text-[8px] text-ink-faint">
                 ESC
               </kbd>
             </div>
 
             <div className="scroll-area max-h-[360px] p-1.5">
               {paletteResults.length === 0 ? (
-                <div className="px-2 py-6 text-center text-[11px] text-[#6f7887]">
+                <div className="px-2 py-6 text-center text-[11px] text-ink-muted">
                   Nothing matches “{paletteQuery}”.
                 </div>
               ) : (

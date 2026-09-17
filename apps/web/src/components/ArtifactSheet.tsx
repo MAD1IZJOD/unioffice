@@ -74,7 +74,7 @@ export function ArtifactSheet({
             <h2 className="sheet-title">{artifact.name}</h2>
 
             {artifact.description && (
-              <p className="mt-2.5 max-w-[62ch] text-[11.5px] leading-[1.7] text-[#a7b0bd]">
+              <p className="mt-2.5 max-w-[62ch] text-[11.5px] leading-[1.7] text-ink-secondary">
                 {artifact.description}
               </p>
             )}
@@ -116,7 +116,7 @@ export function ArtifactSheet({
                     {report.created.length} proposed — recalled as unverified leads until a person approves them.
                   </p>
                   {report.created.map((item) => (
-                    <Link key={item.id} to={`/brain/${item.id}`} className="block py-1 text-[#84b4fb]" onClick={onClose}>
+                    <Link key={item.id} to={`/brain/${item.id}`} className="block py-1 text-blue-ink" onClick={onClose}>
                       {item.title}
                     </Link>
                   ))}

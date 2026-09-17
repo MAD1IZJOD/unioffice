@@ -266,7 +266,7 @@ export default function Brain() {
             }}
           >
             <label className="brain-query-field">
-              <Search size={17} className="text-[#535b68]" />
+              <Search size={17} className="text-ink-faint" />
               <input
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -664,7 +664,7 @@ function Strata({
                   {item.workId && (
                     <>
                       {" · "}
-                      <Link to={`/missions/${item.workId}`} className="hover:text-[#84b4fb]">the mission</Link>
+                      <Link to={`/missions/${item.workId}`} className="hover:text-blue-ink">the mission</Link>
                     </>
                   )}
                 </div>
