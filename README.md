@@ -1,9 +1,12 @@
-# UNIOFFICE 2.0
+# UNIOFFICE 2.1
 
 An AI-native operating system for companies: you give the company an
-objective, it plans the work, routes each step to the agent that holds the
-right skills and tools, executes it under governance, keeps what it learns, and
-stops for a person wherever a person is required.
+objective, it plans the work, decides which of the company's own procedures
+each step follows, routes it to an agent that holds that skill and the tools it
+needs, executes it under governance against the exact version it was planned
+around, keeps what it learns, and stops for a person wherever a person is
+required - on a written-down proposal they can read, not on a step in the
+abstract.
 
 Documentation lives in [`docs/`](docs/architecture/README.md): the
 [system overview](docs/architecture/system-overview.md),

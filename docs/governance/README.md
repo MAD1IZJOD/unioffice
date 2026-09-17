@@ -34,12 +34,30 @@ once in its step, and only for the tool the approval named.
 
 ## Approvals
 
-Every pending approval is served with a briefing (`GET /approvals`): what is
-being approved, why it stopped (policy, skill, external write or the planner's
-judgement), which agent is waiting, the tools involved, the risk, what approving
+An approval is granted against one concrete action, not against a step in
+general.
+
+Before anyone is asked, the server writes down what would happen - the agent,
+the skill and the exact version the step is pinned to, every tool it is
+authorized to use, which of those write to systems outside the company, and the
+mission - as a row in `action_proposals`, with a sha-256 fingerprint of those
+fields. The approval points at that proposal by id and carries its fingerprint.
+A proposal is never edited; a changed action is a new proposal.
+
+Before the step runs, the action is described again from the step as it then
+stands. If the fingerprint differs, the decision does not cover what would
+happen now: nothing runs, the approval is marked superseded,
+`approval.superseded` is recorded, and a fresh approval is raised against the
+action as it now stands.
+
+Every pending approval is served with a briefing (`GET /approvals`): the
+proposal's own sentence for what would happen, the skill and version behind it,
+why it stopped (policy, skill, external write or the planner's judgement),
+which agent is waiting, the tools the proposal covers, the risk, what approving
 and rejecting each do, who may decide, and whether the caller may. The last is
 computed with the same rule that refuses a decision, so the interface never
-re-derives authorization.
+re-derives authorization. Nothing of the agent's instructions, the model's
+reasoning or any credential appears in it.
 
 | Approval raised by | Who may decide |
 | --- | --- |

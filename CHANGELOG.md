@@ -1,5 +1,64 @@
 # Changelog
 
+## 2.1 - The intelligence layer
+
+Skills stop being something a model may or may not remember to use, and become
+the thing the server decides, pins and can explain.
+
+### Skill resolution
+
+- Which skill a step follows is settled on the server by a deterministic
+  ranking over the skills that apply and the agents that could take the step
+  (`packages/skills/src/resolver.ts`). The planner's answer is one signal among
+  several, worth 200 points; a person naming a skill is worth 1000; what the
+  step says it needs, the words it uses and the skill's own category and
+  description make up the rest. The same inputs always give the same answer.
+- A skill is only a candidate when an agent holds it and already has every tool
+  and capability it needs. Nothing can invent a skill, a scope, an owner, a
+  tool grant or a capability.
+- Every selection carries its reasons in a person's words, recorded on the step
+  and shown in the execution room. When no skill was chosen, the step says why.
+- A planner suggestion no longer changes a step's requirements by itself; the
+  skill the server chooses does.
+
+### Version pinning
+
+- Every published version of a skill is kept, unchanged, in `skill_versions`.
+  System skills are recorded the first time an organization pins one.
+- A step runs the version it was planned around. Publishing a new version
+  changes what later missions do, not what a mission is part way through.
+- A pinned version that is no longer on record is never swapped for a different
+  one, and a skill archived since planning is not run.
+- A step that its agent can no longer follow says which tool or capability is
+  missing, by name.
+
+### Approvals
+
+- An approval is granted against a **proposal**: the agent, the skill and its
+  pinned version, the tools, the external writes and the mission, written down
+  in `action_proposals` before anyone is asked, with a sha-256 fingerprint.
+- The approval points at that proposal and shows the sentence it produced, so
+  a decision is about one concrete action rather than about a step in general.
+- If the action changes before the step runs, the decision no longer covers it:
+  nothing runs, `approval.superseded` is recorded, and a fresh approval is
+  raised against the action as it now stands.
+
+### Surfaces
+
+- The execution room shows the skill a step followed, the version it was pinned
+  to, the reasons it was chosen, and the version that actually ran.
+- The approvals page leads with what is being approved, and says the decision
+  is bound to it.
+- The skills catalogue says which skills the workforce can actually use, and
+  filters by that: "Ledger can run it" rather than "held by Ledger".
+
+### Performance
+
+- The browser is shipped only the Supabase auth client rather than the whole
+  SDK, since signing in is all it does with Supabase. The main bundle falls
+  from 835 kB to 720 kB (241 kB to 209 kB gzipped).
+
+
 ## 2.0 - UNIOFFICE 2.0
 
 UNIOFFICE becomes an operating system with a workforce that knows how to do
