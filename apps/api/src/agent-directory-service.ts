@@ -49,6 +49,13 @@ export interface UpdateAgentInput {
   /** null clears the assignment; undefined leaves it alone. */
   workspaceId?: WorkspaceId | null;
   status?: AgentStatus;
+  /** Skill slugs, replacing the current set. undefined leaves them alone. */
+  skills?: string[];
+}
+
+/** Checks skills against the agent as it will be once the change is saved. */
+export interface SkillAssignmentCheck {
+  checkAssignment(agent: Agent, slugs: string[]): Promise<void>;
 }
 
 /**
@@ -67,6 +74,7 @@ export class AgentDirectoryService {
     private readonly workspaceRepository: WorkspaceRepository,
     private readonly toolRegistry: ToolRegistry,
     private readonly eventRecorder: EventRecorder,
+    private readonly skillAssignments?: SkillAssignmentCheck,
   ) {}
 
   async getAgent(
@@ -201,11 +209,31 @@ export class AgentDirectoryService {
       }
     }
 
+    const skills = input.skills === undefined
+      ? current.skills
+      : [...new Set(input.skills.map((slug) => slug.trim()))];
+
+    // Checked against the agent as it will be after this change, so removing
+    // a tool and assigning a skill that needs it in the same request fails
+    // rather than slipping through. Existing assignments are re-checked only
+    // when they are part of the change.
+    if (input.skills !== undefined) {
+      if (!this.skillAssignments) {
+        throw new AgentValidationError("Skills cannot be assigned on this server.");
+      }
+
+      await this.skillAssignments.checkAssignment(
+        { ...current, capabilities, toolIds, workspaceId, skills },
+        skills ?? [],
+      );
+    }
+
     const updated = await this.agentRepository.update({
       ...current,
       description,
       capabilities,
       toolIds,
+      skills,
       status,
       workspaceId,
       updatedAt: new Date(),
@@ -231,6 +259,7 @@ export class AgentDirectoryService {
         status: updated.status,
         capabilities: updated.capabilities,
         toolIds: updated.toolIds,
+        skills: updated.skills ?? [],
         workspaceId: updated.workspaceId,
       },
     });
