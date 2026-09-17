@@ -316,11 +316,11 @@ export class WorkApprovalService implements ApprovalCoordinator {
  * the request fall back to the task, which has always carried it.
  */
 export function isGovernedByPolicy(approval: ApprovalRequest, task?: Task | null): boolean {
-  if (typeof approval.metadata.policyId === "string" || hasExternalWrites(approval.metadata)) return true;
+  if (typeof approval.metadata.policyId === "string" || hasExternalWrites(approval.metadata) || typeof approval.metadata.skill === "string") return true;
   if (!task) return false;
 
   const metadata = approvalMetadata(task);
-  return typeof metadata.policyId === "string" || hasExternalWrites(metadata);
+  return typeof metadata.policyId === "string" || hasExternalWrites(metadata) || typeof metadata.skill === "string";
 }
 
 /**
@@ -338,10 +338,15 @@ function governingPolicy(approval: Record<string, unknown>): Record<string, unkn
     ? { externalWrites: (approval.externalWrites as unknown[]).filter((entry): entry is string => typeof entry === "string") }
     : {};
 
-  if (typeof approval.policyId !== "string") return externalWrites;
+  // A skill that requires approval is company configuration, like a policy,
+  // so it is decided with the same authority.
+  const skill = typeof approval.skill === "string" ? { skill: approval.skill } : {};
+
+  if (typeof approval.policyId !== "string") return { ...externalWrites, ...skill };
 
   return {
     ...externalWrites,
+    ...skill,
     policyId: approval.policyId,
     ...(typeof approval.policyName === "string" ? { policyName: approval.policyName } : {}),
     ...(typeof approval.risk === "string" ? { risk: approval.risk } : {}),

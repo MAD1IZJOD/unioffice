@@ -27,6 +27,8 @@ export interface TaskGovernanceOutcome {
   approvalPrompt?: string;
   /** External write tools the step needs; approving the step allows exactly these. */
   externalWrites?: string[];
+  /** The skill whose own setting requires this approval, when that is why. */
+  skill?: string;
 }
 
 /**
@@ -87,6 +89,9 @@ export class PolicyTaskGovernanceGate implements TaskGovernanceGate {
       policyName: decision.decidingPolicyName,
       approvalPrompt: decision.approvalPrompt,
       externalWrites: this.governance.externalWritesFor(task),
+      skill: this.governance.skillOf(task)?.approval === "required"
+        ? this.governance.skillOf(task)?.name
+        : undefined,
     };
   }
 }

@@ -149,7 +149,50 @@ export class GovernanceService {
       policies,
     );
 
-    return this.withExternalWriteFloor(decision, task);
+    return this.withSkillFloor(this.withExternalWriteFloor(decision, task), task);
+  }
+
+  /** The skill a step follows, as the server recorded it when routing. */
+  skillOf(task: Task): { slug: string; name: string; approval: string } | undefined {
+    const routing = task.metadata.routing;
+    const skill = typeof routing === "object" && routing !== null
+      ? (routing as { skill?: unknown }).skill
+      : undefined;
+
+    if (typeof skill !== "object" || skill === null) return undefined;
+
+    const { slug, name, approval } = skill as Record<string, unknown>;
+    return typeof slug === "string" && typeof name === "string" && typeof approval === "string"
+      ? { slug, name, approval }
+      : undefined;
+  }
+
+  /**
+   * A skill that requires approval holds every step that follows it.
+   *
+   * Like the external-write floor, a policy cannot lower it and a deny still
+   * wins. A skill can only ever add this requirement - there is no setting on
+   * a skill that removes an approval something else asked for.
+   */
+  private withSkillFloor(decision: GovernanceDecision, task: Task): GovernanceDecision {
+    const skill = this.skillOf(task);
+
+    if (!skill || skill.approval !== "required" || decision.outcome === "deny") {
+      return decision;
+    }
+
+    const alreadyRequired = decision.outcome === "require_approval";
+
+    return {
+      ...decision,
+      outcome: "require_approval",
+      risk: highestRisk(decision.risk, "medium"),
+      summary: alreadyRequired
+        ? decision.summary
+        : `“${task.title}” follows the ${skill.name} skill, which needs a person to approve each step.`,
+      approvalPrompt: decision.approvalPrompt ??
+        `This step follows the ${skill.name} skill, which the company set to need approval every time. Approve only if it should go ahead.`,
+    };
   }
 
   /**

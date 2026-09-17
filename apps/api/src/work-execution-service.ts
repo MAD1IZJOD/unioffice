@@ -477,6 +477,7 @@ function withGovernanceReason(
     policyName?: string;
     approvalPrompt?: string;
     externalWrites?: string[];
+    skill?: string;
   },
 ): Task {
   const existing =
@@ -501,6 +502,7 @@ function withGovernanceReason(
         required: true,
         reason: decision.approvalPrompt ?? decision.summary,
         ...(decision.externalWrites?.length ? { externalWrites: decision.externalWrites } : {}),
+        ...(decision.skill ? { skill: decision.skill } : {}),
         policyId: decision.policyId,
         policyName: decision.policyName,
         risk: decision.risk,
