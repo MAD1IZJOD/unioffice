@@ -254,3 +254,41 @@ test("breaks an otherwise equal ranking by agent id", async () => {
   const result = await delegator.delegate(context({ availableAgentIds: [laterId, earlierId] }));
   assert.equal(result.agentId, earlierId);
 });
+
+test("a step that follows a skill goes only to an agent assigned that skill", async () => {
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { capabilities: ["financial_analysis"], toolIds: ["calculator"] }),
+    agent(forgeId, "active", { toolIds: ["calculator"], skills: ["financial-analysis"] }),
+  ]));
+
+  const base = context({ requiredCapabilities: ["financial_analysis"], requiredTools: ["calculator"] });
+  const result = await delegator.delegate({ ...base, task: { ...base.task, skill: "financial-analysis" } });
+
+  // atlas matches the capability better, but only forge holds the skill.
+  assert.equal(result.agentId, forgeId);
+  assert.equal(result.metadata.skill, "financial-analysis");
+  assert.equal(result.metadata.skillDropped, undefined);
+});
+
+test("a skill never gets a step past a missing tool grant", async () => {
+  const delegator = new DefaultDelegator(repository([
+    agent(forgeId, "active", { toolIds: [], skills: ["financial-analysis"] }),
+  ]));
+
+  const base = context({ requiredTools: ["calculator"], availableAgentIds: [forgeId] });
+
+  await assert.rejects(
+    delegator.delegate({ ...base, task: { ...base.task, skill: "financial-analysis" } }),
+    /authorized for the required tool/,
+  );
+});
+
+test("when nobody eligible holds the skill, the step is routed without it and says so", async () => {
+  const delegator = new DefaultDelegator(repository([agent(atlasId), agent(forgeId)]));
+  const base = context();
+
+  const result = await delegator.delegate({ ...base, task: { ...base.task, skill: "code-review" } });
+
+  assert.equal(result.metadata.skill, undefined);
+  assert.equal(result.metadata.skillDropped, "code-review");
+});

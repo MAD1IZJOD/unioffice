@@ -42,13 +42,29 @@ export class DefaultDelegator implements Delegator {
     // both), and treating that as a filter failed the entire objective rather
     // than routing to the closest-matching agent. Capabilities therefore rank
     // candidates below, and a partial match is reported rather than rejected.
-    const eligibleAgents = agents.filter(
+    const toolEligible = agents.filter(
       (agent) =>
         availableAgentIds.has(agent.id) &&
         agent.status === "active" &&
         isWorkspaceCompatible(agent, context.workspaceId) &&
         hasTools(agent, requiredTools),
     );
+
+    // A skill is a hard boundary like a tool: a step that follows one goes
+    // only to an agent the skill was assigned to. The one exception keeps a
+    // mission alive rather than failing it outright - when no eligible agent
+    // holds the skill, the step is routed without it, and the record says so.
+    // Its procedure is then not used and its approval floor does not apply
+    // on its account; tool, workspace and governance boundaries still do.
+    const skill = context.task.skill;
+    const skillHolders = skill
+      ? toolEligible.filter((agent) => (agent.skills ?? []).includes(skill))
+      : [];
+    const skillApplied = skill !== undefined && skillHolders.length > 0;
+    const eligibleAgents = skillApplied ? skillHolders : toolEligible;
+    const skillMetadata = skill
+      ? { skill: skillApplied ? skill : undefined, skillDropped: skillApplied ? undefined : skill }
+      : {};
 
     if (context.task.assignedAgentId) {
       const assignedAgent = eligibleAgents.find(
@@ -72,6 +88,7 @@ export class DefaultDelegator implements Delegator {
         taskId: context.task.id,
         agentId: assignedAgent.id,
         metadata: {
+          ...skillMetadata,
           delegation: "explicit",
           selectionReason:
             "The planner explicitly assigned this active, compatible agent.",
@@ -102,6 +119,7 @@ export class DefaultDelegator implements Delegator {
       taskId: context.task.id,
       agentId: candidate.agent.id,
       metadata: {
+        ...skillMetadata,
         delegation: "capability_ranked",
         selectionReason: this.selectionReason(
           candidate.score,
