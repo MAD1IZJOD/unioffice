@@ -16,13 +16,13 @@
   border: 1px solid var(--warning-line);
   border-radius: var(--radius-sm);
   background: var(--warning-soft);
-  color: #fcd34d;
+  color: var(--warning-ink);
   font-size: 11px;
   text-decoration: none;
 }
 
 .operation-debrief:hover {
-  color: #fde68a;
+  color: var(--warning-ink);
 }
 
 .debrief-summary {
@@ -36,7 +36,7 @@
 }
 
 .debrief-summary-open {
-  color: #fcd34d;
+  color: var(--warning-ink);
 }
 
 .debrief-item {

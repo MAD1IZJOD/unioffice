@@ -270,7 +270,7 @@
 }
 
 .delivery-body .prose-result {
-  color: #dbe6f1;
+  color: var(--ink-primary);
   font-size: 13px;
   line-height: 1.8;
 }

@@ -15,7 +15,7 @@
 }
 
 .control-freshness-stale {
-  color: #fcd34d;
+  color: var(--warning-ink);
 }
 
 .control-launch {
@@ -187,7 +187,7 @@
 }
 
 .mission-row-failure {
-  color: #c9868a;
+  color: var(--red-muted);
 }
 
 .mission-row-team {
@@ -235,7 +235,7 @@
 }
 
 .team-chip-link:hover {
-  color: #84b4fb;
+  color: var(--blue-ink);
 }
 
 .mission-row-latest {
@@ -303,7 +303,7 @@ a.outcome-text:hover {
 }
 
 .signal-group-warning .signal-group-title {
-  color: #fcd34d;
+  color: var(--warning-ink);
 }
 
 .signal-line {

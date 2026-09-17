@@ -42,7 +42,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  color: #eaf2ff;
+  color: var(--ink-primary);
   /* The one place a red-to-blue transition is allowed: the mark itself. */
   background: linear-gradient(135deg, var(--red) 0%, var(--blue) 100%);
 }
@@ -364,7 +364,7 @@
 
 .attention-button-live kbd {
   border-color: var(--red-line);
-  color: #c9868a;
+  color: var(--red-muted);
 }
 
 /* Red only when a person really is being waited on. */
@@ -376,7 +376,7 @@
 
 .attention-button-live:hover {
   border-color: var(--red);
-  color: #ffd9da;
+  color: var(--red-whisper);
 }
 
 .attention-count {

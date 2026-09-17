@@ -253,7 +253,7 @@
 
 .mission-decision-next {
   margin-top: 9px;
-  color: #c9868a;
+  color: var(--red-muted);
   font-size: 10.5px;
   line-height: 1.6;
 }
@@ -465,7 +465,7 @@
 
 .mission-member-stretch {
   margin-top: 8px;
-  color: #c9a06a;
+  color: var(--warning-muted);
   font-size: 10px;
   line-height: 1.55;
 }

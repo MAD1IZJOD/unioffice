@@ -14,6 +14,13 @@
 :root {
   color-scheme: dark;
 
+  /* Tinted surfaces: a region the system is working in (blue) or one that
+     needs a person (red). Used sparingly, for the one region that matters. */
+  --surface-active-soft: #090e13;
+  --surface-active: #101c22;
+  --surface-active-strong: #1a242e;
+  --surface-alert: #0c0709;
+
   /* Surfaces. Near-black through graphite; each step is deliberately small so
      elevation reads as depth rather than as a stack of floating cards. */
   --surface-0: #06070a;
@@ -49,6 +56,8 @@
   --red: #e5484d;
   --red-ink: #ff7176;
   --red-muted: #c9868a;
+  --red-pale: #f8a4a4;
+  --red-whisper: #ffd9da;
   --red-soft: rgba(229, 72, 77, 0.10);
   --red-line: rgba(229, 72, 77, 0.30);
 
@@ -62,6 +71,7 @@
   /* Caution that is not yet a demand on anyone - limited features, drafts. */
   --warning: #d99a2b;
   --warning-muted: #c9a06a;
+  --warning-ink: #f2c97d;
   --warning-soft: rgba(217, 154, 43, 0.09);
   --warning-line: rgba(217, 154, 43, 0.24);
 
@@ -614,7 +624,7 @@
 .skeleton-row {
   height: 11px;
   border-radius: 5px;
-  background: linear-gradient(90deg, #131b23 25%, #1a242e 50%, #131b23 75%);
+  background: linear-gradient(90deg, var(--surface-active) 25%, var(--surface-active-strong) 50%, var(--surface-active) 75%);
   background-size: 240% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
@@ -656,7 +666,7 @@
 .button-primary {
   border: 1px solid var(--accent-line);
   background: var(--accent-soft);
-  color: #d6fbff;
+  color: var(--blue-ink);
 }
 
 .button-primary:hover:not(:disabled) {
@@ -705,7 +715,7 @@
 .button-approve {
   border-color: var(--live-line);
   background: var(--live-soft);
-  color: #86efac;
+  color: var(--success-ink);
 }
 
 .button-approve:hover:not(:disabled) {
@@ -716,7 +726,7 @@
 .button-reject {
   border-color: var(--error-line);
   background: var(--error-soft);
-  color: #fca5a5;
+  color: var(--red-pale);
 }
 
 .button-reject:hover:not(:disabled) {
@@ -801,7 +811,7 @@
 .suggestion-chip:hover:not(:disabled) {
   border-color: var(--accent-line);
   background: var(--accent-soft);
-  color: #b6f2ff;
+  color: var(--blue-ink);
 }
 
 .suggestion-chip:disabled {
@@ -852,7 +862,7 @@
 .pipeline-step-done {
   border-color: var(--live-line);
   background: var(--live-soft);
-  color: #6ee7b7;
+  color: var(--success-ink);
 }
 
 .pipeline-step-idle {
@@ -927,7 +937,7 @@
 
 .filter-tab-active {
   background: var(--accent-soft);
-  color: #b6f2ff;
+  color: var(--blue-ink);
 }
 
 .filter-count {
@@ -1000,13 +1010,13 @@
 .callout-error {
   --tone-line: var(--error-line);
   --tone-soft: var(--error-soft);
-  color: #fca5a5;
+  color: var(--red-pale);
 }
 
 .callout-warning {
   --tone-line: var(--warning-line);
   --tone-soft: var(--warning-soft);
-  color: #fcd34d;
+  color: var(--warning-ink);
 }
 
 .approval-card {
@@ -1065,7 +1075,7 @@
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #090e13;
+  background: var(--surface-active-soft);
   color: var(--ink-secondary);
   font-family: var(--mono);
   font-size: 10px;
@@ -1079,7 +1089,7 @@
   border: 1px solid var(--live-line);
   border-radius: var(--radius-sm);
   background: var(--live-soft);
-  color: #d7e5f0;
+  color: var(--ink-primary);
   font-size: 11.5px;
   line-height: 1.75;
   white-space: pre-wrap;
@@ -1184,7 +1194,7 @@
 
 .agent-card-selected {
   border-color: var(--accent-line);
-  background: linear-gradient(160deg, #101c22, #0c1218);
+  background: linear-gradient(160deg, var(--surface-active), var(--surface-active));
 }
 
 .agent-active-task {
@@ -1270,7 +1280,7 @@
    -------------------------------------------------------------------------- */
 
 .prose-result {
-  color: #d3dfea;
+  color: var(--ink-primary);
   font-size: 12px;
   line-height: 1.75;
 }
@@ -1762,7 +1772,7 @@
 .button-approve-strong {
   border-color: var(--red-line);
   background: rgba(229, 72, 77, 0.16);
-  color: #ffd9da;
+  color: var(--red-whisper);
 }
 
 .button-approve-strong:hover:not(:disabled) {

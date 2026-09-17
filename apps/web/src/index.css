@@ -83,7 +83,7 @@ button {
 }
 
 ::selection {
-  color: #eaf2ff;
+  color: var(--ink-primary);
   background: rgba(59, 130, 246, 0.3);
 }
 
@@ -98,11 +98,11 @@ button {
 
 ::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #232a34;
+  background: var(--line-strong);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #333c49;
+  background: var(--ink-ghost);
 }
 
 .glass-panel {
