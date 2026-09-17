@@ -15,10 +15,11 @@ import {
   Chapter,
   Chip,
   Connecting,
-  Failure,
   PageOpening,
   Quiet,
+  ReadFailure,
   Reading,
+  StaleNotice,
 } from "../components/primitives";
 
 import { ArtifactSheet } from "../components/ArtifactSheet";
@@ -94,26 +95,16 @@ export default function Artifacts() {
         }
       />
 
+      {artifacts.error && artifacts.data && <StaleNotice error={artifacts.error} onRetry={artifacts.reload} />}
+
       {artifacts.loading ? (
         <Connecting what="Opening the output archive…" />
-      ) : artifacts.error ? (
-        <Failure
-          headline={
-            artifacts.error.isOffline
-              ? "The company is unreachable"
-              : "The archive could not be read"
-          }
-          detail={artifacts.error.message}
+      ) : artifacts.error && !artifacts.data ? (
+        <ReadFailure
+          what="the artifacts"
+          error={artifacts.error}
+          onRetry={artifacts.reload}
           consequence="Nothing is lost — artifacts are rows, not something this page holds."
-          action={
-            <button
-              type="button"
-              onClick={artifacts.reload}
-              className="button-ghost"
-            >
-              Try again
-            </button>
-          }
         />
       ) : items.length === 0 ? (
         <Quiet
