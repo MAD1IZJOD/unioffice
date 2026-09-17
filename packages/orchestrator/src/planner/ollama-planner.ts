@@ -9,6 +9,7 @@ import type {
   PlannedTask,
   Planner,
   PlanningContext,
+  PlanningSkillDescriptor,
   PlanningToolDescriptor,
   WorkPlan,
 } from "./planner.js";
@@ -33,6 +34,7 @@ export class OllamaPlanner implements Planner {
   ): Promise<WorkPlan> {
     const availableTools = context.availableTools ?? [];
     const availableCapabilities = context.availableCapabilities ?? [];
+    const availableSkills = context.availableSkills ?? [];
     const knowledgeSection = formatKnowledgeSection(
       context.knowledge ?? [],
       MAX_PLANNING_KNOWLEDGE_CHARS,
@@ -67,6 +69,13 @@ export class OllamaPlanner implements Planner {
                     ...availableTools.map((tool) => `- ${tool.id}: ${tool.name} - ${tool.description}`),
                   ].join("\n")
                 : "No tools are currently available; requiredTools must always be an empty array.",
+              availableSkills.length > 0
+                ? [
+                    "A task may name ONE skill - a way of doing a kind of work the company has defined - in a skill field, using an exact slug from this list. Name a skill only when the task is clearly that kind of work; otherwise omit skill.",
+                    "Available skills:",
+                    ...availableSkills.map((skill) => `- ${skill.slug}: ${skill.name} - ${skill.description}`),
+                  ].join("\n")
+                : "",
               "suggestedAgentType must be specialist, manager, or orchestrator when present.",
               "requiresApproval must be true only when a human decision is required before executing the task. Include approvalReason when true.",
               "Use an empty dependsOn array when a task has no prerequisites.",
@@ -111,6 +120,7 @@ export class OllamaPlanner implements Planner {
       context.availableAgentIds,
       availableTools,
       availableCapabilities,
+      availableSkills,
     );
 
     const idsByRef = new Map(
@@ -139,6 +149,8 @@ export class OllamaPlanner implements Planner {
         requiredCapabilities: task.requiredCapabilities,
 
         requiredTools: task.requiredTools,
+
+        skill: task.skill,
 
         suggestedAgentType: task.suggestedAgentType,
 
@@ -192,6 +204,7 @@ interface RawPlannedTask {
   assignedAgentId?: AgentId;
   requiredCapabilities: string[];
   requiredTools: string[];
+  skill?: string;
   suggestedAgentType?: AgentType;
   requiresApproval: boolean;
   approvalReason?: string;
@@ -207,6 +220,7 @@ export function parseOllamaPlan(
   availableAgentIds: AgentId[],
   availableTools: PlanningToolDescriptor[] = [],
   availableCapabilities: string[] = [],
+  availableSkills: PlanningSkillDescriptor[] = [],
 ): ParsedOllamaPlan {
   const parsed = parseJsonPlan(content);
 
@@ -231,8 +245,10 @@ export function parseOllamaPlan(
     availableCapabilities.map((capability) => capability.toLocaleLowerCase()),
   );
 
+  const skillsBySlug = new Map(availableSkills.map((skill) => [skill.slug, skill]));
+
   const tasks = parsed.tasks.map((task, index) =>
-    parseTask(task, index, availableAgents, availableToolIds, knownCapabilities),
+    parseTask(task, index, availableAgents, availableToolIds, knownCapabilities, skillsBySlug),
   );
 
   validateGraph(tasks);
@@ -266,6 +282,7 @@ function parseTask(
   availableAgents: Set<AgentId>,
   availableToolIds: Set<string>,
   knownCapabilities: Set<string>,
+  skillsBySlug: Map<string, PlanningSkillDescriptor> = new Map(),
 ): RawPlannedTask {
   if (!isRecord(task)) {
     throw new Error(
@@ -301,6 +318,26 @@ function parseTask(
     task.suggestedAgentType,
     index,
   );
+
+  // A skill the planner names is honoured only when it is one of the skills
+  // offered. An unknown or malformed one is dropped, like an invented
+  // capability, rather than failing the whole plan. A known skill's own
+  // requirements are folded in, so routing and governance see them whether or
+  // not the planner remembered to list them.
+  const skill = typeof task.skill === "string" ? skillsBySlug.get(task.skill.trim()) : undefined;
+
+  if (skill) {
+    for (const tool of skill.requiredTools) {
+      if (availableToolIds.size === 0 || availableToolIds.has(tool)) {
+        if (!requiredTools.includes(tool)) requiredTools.push(tool);
+      }
+    }
+
+    for (const capability of skill.requiredCapabilities) {
+      const normalized = capability.toLocaleLowerCase();
+      if (!requiredCapabilities.includes(normalized)) requiredCapabilities.push(normalized);
+    }
+  }
   const approval = parseApprovalRequirement(
     task.requiresApproval,
     task.approvalReason,
@@ -318,6 +355,7 @@ function parseTask(
     assignedAgentId,
     requiredCapabilities,
     requiredTools,
+    skill: skill?.slug,
     suggestedAgentType,
     requiresApproval: approval.requiresApproval,
     approvalReason: approval.approvalReason,

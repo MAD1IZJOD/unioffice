@@ -17,6 +17,22 @@ export interface PlanningToolDescriptor {
   description: string;
 }
 
+/**
+ * A skill the planner may name for a step. Only skills held by at least one
+ * available agent are offered, so a plan never asks for one nobody can use.
+ */
+export interface PlanningSkillDescriptor {
+  slug: string;
+
+  name: string;
+
+  description: string;
+
+  requiredTools: string[];
+
+  requiredCapabilities: string[];
+}
+
 export interface PlanningContext {
   workId: WorkId;
 
@@ -34,6 +50,9 @@ export interface PlanningContext {
    * than free-texting a plausible-sounding one.
    */
   availableCapabilities?: string[];
+
+  /** Skills the available agents hold, resolved for this mission's workspace. */
+  availableSkills?: PlanningSkillDescriptor[];
 
   /**
    * The requester's own briefing: constraints, background, and anything the
@@ -68,6 +87,12 @@ export interface PlannedTask {
 
   /** Tool ids the executing agent must be authorized for. */
   requiredTools?: string[];
+
+  /**
+   * The skill this step follows, by slug. Its tools and capabilities are
+   * already folded into requiredTools and requiredCapabilities.
+   */
+  skill?: string;
 
   suggestedAgentType?: AgentType;
 

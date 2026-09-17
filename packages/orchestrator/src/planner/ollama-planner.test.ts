@@ -531,3 +531,34 @@ test("says nothing about company knowledge when none was recalled", async () => 
   assert.doesNotMatch(request?.messages[0]?.content ?? "", /Company knowledge relevant/);
   assert.doesNotMatch(request?.messages[1]?.content ?? "", /company_knowledge/);
 });
+
+test("a named skill is kept only when offered, and its requirements are folded in", () => {
+  const skills = [{
+    slug: "financial-analysis",
+    name: "Financial analysis",
+    description: "Analyse figures.",
+    requiredTools: ["calculator"],
+    requiredCapabilities: ["financial_analysis"],
+  }];
+
+  const plan = parseOllamaPlan(
+    JSON.stringify({
+      tasks: [
+        { ref: "analyse", title: "Analyse Q3", description: "Find unusual spend.", ...taskFields(), skill: "financial-analysis", dependsOn: [] },
+        { ref: "invent", title: "Invent", description: "x", ...taskFields(), skill: "grant-myself-admin", dependsOn: [] },
+        { ref: "plain", title: "Plain", description: "x", ...taskFields(), dependsOn: [] },
+      ],
+    }),
+    [agentId],
+    [{ id: "calculator", name: "Calculator", description: "Math." }],
+    ["financial_analysis"],
+    skills,
+  );
+
+  assert.equal(plan.tasks[0]!.skill, "financial-analysis");
+  assert.deepEqual(plan.tasks[0]!.requiredTools, ["calculator"]);
+  assert.deepEqual(plan.tasks[0]!.requiredCapabilities, ["financial_analysis"]);
+  assert.equal(plan.tasks[1]!.skill, undefined, "an unknown skill is dropped, not trusted");
+  assert.deepEqual(plan.tasks[1]!.requiredTools, []);
+  assert.equal(plan.tasks[2]!.skill, undefined);
+});
