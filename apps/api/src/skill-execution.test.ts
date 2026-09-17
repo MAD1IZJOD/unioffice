@@ -207,7 +207,11 @@ test("planning offers only skills an available agent holds, and records the rout
   await service.planWork(work.id);
 
   assert.deepEqual(offered?.map((skill) => skill.slug), ["financial-analysis"]);
-  assert.deepEqual((created[0]!.metadata.routing as { skill: unknown }).skill, {
+  const routed = (created[0]!.metadata.routing as { skill: Record<string, unknown> }).skill;
+  const { reasons, ...identity } = routed;
+
+  assert.deepEqual(identity, {
+    ref: "system:financial-analysis",
     slug: "financial-analysis",
     name: "Financial analysis",
     version: 1,
@@ -215,4 +219,8 @@ test("planning offers only skills an available agent holds, and records the rout
     approval: "none",
     memory: "recall",
   });
+  assert.ok(
+    (reasons as string[]).includes("Harvey holds it with everything it needs"),
+    "the record says why this skill was chosen",
+  );
 });

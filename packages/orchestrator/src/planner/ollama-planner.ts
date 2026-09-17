@@ -321,25 +321,12 @@ function parseTask(
     index,
   );
 
-  // A skill the planner names is honoured only when it is one of the skills
-  // offered. An unknown or malformed one is dropped, like an invented
-  // capability, rather than failing the whole plan. A known skill's own
-  // requirements are folded in, so routing and governance see them whether or
-  // not the planner remembered to list them.
+  // A skill the planner names is a suggestion, and only when it is one of the
+  // skills offered: an unknown or malformed one is dropped, like an invented
+  // capability, rather than failing the whole plan. It changes nothing else
+  // about the step. Which skill is actually used, and what that skill then
+  // requires, is settled by the server when the plan comes back.
   const skill = typeof task.skill === "string" ? skillsBySlug.get(task.skill.trim()) : undefined;
-
-  if (skill) {
-    for (const tool of skill.requiredTools) {
-      if (availableToolIds.size === 0 || availableToolIds.has(tool)) {
-        if (!requiredTools.includes(tool)) requiredTools.push(tool);
-      }
-    }
-
-    for (const capability of skill.requiredCapabilities) {
-      const normalized = capability.toLocaleLowerCase();
-      if (!requiredCapabilities.includes(normalized)) requiredCapabilities.push(normalized);
-    }
-  }
   const approval = parseApprovalRequirement(
     task.requiresApproval,
     task.approvalReason,

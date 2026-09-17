@@ -1,9 +1,11 @@
-import type {
-  Skill,
-  Task,
-  Work,
-  WorkId,
-  WorkspaceId,
+import {
+  skillRefOf,
+  type OrganizationId,
+  type Skill,
+  type Task,
+  type Work,
+  type WorkId,
+  type WorkspaceId,
 } from "@unioffice/core";
 
 import type {
@@ -18,6 +20,8 @@ import type {
   PlanningToolDescriptor,
   WorkPlan,
 } from "@unioffice/orchestrator";
+
+import { resolveSkill, type SkillMatch } from "@unioffice/skills";
 
 import type {
   EventRecorder,
@@ -63,7 +67,15 @@ export class WorkService {
      * The skills that apply to a mission. Absent, planning works exactly as
      * it did before skills existed.
      */
-    private readonly skills?: { effective(organizationId: Work["organizationId"], workspaceId?: WorkspaceId): Promise<Map<string, Skill>> },
+    private readonly skills?: {
+      effective(organizationId: Work["organizationId"], workspaceId?: WorkspaceId): Promise<Map<string, Skill>>;
+
+      /**
+       * Keeps the version a step is about to use, so the step can be run that
+       * way however much the skill changes afterwards.
+       */
+      pin?(organizationId: OrganizationId, skill: Skill): Promise<Skill>;
+    },
   ) {}
 
   async planWork(
@@ -138,12 +150,22 @@ export class WorkService {
       )];
 
       // Only skills some available agent actually holds are offered, so the
-      // planner cannot pick one that nobody could be given.
+      // planner cannot suggest one that nobody could be given. Which skill a
+      // step actually uses is settled below, here, from the skills as they
+      // are - the planner's answer is one signal into that.
       const effectiveSkills = this.skills
         ? await this.skills.effective(updatedWork.organizationId, updatedWork.workspaceId)
         : new Map<string, Skill>();
+      const candidateSkills = [...effectiveSkills.values()];
       const heldSlugs = new Set(availableAgents.flatMap((agent) => agent.skills ?? []));
-      const offeredSkills = [...effectiveSkills.values()].filter((skill) => heldSlugs.has(skill.slug));
+      const offeredSkills = candidateSkills.filter((skill) => heldSlugs.has(skill.slug));
+
+      // A skill someone named in the request itself. It still has to survive
+      // the same checks as any other: naming a skill cannot conjure one.
+      const requestedSkill = typeof updatedWork.metadata?.skill === "string"
+        ? updatedWork.metadata.skill
+        : undefined;
+      const knownTools = new Set(this.availableTools.map((tool) => tool.id));
 
       // Objective, then recall, then plan. The orchestrator is the actor the
       // recall is governed and recorded for - it is the one reading it.
@@ -194,11 +216,45 @@ export class WorkService {
       const tasks: Task[] = [];
 
       for (const plannedTask of plan.tasks) {
+        // The server decides the skill, before anyone is given the step: the
+        // step's own words and stated needs, against the skills that apply
+        // here and the agents that could take it. What it decides is what the
+        // step then requires, and what it is routed by.
+        const resolution = resolveSkill({
+          requirement: {
+            text: `${plannedTask.title} ${plannedTask.description} ${updatedWork.objective}`,
+            capabilities: plannedTask.requiredCapabilities ?? [],
+            tools: plannedTask.requiredTools ?? [],
+            requestedSlug: requestedSkill,
+            suggestedSlug: plannedTask.skill,
+          },
+          skills: candidateSkills,
+          agents: availableAgents,
+        });
+
+        const chosen: SkillMatch | undefined = resolution.outcome === "selected" ? resolution.match : undefined;
+
+        // A skill's own requirements become the step's, so routing and
+        // governance see them whether or not the planner listed them.
+        const requiredTools = [...new Set([
+          ...(plannedTask.requiredTools ?? []),
+          ...(chosen?.skill.requiredTools ?? []).filter((tool) => knownTools.size === 0 || knownTools.has(tool)),
+        ])];
+        const requiredCapabilities = [...new Set([
+          ...(plannedTask.requiredCapabilities ?? []),
+          ...(chosen?.skill.requiredCapabilities ?? []).map((capability) => capability.toLocaleLowerCase()),
+        ])];
+
         const delegation =
           await this.delegator.delegate({
             workId: updatedWork.id,
 
-            task: plannedTask,
+            task: {
+              ...plannedTask,
+              skill: chosen?.skill.slug,
+              requiredTools,
+              requiredCapabilities,
+            },
 
             availableAgentIds:
               availableAgents.map(
@@ -222,9 +278,19 @@ export class WorkService {
         // The skill as it was when the step was routed: which version, from
         // which scope, and whether it needs a person. Recorded here, from the
         // server's own resolution, so governance reads it from the step
-        // rather than from anything the planner wrote.
+        // rather than from anything the planner wrote. The version is kept
+        // as it is now, so running the step later runs this version of it.
         const appliedSlug = typeof delegation.metadata.skill === "string" ? delegation.metadata.skill : undefined;
-        const applied = appliedSlug ? effectiveSkills.get(appliedSlug) : undefined;
+        const applied = chosen && appliedSlug === chosen.skill.slug
+          ? (this.skills?.pin ? await this.skills.pin(updatedWork.organizationId, chosen.skill) : chosen.skill)
+          : undefined;
+
+        // Why this step has no skill, in the words the mission will show.
+        const skillNote = applied
+          ? undefined
+          : chosen
+            ? `${chosen.skill.name} was selected, but the step went to an agent that does not hold it.`
+            : resolution.outcome === "selected" ? undefined : resolution.reason;
 
         const task: Task = {
           id: plannedTask.id,
@@ -261,22 +327,23 @@ export class WorkService {
               : undefined,
 
             routing: {
-              requiredCapabilities:
-                plannedTask.requiredCapabilities ?? [],
-              requiredTools:
-                plannedTask.requiredTools ?? [],
+              requiredCapabilities,
+              requiredTools,
               suggestedAgentType:
                 plannedTask.suggestedAgentType,
               skill: applied
                 ? {
+                    ref: skillRefOf(applied),
                     slug: applied.slug,
                     name: applied.name,
                     version: applied.version,
                     scope: applied.scope,
                     approval: applied.approval,
                     memory: applied.memory,
+                    reasons: chosen?.reasons ?? [],
                   }
                 : undefined,
+              skillNote,
             },
 
             delegation:

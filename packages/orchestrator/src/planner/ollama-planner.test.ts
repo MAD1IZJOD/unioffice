@@ -532,7 +532,7 @@ test("says nothing about company knowledge when none was recalled", async () => 
   assert.doesNotMatch(request?.messages[1]?.content ?? "", /company_knowledge/);
 });
 
-test("a named skill is kept only when offered, and its requirements are folded in", () => {
+test("a named skill is kept only when offered, and changes nothing else about the step", () => {
   const skills = [{
     slug: "financial-analysis",
     name: "Financial analysis",
@@ -556,8 +556,8 @@ test("a named skill is kept only when offered, and its requirements are folded i
   );
 
   assert.equal(plan.tasks[0]!.skill, "financial-analysis");
-  assert.deepEqual(plan.tasks[0]!.requiredTools, ["calculator"]);
-  assert.deepEqual(plan.tasks[0]!.requiredCapabilities, ["financial_analysis"]);
+  assert.deepEqual(plan.tasks[0]!.requiredTools, [], "a suggestion does not add requirements of its own");
+  assert.deepEqual(plan.tasks[0]!.requiredCapabilities, []);
   assert.equal(plan.tasks[1]!.skill, undefined, "an unknown skill is dropped, not trusted");
   assert.deepEqual(plan.tasks[1]!.requiredTools, []);
   assert.equal(plan.tasks[2]!.skill, undefined);
