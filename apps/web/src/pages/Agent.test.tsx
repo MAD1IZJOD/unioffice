@@ -256,4 +256,52 @@ describe("an agent's profile", () => {
 
     expect(screen.queryByRole("region", { name: "Connected systems" })).toBeNull();
   });
+
+  it("lists the skills it holds, and says when one cannot be used", async () => {
+    open("viewer", () => json(200, {
+      ...tony,
+      skills: [
+        { slug: "code-review", name: "Code review", category: "engineering", scope: "system", approval: "none", usable: true, note: "Can be given steps." },
+        { slug: "forecasting", name: "Forecasting", category: "finance", scope: "system", approval: "none", usable: false, note: "Needs the datetime tool." },
+      ],
+    }));
+    await screen.findByRole("heading", { name: "Tony" });
+
+    const skills = section("Skills");
+    expect(within(skills).getByText("Can use")).toBeDefined();
+    expect(within(skills).getByText("Needs the datetime tool.")).toBeDefined();
+  });
+
+  it("assigns a skill the agent qualifies for, and cannot offer one it does not", async () => {
+    const user = userEvent.setup();
+    const catalogue = [
+      { id: "system:code-review", slug: "code-review", name: "Code review", status: "active", overriddenBy: null, requiredTools: [], requiredCapabilities: [], description: "" },
+      { id: "system:forecasting", slug: "forecasting", name: "Forecasting", status: "active", overriddenBy: null, requiredTools: ["datetime"], requiredCapabilities: [], description: "" },
+    ];
+
+    const calls = stubNetwork((call) => {
+      if (call.url.pathname === "/workforce/agent-tony") return json(200, tony);
+      if (call.url.pathname === "/skills") return json(200, { skills: catalogue });
+      if (call.method === "POST") return json(200, { agent: {} });
+      return json(200, { tools: [], workspaces: [] });
+    });
+
+    render(<RouterProvider router={createMemoryRouter(
+      [{ path: "/workforce/:agentId", element: <AccessContext.Provider value={signedInAs("owner")}><Agent /></AccessContext.Provider> }],
+      { initialEntries: ["/workforce/agent-tony"] },
+    )} />);
+
+    await user.click(await screen.findByRole("button", { name: "Configure" }));
+    const group = await screen.findByRole("group", { name: "Skills" });
+
+    expect((within(group).getByRole("button", { name: /Forecasting/ }) as HTMLButtonElement).disabled).toBe(true);
+
+    await user.click(within(group).getByRole("button", { name: /Code review/ }));
+    await user.click(screen.getByRole("button", { name: /Save/ }));
+
+    await waitFor(() => {
+      const update = calls.find((call) => call.method === "POST" && call.url.pathname === "/agents/agent-tony");
+      expect(update?.body).toMatchObject({ skills: ["code-review"] });
+    });
+  });
 });

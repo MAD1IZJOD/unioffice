@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Blocks,
   Check,
   CircleDot,
   Pause,
@@ -16,12 +17,14 @@ import { Link, useParams } from "react-router-dom";
 
 import {
   fetchAgentProfile,
+  fetchSkills,
   fetchTools,
   fetchWorkspaces,
   formatRelativeTime,
   updateAgent,
   type AgentProfile,
   type AgentSummary,
+  type SkillItem,
   type ToolDescriptor,
   type WorkforceMember,
   type WorkspaceSummary,
@@ -120,7 +123,7 @@ export default function Agent() {
     );
   }
 
-  const { member, history, artifacts, activity, governance, systems } = profile.data;
+  const { member, history, artifacts, activity, governance, systems, skills } = profile.data;
   const presence = PRESENCE[member.presence];
   const orchestrator = member.type === "orchestrator";
   const unregistered = member.tools.filter((tool) => !tool.registered);
@@ -228,6 +231,7 @@ export default function Agent() {
           {editing ? (
             <AgentEditor
               member={member}
+              heldSkills={skills.map((skill) => skill.slug)}
               onCancel={() => setEditing(false)}
               onSaved={() => {
                 setEditing(false);
@@ -297,6 +301,35 @@ export default function Agent() {
                 <p className="dossier-answer">
                   A tool grant is not a permission. Governance decides every call, and can put a person in front of it
                   or refuse it.
+                </p>
+              </section>
+
+              <section className="dossier-block" aria-label="Skills">
+                <div className="dossier-question">What it knows how to do</div>
+
+                {skills.length === 0 ? (
+                  <p className="dossier-answer">
+                    Holds no skills, so the planner never names a skill for its steps.
+                    {canConfigure ? " Assign skills with Configure." : ""}
+                  </p>
+                ) : (
+                  <div className="agent-tools">
+                    {skills.map((skill) => (
+                      <div key={skill.slug} className={`agent-tool ${skill.usable ? "tone-live" : "tone-warning"}`}>
+                        <Link to={skill.scope === "system" ? `/skills/${encodeURIComponent(`system:${skill.slug}`)}` : "/skills"} className="agent-tool-name">
+                          <Blocks size={11} />
+                          {skill.name}
+                        </Link>
+                        <StatusPill tone={skill.usable ? "live" : "warning"}>{skill.usable ? "Can use" : "Cannot use"}</StatusPill>
+                        <span className="agent-tool-why">{skill.note}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="dossier-answer">
+                  A skill is how a kind of work is done. It grants nothing: the agent must already hold every tool and
+                  capability the skill needs.
                 </p>
               </section>
 
@@ -507,8 +540,20 @@ function eventTone(type: string): Tone {
  * Configuring an agent, against what the backend accepts. Only offered to
  * roles that configure the workforce; the API refuses anyone else.
  */
-function AgentEditor({ member, onCancel, onSaved }: { member: WorkforceMember; onCancel: () => void; onSaved: () => void }) {
+function AgentEditor({
+  member,
+  heldSkills,
+  onCancel,
+  onSaved,
+}: {
+  member: WorkforceMember;
+  heldSkills: string[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
   const tools = useResource<ToolDescriptor[]>(useCallback(() => fetchTools(), []));
+  const catalogue = useResource<SkillItem[]>(useCallback(() => fetchSkills(), []));
+  const [skillSlugs, setSkillSlugs] = useState<string[]>(heldSkills);
   const workspaces = useResource<WorkspaceSummary[]>(useCallback(() => fetchWorkspaces(), []));
 
   const orchestrator = member.type === "orchestrator";
@@ -542,7 +587,18 @@ function AgentEditor({ member, onCancel, onSaved }: { member: WorkforceMember; o
     setError(undefined);
 
     try {
-      await updateAgent(member.id, { description: description.trim(), capabilities, toolIds, workspaceId, status });
+      // Skills are sent only when they changed, so an assignment the agent
+      // no longer meets does not block saving an unrelated edit.
+      const skillsChanged = [...skillSlugs].sort().join() !== [...heldSkills].sort().join();
+
+      await updateAgent(member.id, {
+        description: description.trim(),
+        capabilities,
+        toolIds,
+        workspaceId,
+        status,
+        ...(skillsChanged ? { skills: skillSlugs } : {}),
+      });
       onSaved();
     } catch (caught) {
       setError((caught as Error).message);
@@ -643,6 +699,41 @@ function AgentEditor({ member, onCancel, onSaved }: { member: WorkforceMember; o
 
         <p className="config-hint">
           Only tools this build registers can be granted, and governance still decides each call.
+        </p>
+      </div>
+
+      <div className="config-row">
+        <span className="config-label">Skills</span>
+
+        <div className="config-choices" role="group" aria-label="Skills">
+          {(catalogue.data ?? [])
+            .filter((skill) => skill.status === "active" && !skill.overriddenBy)
+            .map((skill) => {
+              const on = skillSlugs.includes(skill.slug);
+              const missing = [
+                ...skill.requiredTools.filter((tool) => !toolIds.includes(tool)),
+                ...skill.requiredCapabilities.filter((capability) => !capabilities.includes(capability)),
+              ];
+
+              return (
+                <button
+                  key={skill.id}
+                  type="button"
+                  disabled={busy || (!on && missing.length > 0)}
+                  title={missing.length > 0 ? `Needs ${missing.join(", ")}` : skill.description}
+                  onClick={() => setSkillSlugs((current) => (on ? current.filter((value) => value !== skill.slug) : [...current, skill.slug]))}
+                  className={`config-choice${on ? " config-choice-on" : ""}`}
+                >
+                  {on ? <Check size={11} /> : <Blocks size={11} />}
+                  {skill.name}
+                </button>
+              );
+            })}
+        </div>
+
+        <p className="config-hint">
+          A skill can only be given to an agent that already has its tools and capabilities. The server checks again when
+          you save.
         </p>
       </div>
 
