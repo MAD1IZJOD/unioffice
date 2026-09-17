@@ -126,7 +126,7 @@ test("a skill's approval is decided by an owner or admin", () => {
   assert.equal(isGovernedByPolicy(approval), true);
 });
 
-function executionHarness(skills: Skill[], recorded: Skill[] = []) {
+function executionHarness(skills: Skill[], recorded: Skill[] = [], actor: Agent = agent("Harvey", { capabilities: ["financial_analysis", "people_operations"] })) {
   const tasks = new Map<TaskId, Task>();
   let handed: Parameters<ConstructorParameters<typeof TaskExecutionService>[4]["execute"]>[0] | undefined;
   let recalls = 0;
@@ -139,7 +139,7 @@ function executionHarness(skills: Skill[], recorded: Skill[] = []) {
     } as never,
     { async create(artifact: unknown) { return artifact; } } as never,
     { async findById() { return work; } } as never,
-    { async findById() { return agent("Harvey"); } } as never,
+    { async findById() { return actor; } } as never,
     {
       async execute(request) {
         handed = request;
@@ -265,5 +265,23 @@ test("planning offers only skills an available agent holds, and records the rout
   assert.ok(
     (reasons as string[]).includes("Harvey holds it with everything it needs"),
     "the record says why this skill was chosen",
+  );
+});
+
+test("a step says plainly when its agent can no longer follow the skill", async () => {
+  const base = systemSkills().find((skill) => skill.slug === "candidate-screening")!;
+  const harness = executionHarness(
+    [{ ...base, version: 1, requiredTools: ["calculator"] }],
+    [],
+    agent("Harvey", { toolIds: [], capabilities: ["financial_analysis", "people_operations"] }),
+  );
+
+  harness.tasks.set("task-1" as TaskId, step({ slug: "candidate-screening", name: base.name, version: 1, scope: "system", approval: "none", memory: "none" }));
+  const result = await harness.service.executeTask("task-1" as TaskId);
+
+  assert.equal(harness.handed()?.task.skill, undefined);
+  assert.equal(
+    (result.metadata.execution as { skillNote: string }).skillNote,
+    "Harvey could not follow Candidate screening because calculator access is no longer available.",
   );
 });

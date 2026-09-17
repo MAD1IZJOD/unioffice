@@ -16,6 +16,8 @@ import {
   skillRefOf,
 } from "@unioffice/core";
 
+import { skillFit } from "@unioffice/skills";
+
 import type {
   AgentRepository,
   ArtifactRepository,
@@ -205,7 +207,7 @@ export class TaskExecutionService {
       // not whatever the skill says today. A skill that has since been
       // archived is not run at all, and the step says so rather than quietly
       // going ahead without the procedure it was planned around.
-      const { skill, note: skillNote } = await this.skillFor(work, runningTask);
+      const { skill, note: skillNote } = await this.skillFor(work, runningTask, agent);
 
       const knowledge = skill?.memory === "none"
         ? []
@@ -466,7 +468,7 @@ export class TaskExecutionService {
    * part way through. The skill still has to be live - one that has been
    * archived or replaced since is not run, and the step carries the reason.
    */
-  private async skillFor(work: Work, task: Task): Promise<{ skill?: Skill; note?: string }> {
+  private async skillFor(work: Work, task: Task, agent: Agent): Promise<{ skill?: Skill; note?: string }> {
     const routing = task.metadata.routing as
       | { skill?: { ref?: unknown; slug?: unknown; name?: unknown; version?: unknown } }
       | undefined;
@@ -487,7 +489,7 @@ export class TaskExecutionService {
     const version = typeof pin?.version === "number" ? pin.version : undefined;
 
     if (version === undefined || version === live.version) {
-      return { skill: live };
+      return this.usable(live, agent);
     }
 
     const ref = typeof pin?.ref === "string" ? pin.ref : skillRefOf(live);
@@ -496,11 +498,32 @@ export class TaskExecutionService {
       : null;
 
     if (pinned) {
-      return { skill: pinned };
+      return this.usable(pinned, agent);
     }
 
     return {
       note: `${name} version ${version}, which this step was planned around, is no longer on record, so this step ran without it.`,
+    };
+  }
+
+  /**
+   * A skill is only followed by an agent that can actually follow it. A tool
+   * or a capability taken away since the mission was planned is not something
+   * to discover halfway through a procedure, and the sentence says which one
+   * it was rather than leaving a person to work it out.
+   */
+  private usable(skill: Skill, agent: Agent): { skill?: Skill; note?: string } {
+    const fit = skillFit({ ...agent, skills: [skill.slug] }, skill);
+
+    if (fit.fits) return { skill };
+
+    const missing = [
+      ...fit.missingTools.map((toolId) => `${this.toolName?.(toolId) ?? toolId} access`),
+      ...fit.missingCapabilities.map((capability) => `the ${capability.replace(/_/g, " ")} capability`),
+    ];
+
+    return {
+      note: `${agent.name} could not follow ${skill.name} because ${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} no longer available.`,
     };
   }
 
