@@ -52,6 +52,9 @@ export interface ExecutionNode {
   requiredTools: string[];
   requiredCapabilities: string[];
 
+  /** The skill the step follows, as routing recorded it. Name and version only. */
+  skill?: { slug: string; name: string; version: number };
+
   startedAt?: Date;
   completedAt?: Date;
   durationMs?: number;
@@ -146,6 +149,7 @@ export function buildExecutionPlan(
       toolCallCount: toolCallsOf(task),
       requiredTools: routingList(task, "requiredTools"),
       requiredCapabilities: routingList(task, "requiredCapabilities"),
+      skill: routedSkill(task),
       startedAt: task.startedAt,
       completedAt: task.completedAt,
       durationMs:
@@ -292,6 +296,14 @@ function toolCallsOf(task: Task): number {
     | undefined;
 
   return Array.isArray(execution?.toolCalls) ? execution.toolCalls.length : 0;
+}
+
+function routedSkill(task: Task): ExecutionNode["skill"] {
+  const skill = (task.metadata.routing as { skill?: Record<string, unknown> } | undefined)?.skill;
+
+  return skill && typeof skill.slug === "string" && typeof skill.name === "string" && typeof skill.version === "number"
+    ? { slug: skill.slug, name: skill.name, version: skill.version }
+    : undefined;
 }
 
 function routingList(task: Task, field: string): string[] {

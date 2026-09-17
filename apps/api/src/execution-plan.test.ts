@@ -210,3 +210,20 @@ test("duration is measured only when the step genuinely started and finished", (
   assert.equal(nodeOf(plan, "finished").durationMs, 12_000);
   assert.equal(nodeOf(plan, "mid").durationMs, undefined);
 });
+
+test("a step shows the skill it follows by name and version, and nothing else of it", () => {
+  const plan = buildExecutionPlan([
+    task("a", {
+      metadata: {
+        routing: {
+          skill: { slug: "financial-analysis", name: "Financial analysis", version: 3, scope: "system", approval: "none", memory: "recall", instructions: "SHOULD NOT LEAVE" },
+        },
+      },
+    }),
+    task("b"),
+  ]);
+
+  assert.deepEqual(plan.nodes[0]!.skill, { slug: "financial-analysis", name: "Financial analysis", version: 3 });
+  assert.equal(plan.nodes[1]!.skill, undefined);
+  assert.doesNotMatch(JSON.stringify(plan), /SHOULD NOT LEAVE/);
+});
