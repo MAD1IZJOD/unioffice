@@ -249,6 +249,9 @@ importers:
       '@unioffice/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
+      '@unioffice/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
       '@unioffice/tools':
         specifier: workspace:*
         version: link:../../packages/tools

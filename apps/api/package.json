@@ -20,6 +20,7 @@
     "@unioffice/governance": "workspace:*",
     "@unioffice/memory": "workspace:*",
     "@unioffice/orchestrator": "workspace:*",
+    "@unioffice/skills": "workspace:*",
     "@unioffice/tools": "workspace:*",
     "dotenv": "^17.4.2",
     "fastify": "^5.12.4"
