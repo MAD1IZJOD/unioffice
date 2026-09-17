@@ -54,6 +54,12 @@ export const router = createBrowserRouter([
         path: "agents/:agentId",
         loader: ({ params }) => redirect(`/workforce/${params.agentId ?? ""}`),
       },
+      { path: "skills", ...page(() => import("../pages/Skills")) },
+      {
+        path: "skills/new",
+        lazy: async () => ({ Component: (await import("../pages/Skill")).NewSkill }),
+      },
+      { path: "skills/:skillRef", ...page(() => import("../pages/Skill")) },
       { path: "tools", ...page(() => import("../pages/Tools")) },
       { path: "brain", ...page(() => import("../pages/Brain")) },
       { path: "brain/:knowledgeId", ...page(() => import("../pages/KnowledgeEntry")) },
