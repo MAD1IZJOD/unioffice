@@ -22,6 +22,6 @@
     "@unioffice/orchestrator": "workspace:*",
     "@unioffice/tools": "workspace:*",
     "dotenv": "^17.4.2",
-    "fastify": "^5.12.1"
+    "fastify": "^5.12.4"
   }
 }
