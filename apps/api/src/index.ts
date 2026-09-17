@@ -71,6 +71,13 @@ export async function createApiServer() {
     memberService: runtime.memberService,
     connectionService: runtime.connectionService,
     skillService: runtime.skillService,
+    approvalContext: {
+      tasks: runtime.taskRepository,
+      works: runtime.workRepository,
+      agents: runtime.agentRepository,
+      workspaces: runtime.workspaceRepository,
+      tools: runtime.toolRegistry,
+    },
     featureEnvironment: {
       semanticRecall: Boolean(config.embeddingModel),
       connectionProviders: (["github", "google_drive"] as const)

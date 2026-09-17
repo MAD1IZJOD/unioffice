@@ -174,6 +174,7 @@ import {
 } from "./access/member-service.js";
 import { LastOwnerError, MemberConflictError } from "@unioffice/database";
 import { featuresFor, type FeatureEnvironment } from "./features/feature-registry.js";
+import { briefApprovals, type ApprovalBriefingDependencies } from "./approval-briefing.js";
 import {
   SkillNotFoundError,
   SkillStateError,
@@ -208,6 +209,8 @@ export interface ApiServices {
   skillService: Pick<SkillService, "list" | "get" | "create" | "update" | "setStatus">;
   /** What this server is configured to do, for feature status. */
   featureEnvironment: FeatureEnvironment;
+  /** Reads that describe an approval to the person deciding it. */
+  approvalContext?: ApprovalBriefingDependencies;
   applicationService: WorkApplicationService;
   workService: WorkService;
   workExecutionService: WorkExecutionService;
@@ -831,7 +834,13 @@ export function buildApiServer(
         access.organizationId,
       );
 
-      return { approvals: await reachableByWork(services, access, approvals) };
+      const reachable = await reachableByWork(services, access, approvals);
+
+      return {
+        approvals: services.approvalContext
+          ? await briefApprovals(services.approvalContext, access, reachable)
+          : reachable,
+      };
     });
 
     // Who decided is the signed-in caller, never a field in the request. A
