@@ -5,6 +5,7 @@ import {
   fetchPendingApprovals,
   formatRelativeTime,
   resolveApproval,
+  type ApprovalBriefing,
   type ApprovalItem,
 } from "../lib/api";
 
@@ -22,13 +23,21 @@ import {
 
 import { spellOut } from "../lib/statement";
 
+/** Why a person is needed, in the words someone deciding would use. */
+const REQUESTED_BY: Record<ApprovalBriefing["requestedBy"], (briefing: ApprovalBriefing) => string> = {
+  external_write: (briefing) => `It changes something outside the company (${briefing.externalWrites.join(", ")}), which always needs an owner or admin.`,
+  skill: (briefing) => `The ${briefing.skill ?? "skill"} skill is set to need a person for every step.`,
+  policy: (briefing) => `Required by the policy ${briefing.policy?.name ?? "a policy"}.`,
+  planner: () => "The planner judged this step consequential enough to ask.",
+};
+
 export default function Approvals() {
   // Deciding is offered to whoever may decide; a step a governance policy
   // requires is offered only to owners and admins. The server rules either way.
   const canDecide = useCan("approvals.decide");
   const canDecideGoverned = useCan("policies.manage");
 
-  const approvals = useResource<ApprovalItem[]>(
+  const approvals = useResource<Array<ApprovalItem & { briefing?: ApprovalBriefing }>>(
     useCallback(() => fetchPendingApprovals(), []),
     { pollMs: 15_000 },
   );
@@ -133,90 +142,125 @@ export default function Approvals() {
         />
       ) : (
         <div className="divide-y divide-line-subtle border-t border-line-subtle">
-          {pending.map((approval) => (
-            <div key={approval.id} className="approval-row">
-              <div className="approval-row-head">
-                <span className="approval-marker" aria-hidden="true" />
+          {pending.map((approval) => {
+            const briefing = approval.briefing;
+            // The server says who may decide; without a briefing (an older
+            // API) the page falls back to the role it can see.
+            const decidable = briefing
+              ? briefing.youCanDecide
+              : canDecide && (typeof approval.metadata.policyId !== "string" || canDecideGoverned);
 
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-semibold leading-snug tracking-[-0.018em] text-ink-primary">
-                    {approval.action}
+            return (
+              <article key={approval.id} className="approval-row" aria-label={briefing?.step?.title ?? approval.action}>
+                <div className="approval-row-head">
+                  <span className="approval-marker" aria-hidden="true" />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[15px] font-semibold leading-snug tracking-[-0.018em] text-ink-primary">
+                      {briefing?.step?.title ?? approval.action}
+                    </div>
+
+                    <div className="t-meta mt-1.5">
+                      {briefing?.agent ? `${briefing.agent.name} is waiting` : "An agent is waiting"}
+                      {briefing?.mission && ` · ${briefing.mission.objective}`}
+                      {briefing?.mission?.workspace && ` · ${briefing.mission.workspace}`}
+                    </div>
                   </div>
 
-                  <div className="t-machine mt-1.5">{approval.resource}</div>
+                  {briefing?.risk && <StatusPill tone={briefing.risk === "low" ? "idle" : "warning"}>{briefing.risk} risk</StatusPill>}
+                  <StatusPill tone="warning" pulse>
+                    {approval.status}
+                  </StatusPill>
                 </div>
 
-                <StatusPill tone="warning" pulse>
-                  {approval.status}
-                </StatusPill>
-              </div>
+                <dl className="approval-facts">
+                  <div>
+                    <dt className="t-eyebrow">Why it stopped</dt>
+                    <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
+                      {approval.reason}
+                      {briefing && <span className="mt-1.5 block text-ink-muted">{REQUESTED_BY[briefing.requestedBy](briefing)}</span>}
+                    </dd>
+                  </div>
 
-              <dl className="approval-facts">
-                <div>
-                  <dt className="t-eyebrow">Why it stopped</dt>
-                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
-                    {approval.reason}
-                  </dd>
-                </div>
+                  <div>
+                    <dt className="t-eyebrow">If you approve</dt>
+                    <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
+                      {briefing?.onApprove ??
+                        "The task goes onto the durable queue, a worker picks it up, and everything depending on it continues."}
+                    </dd>
+                  </div>
 
-                <div>
-                  <dt className="t-eyebrow">If you approve</dt>
-                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
-                    The task goes onto the durable queue, a worker picks it up,
-                    and everything depending on it continues.
-                  </dd>
-                </div>
+                  <div>
+                    <dt className="t-eyebrow">If you reject</dt>
+                    <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
+                      {briefing?.onReject ??
+                        "The decision is recorded against the run and the task stays unexecuted. Nothing is deleted."}
+                    </dd>
+                  </div>
+                </dl>
 
-                <div>
-                  <dt className="t-eyebrow">If you reject</dt>
-                  <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
-                    The decision is recorded against the run and the task stays
-                    unexecuted. Nothing is deleted.
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="approval-row-foot">
-                <span className="t-machine">
-                  requested {formatRelativeTime(approval.createdAt)}
-                </span>
-
-                <Link to={`/missions/${approval.workId}`} className="button-quiet">
-                  Open the mission
-                </Link>
-
-                <span className="flex-1" />
-
-                {!canDecide ? (
-                  <span className="t-meta">Your role can see this step but not decide it.</span>
-                ) : typeof approval.metadata.policyId === "string" && !canDecideGoverned ? (
-                  <span className="t-meta">A governance policy requires an owner or admin to decide this step.</span>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      disabled={resolving === approval.id}
-                      onClick={() => decide(approval, "reject")}
-                      className="button-ghost button-reject"
-                    >
-                      Reject
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={resolving === approval.id}
-                      onClick={() => decide(approval, "approve")}
-                      className="button-primary button-approve-strong"
-                    >
-                      {resolving === approval.id
-                        ? "Working…"
-                        : "Approve and continue"}
-                    </button>
-                  </>
+                {briefing && (briefing.step?.description || briefing.tools.length > 0) && (
+                  <div className="approval-involves">
+                    <span className="t-eyebrow">What it involves</span>
+                    {briefing.step?.description && <p className="t-body mt-1.5">{briefing.step.description}</p>}
+                    {briefing.tools.length > 0 && (
+                      <div className="token-set">
+                        {briefing.tools.map((tool) => (
+                          <span key={tool} className={`token ${briefing.externalWrites.includes(tool) ? "token-unknown" : "token-tool"}`}>
+                            {tool}{briefing.externalWrites.includes(tool) ? " · changes an outside system" : ""}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
-              </div>
-            </div>
-          ))}
+
+                <div className="approval-row-foot">
+                  <span className="t-machine">
+                    requested {formatRelativeTime(approval.createdAt)}
+                  </span>
+
+                  <Link to={`/missions/${approval.workId}`} className="button-quiet">
+                    View the mission
+                  </Link>
+
+                  <span className="flex-1" />
+
+                  {!decidable ? (
+                    <span className="t-meta">
+                      {!canDecide
+                        ? "Your role can see this step but not decide it."
+                        : briefing?.decidedBy === "owners_and_admins" && briefing.requestedBy !== "policy"
+                          ? "An owner or admin decides this step."
+                          : "A governance policy requires an owner or admin to decide this step."}
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={resolving === approval.id}
+                        onClick={() => decide(approval, "reject")}
+                        className="button-ghost button-reject"
+                      >
+                        Reject
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={resolving === approval.id}
+                        onClick={() => decide(approval, "approve")}
+                        className="button-primary button-approve-strong"
+                      >
+                        {resolving === approval.id
+                          ? "Working…"
+                          : "Approve and continue"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 

@@ -76,3 +76,61 @@ describe("the approvals queue, by role", () => {
     expect(screen.getAllByRole("button", { name: "Approve and continue" })).toHaveLength(2);
   });
 });
+
+describe("an approval with the server's briefing", () => {
+  function briefed(youCanDecide: boolean) {
+    return {
+      ...approval("governed", { externalWrites: ["github_create_issue"] }),
+      briefing: {
+        mission: { id: "c0000000-0000-4000-8000-000000000001", objective: "File the regression.", workspace: "Engineering" },
+        step: { title: "Open the issue", description: "Create an issue in acme/app." },
+        agent: { id: "agent-tony", name: "Tony" },
+        requestedBy: "external_write" as const,
+        policy: null,
+        skill: null,
+        externalWrites: ["Create GitHub issue"],
+        tools: ["Create GitHub issue"],
+        risk: "high" as const,
+        onApprove: "Tony runs this step and may use Create GitHub issue once.",
+        onReject: "The step does not run and the mission stops here.",
+        decidedBy: "owners_and_admins" as const,
+        youCanDecide,
+      },
+    };
+  }
+
+  function openWith(role: OrganizationRole, youCanDecide: boolean) {
+    stubNetwork((call) =>
+      call.url.pathname === "/approvals"
+        ? json(200, { approvals: [briefed(youCanDecide)] })
+        : json(404, { error: { code: "NOT_FOUND", message: "Not found." } }));
+
+    const router = createMemoryRouter(
+      [{ path: "/approvals", element: <AccessContext.Provider value={signedInAs(role)}><Approvals /></AccessContext.Provider> }],
+      { initialEntries: ["/approvals"] },
+    );
+
+    render(<RouterProvider router={router} />);
+  }
+
+  it("says what is approved, why, who waits, and what each answer does", async () => {
+    openWith("admin", true);
+
+    const card = await screen.findByRole("article", { name: "Open the issue" });
+    expect(card.textContent).toMatch(/Tony is waiting/);
+    expect(card.textContent).toMatch(/File the regression/);
+    expect(card.textContent).toMatch(/changes something outside the company/);
+    expect(card.textContent).toMatch(/may use Create GitHub issue once/);
+    expect(card.textContent).toMatch(/mission stops here/);
+    expect(card.textContent).toMatch(/high risk/);
+    expect(screen.getByRole("button", { name: "Approve and continue" })).toBeDefined();
+  });
+
+  it("follows the server's answer on who may decide, not the role alone", async () => {
+    openWith("member", false);
+
+    await screen.findByRole("article", { name: "Open the issue" });
+    expect(screen.queryByRole("button", { name: "Approve and continue" })).toBeNull();
+    expect(screen.getByText("An owner or admin decides this step.")).toBeDefined();
+  });
+});
