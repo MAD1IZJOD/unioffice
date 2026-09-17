@@ -53,7 +53,9 @@ export type Permission =
   /** Make knowledge current, edit, archive, merge, replace, settle conflicts. */
   | "knowledge.curate"
   /** Connect and disconnect external systems, and decide what agents may do through them. */
-  | "connections.manage";
+  | "connections.manage"
+  /** Write, change, archive and restore the organization's own skills. */
+  | "skills.manage";
 
 const EVERYTHING: readonly Permission[] = [
   "organization.read",
@@ -69,6 +71,7 @@ const EVERYTHING: readonly Permission[] = [
   "knowledge.propose",
   "knowledge.curate",
   "connections.manage",
+  "skills.manage",
 ];
 
 const GRANTS: Record<OrganizationRole, ReadonlySet<Permission>> = {
