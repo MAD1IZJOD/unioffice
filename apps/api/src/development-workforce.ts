@@ -30,6 +30,7 @@ const workforce = [
     description: "Reads the objective, decides the order of the work, routes each task to whoever can actually do it, and holds the outcome together.",
     capabilities: ["planning", "coordination", "decision_support"],
     toolIds: [] as string[],
+    skills: [] as string[],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c502",
@@ -38,6 +39,7 @@ const workforce = [
     description: "Builds. Engineering analysis, technical design and structured data transformation.",
     capabilities: ["coding", "technical_design", "data_transformation"],
     toolIds: ["calculator", "datetime", "json_transform"],
+    skills: ["code-review", "debugging", "api-design", "database-investigation", "test-generation", "incident-analysis"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c503",
@@ -46,6 +48,7 @@ const workforce = [
     description: "Runs the numbers exactly. Calculation, financial analysis and quantitative decision support.",
     capabilities: ["calculation", "financial_analysis", "decision_support"],
     toolIds: ["calculator", "datetime"],
+    skills: ["financial-analysis", "budget-review", "variance-analysis", "forecasting"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c504",
@@ -54,6 +57,7 @@ const workforce = [
     description: "Works the question over: reads the supplied context and company memory, synthesises what it finds and writes the analysis.",
     capabilities: ["research", "synthesis", "writing"],
     toolIds: ["datetime", "json_transform"],
+    skills: ["web-research", "competitor-analysis", "source-synthesis", "briefing-generation", "meeting-summary"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c505",
@@ -62,6 +66,7 @@ const workforce = [
     description: "Handles people operations, process design and the internal ways of working the company runs on.",
     capabilities: ["people_operations", "process_design", "writing"],
     toolIds: ["datetime"],
+    skills: ["candidate-screening", "onboarding-planning", "policy-drafting", "employee-communication"],
   },
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c506",
@@ -70,6 +75,7 @@ const workforce = [
     description: "Turns what the company knows into clear customer and stakeholder messages. Drafts them; never sends anything externally.",
     capabilities: ["communication", "stakeholder_messaging", "writing"],
     toolIds: ["datetime"],
+    skills: ["executive-briefing", "stakeholder-update", "announcement-drafting", "meeting-summary"],
   },
 ];
 
@@ -130,6 +136,7 @@ export async function ensureDevelopmentWorkforce(
         status: "active",
         capabilities: blueprint.capabilities,
         toolIds,
+        skills: blueprint.skills,
         createdAt: now,
         updatedAt: now,
         metadata: {
@@ -155,6 +162,7 @@ export async function ensureDevelopmentWorkforce(
       currentAgent.name !== blueprint.name ||
       JSON.stringify([...currentAgent.toolIds].sort()) !== JSON.stringify([...toolIds].sort()) ||
       JSON.stringify([...currentAgent.capabilities].sort()) !== JSON.stringify([...blueprint.capabilities].sort()) ||
+      JSON.stringify([...(currentAgent.skills ?? [])].sort()) !== JSON.stringify([...blueprint.skills].sort()) ||
       currentAgent.description !== blueprint.description ||
       currentAgent.metadata.systemInstructions !== systemInstructions;
 
@@ -165,6 +173,7 @@ export async function ensureDevelopmentWorkforce(
         description: blueprint.description,
         capabilities: blueprint.capabilities,
         toolIds,
+        skills: blueprint.skills,
         updatedAt: now,
         metadata: {
           ...currentAgent.metadata,

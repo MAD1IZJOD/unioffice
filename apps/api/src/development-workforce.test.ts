@@ -111,6 +111,7 @@ test("does not rewrite an agent that already matches the blueprint", async () =>
     status: "active",
     capabilities: ["calculation", "financial_analysis", "decision_support"],
     toolIds: ["calculator", "datetime"],
+    skills: ["financial-analysis", "budget-review", "variance-analysis", "forecasting"],
     createdAt: now,
     updatedAt: now,
     metadata: {
@@ -195,4 +196,22 @@ test("leaves an agent alone once a person has configured it", async () => {
   assert.deepEqual(after.capabilities, ["calculation"]);
   assert.deepEqual(after.toolIds, ["calculator"]);
   assert.equal(after.status, "paused");
+});
+
+test("every seeded agent holds only skills it can actually use", async () => {
+  const { resolveSkills, skillFit } = await import("@unioffice/skills");
+  const repository = agentRepository([]);
+
+  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), repository);
+  const skills = resolveSkills([]);
+
+  assert.ok(agents.some((agent) => (agent.skills ?? []).length > 0));
+
+  for (const agent of agents) {
+    for (const slug of agent.skills ?? []) {
+      const skill = skills.get(slug);
+      assert.ok(skill, `${agent.name} holds unknown skill ${slug}`);
+      assert.equal(skillFit(agent, skill).fits, true, `${agent.name} cannot use ${slug}`);
+    }
+  }
 });
