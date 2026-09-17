@@ -524,7 +524,7 @@ export default function Room() {
               <div className="detail-label mb-1.5">
                 Attempt {executionJob.attempts} did not finish
               </div>
-              {executionJob.lastError} UNI-OFFICE put it back on the queue, and
+              {executionJob.lastError} UNIOFFICE put it back on the queue, and
               a worker will resume it without you.
             </div>
           )}

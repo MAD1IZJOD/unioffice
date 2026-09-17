@@ -104,7 +104,7 @@ export function readMission(data: MissionData): MissionState {
     return {
       phase: "recovering",
       label: "Recovering",
-      line: "UNI-OFFICE put this mission back on the queue.",
+      line: "UNIOFFICE put this mission back on the queue.",
       note: executionJob?.lastError
         ? `Attempt ${executionJob.attempts} did not finish: ${executionJob.lastError}`
         : `Resuming on attempt ${(executionJob?.attempts ?? 0) + 1}.`,
@@ -411,7 +411,7 @@ function tell(
             : payload.reason === "retry"
               ? "The mission went back on the queue to be retried."
               : payload.reason === "recovered"
-                ? "UNI-OFFICE recovered the mission and queued it again."
+                ? "UNIOFFICE recovered the mission and queued it again."
                 : "The mission went onto the durable queue.",
         note: "A worker takes it from here, so the run survives a restart.",
       };
@@ -434,7 +434,7 @@ function tell(
           act: "execution",
           tone: "tone-warning",
           actor,
-          line: `The worker running “${task ?? "a task"}” stopped, so UNI-OFFICE took the step back.`,
+          line: `The worker running “${task ?? "a task"}” stopped, so UNIOFFICE took the step back.`,
           note: "Nothing finished was lost. Another worker picks it up from here.",
         };
       }

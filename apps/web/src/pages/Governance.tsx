@@ -42,7 +42,7 @@ import {
 /**
  * The Governance Center.
  *
- * UNI-OFFICE acts on its own. This is where a person decides what it is
+ * UNIOFFICE acts on its own. This is where a person decides what it is
  * allowed to do on its own, and the whole surface is arranged around that one
  * distinction: rules first, then who they constrain, then what they actually
  * stopped.

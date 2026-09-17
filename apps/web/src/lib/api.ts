@@ -1,4 +1,4 @@
-// Typed client for the UNI-OFFICE API. No framework, no caching layer - the
+// Typed client for the UNIOFFICE API. No framework, no caching layer - the
 // backend is small enough that typed fetch calls are the honest amount of
 // infrastructure this needs right now.
 //

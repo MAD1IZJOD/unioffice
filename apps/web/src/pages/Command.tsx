@@ -57,7 +57,7 @@ import { SignalField } from "../components/SignalField";
 /**
  * The Command Center: Mission Control.
  *
- * Opening UNI-OFFICE should answer, within seconds and without scrolling,
+ * Opening UNIOFFICE should answer, within seconds and without scrolling,
  * whether the company needs you. So the page is built on exceptions:
  *
  *   1. The statement says, at display size, whether anything needs you.

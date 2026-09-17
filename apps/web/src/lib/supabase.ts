@@ -6,7 +6,7 @@ let client: SupabaseClient | null | undefined;
  * The browser's Supabase client, used for signing in and nothing else.
  *
  * It holds only the public anon key. Every read and write of company data goes
- * through the UNI-OFFICE API with the signed-in user's access token, where
+ * through the UNIOFFICE API with the signed-in user's access token, where
  * membership and permissions are checked; the browser never talks to the
  * database tables directly. Null when the project is not configured.
  */

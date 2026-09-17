@@ -56,7 +56,7 @@ export default function SignIn() {
             <Boxes size={14} strokeWidth={2} />
           </span>
           <span>
-            <span className="brand-name block">UNI-OFFICE</span>
+            <span className="brand-name block">UNIOFFICE</span>
             <span className="brand-subtitle block">OPERATING SYSTEM</span>
           </span>
         </div>
