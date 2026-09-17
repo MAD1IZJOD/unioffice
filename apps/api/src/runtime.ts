@@ -436,6 +436,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     policies: policyRepository,
     tools: toolRegistry,
     connections: connectionRepository,
+    skills: skillService,
   });
 
   const staleRunReconciler = new StaleRunReconciler(

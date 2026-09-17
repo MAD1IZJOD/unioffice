@@ -347,3 +347,35 @@ test("a profile shows only the external systems the agent holds tools for, and w
   await connections.revoke(orgA, live!.id, undefined, new Date());
   assert.equal((await service.getProfile(orgA, "tony" as AgentId)).systems.find((system) => system.provider === "github")!.state, "not_connected");
 });
+
+test("a profile shows each assigned skill and whether the agent can really use it", async () => {
+  const { systemSkills } = await import("@unioffice/skills");
+  const skills = new Map(systemSkills().map((skill) => [skill.slug, skill]));
+
+  const agents = [agent("harvey", {
+    capabilities: ["financial_analysis"],
+    toolIds: ["datetime"],
+    skills: ["financial-analysis", "candidate-screening", "retired-skill"],
+  })];
+
+  const service = new WorkforceService({
+    agents: {
+      async findById(id) { return agents.find((entry) => entry.id === id) ?? null; },
+      async findByOrganization() { return agents; },
+    },
+    reads: new InMemoryOperationalReadRepository([], [], [], []),
+    workspaces: { async findByOrganization() { return []; } },
+    policies: { async findEnforced() { return []; } },
+    tools: createDefaultToolRegistry(),
+    skills: { async effective() { return skills; } },
+  });
+
+  const profile = await service.getProfile(orgA, "harvey" as AgentId);
+  const bySlug = new Map(profile.skills.map((skill) => [skill.slug, skill]));
+
+  assert.equal(bySlug.get("financial-analysis")?.usable, false);
+  assert.match(bySlug.get("financial-analysis")?.note ?? "", /calculator tool/);
+  assert.equal(bySlug.get("candidate-screening")?.usable, false, "people_operations is missing");
+  assert.equal(bySlug.get("retired-skill")?.usable, false);
+  assert.match(bySlug.get("retired-skill")?.note ?? "", /no longer active/);
+});

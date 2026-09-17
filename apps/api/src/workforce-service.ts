@@ -4,6 +4,7 @@ import type {
   Connection,
   ConnectionProvider,
   EventType,
+  Skill,
   OrganizationId,
   PolicyEffect,
   RiskLevel,
@@ -28,6 +29,7 @@ import type { ToolRegistry } from "@unioffice/tools";
 
 import { AgentNotFoundError } from "./agent-directory-service.js";
 import { PROVIDER_INFO } from "./connections/connection-providers.js";
+import { skillFit } from "@unioffice/skills";
 import { reachesAgent } from "./governance-overview-service.js";
 import { clip, describeEvent, isTerminal } from "./mission-reading.js";
 
@@ -143,6 +145,20 @@ export interface AgentProfile {
    * when a live connection reaches the agent, allows what the tool does, and
    * governance does not refuse it.
    */
+  /**
+   * The skills the agent was assigned, as they resolve where it works, and
+   * whether it can really be given a step for each: an assignment whose tool
+   * or capability was later taken away is shown as not usable, not hidden.
+   */
+  skills: Array<{
+    slug: string;
+    name: string;
+    category: Skill["category"] | null;
+    scope: Skill["scope"] | null;
+    approval: Skill["approval"] | null;
+    usable: boolean;
+    note: string;
+  }>;
   systems: Array<{
     provider: ConnectionProvider;
     name: string;
@@ -167,6 +183,8 @@ export interface WorkforceDependencies {
   tools: Pick<ToolRegistry, "get" | "list">;
   /** Absent in tests that are not about external systems. */
   connections?: Pick<ConnectionRepository, "list">;
+  /** Absent in tests that are not about skills. */
+  skills?: { effective(organizationId: OrganizationId, workspaceId?: WorkspaceId): Promise<Map<string, Skill>> };
 }
 
 /** Missions the roster's status and recent outcomes are read over. */
@@ -243,7 +261,7 @@ export class WorkforceService {
       throw new AgentNotFoundError(`Agent not found: ${agentId}`);
     }
 
-    const [steps, events, artifacts, workspaces, enforced, connections] = await Promise.all([
+    const [steps, events, artifacts, workspaces, enforced, connections, effectiveSkills] = await Promise.all([
       this.deps.reads.findTaskSummariesByAgent(agent.id, PROFILE_STEPS),
       this.deps.reads.findEventsByTypes(organizationId, { types: AGENT_EVENT_TYPES, agentId: agent.id, limit: PROFILE_ACTIVITY * 2 }),
       this.deps.reads.findArtifactSummariesByAgent(organizationId, agent.id, PROFILE_ARTIFACTS * 2),
@@ -252,6 +270,9 @@ export class WorkforceService {
       this.agentHoldsExternalTools(agent) && this.deps.connections
         ? this.deps.connections.list(organizationId)
         : Promise.resolve([] as Connection[]),
+      (agent.skills ?? []).length > 0 && this.deps.skills
+        ? this.deps.skills.effective(organizationId, agent.workspaceId)
+        : Promise.resolve(new Map<string, Skill>()),
     ]);
 
     // Steps carry no organization. Their missions are read back inside this
@@ -311,6 +332,31 @@ export class WorkforceService {
         })
         .slice(0, PROFILE_ACTIVITY),
       governance,
+      skills: (agent.skills ?? []).map((slug) => {
+        const skill = effectiveSkills.get(slug);
+
+        if (!skill) {
+          return { slug, name: slug, category: null, scope: null, approval: null, usable: false, note: "This skill is no longer active here." };
+        }
+
+        const fit = skillFit(agent, skill);
+        const missing = [
+          ...fit.missingTools.map((toolId) => `the ${toolId} tool`),
+          ...fit.missingCapabilities.map((capability) => `the ${capability} capability`),
+        ];
+
+        return {
+          slug,
+          name: skill.name,
+          category: skill.category,
+          scope: skill.scope,
+          approval: skill.approval,
+          usable: fit.fits,
+          note: fit.fits
+            ? skill.approval === "required" ? "Each step waits for an owner or admin to approve it." : "Can be given steps."
+            : `Needs ${missing.join(" and ")}.`,
+        };
+      }),
       systems: this.systemsOf(agent, connections.filter((connection) => connection.organizationId === organizationId), governance),
     };
   }
