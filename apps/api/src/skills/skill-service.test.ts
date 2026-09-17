@@ -13,7 +13,7 @@ import type {
   WorkspaceId,
 } from "@unioffice/core";
 
-import { InMemorySkillRepository } from "@unioffice/database";
+import { InMemorySkillRepository, InMemorySkillVersionRepository } from "@unioffice/database";
 import { createDefaultToolRegistry } from "@unioffice/tools";
 
 import { AccessError } from "../access/access-resolver.js";
@@ -64,6 +64,7 @@ function person(role: OrganizationRole, organizationId = orgA, grants: Array<[Wo
 
 function setup(agents: Agent[] = [agent("Ledger")]) {
   const repository = new InMemorySkillRepository();
+  const versions = new InMemorySkillVersionRepository();
   const events: RecordEventInput[] = [];
   const workspaces: Workspace[] = [
     { id: finance, organizationId: orgA, name: "Finance", slug: "finance", status: "active", createdAt: now, updatedAt: now, metadata: {} },
@@ -79,10 +80,11 @@ function setup(agents: Agent[] = [agent("Ledger")]) {
     },
     tools: createDefaultToolRegistry(),
     eventRecorder: { async record(event) { events.push(structuredClone(event)); return event as never; } },
+    versions,
     now: () => now,
   });
 
-  return { service, repository, events };
+  return { service, repository, events, versions };
 }
 
 const draft = {
@@ -177,6 +179,37 @@ test("changes are versioned, need the version seen, and never touch system skill
 
   assert.deepEqual(events.map((event) => event.type), ["skill.created", "skill.updated", "skill.archived"]);
   assert.doesNotMatch(JSON.stringify(events), /Compare each line/, "instructions are not copied into the audit trail");
+});
+
+test("every published version is kept, so a step pinned to one still gets what it pinned", async () => {
+  const { service } = setup();
+  const owner = person("owner");
+
+  const created = await service.create(owner, draft);
+  await service.update(owner, created.id, { instructions: "Compare each line to the same quarter last year.", expectedVersion: 1 });
+
+  const first = await service.pinned(orgA, created.id, 1);
+  const second = await service.pinned(orgA, created.id, 2);
+
+  assert.match(first?.instructions ?? "", /prior quarter/, "version one is kept as it was written");
+  assert.match(second?.instructions ?? "", /same quarter last year/);
+  assert.equal(await service.pinned(orgA, created.id, 3), null, "a version nobody published is not invented");
+  assert.equal(await service.pinned(orgB, created.id, 1), null, "another organization cannot read it");
+
+  assert.deepEqual((await service.history(owner, created.id)).map((entry) => entry.version), [2, 1]);
+});
+
+test("a system skill is pinned the first time an organization uses it", async () => {
+  const { service } = setup();
+  const system = (await service.effective(orgA)).get("financial-analysis");
+
+  assert.ok(system);
+  assert.equal(await service.pinned(orgA, "system:financial-analysis", 1), null);
+
+  const pinned = await service.pin(orgA, system);
+
+  assert.equal(pinned.version, system.version);
+  assert.equal((await service.pinned(orgA, "system:financial-analysis", system.version))?.slug, "financial-analysis");
 });
 
 test("an organization skill replaces the system skill of the same slug; drafts and archived ones do not", async () => {

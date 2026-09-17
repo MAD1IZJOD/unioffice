@@ -1,10 +1,12 @@
 import {
   createEntityId,
+  skillRefOf,
   SKILL_STATUSES,
   type Agent,
   type OrganizationId,
   type Skill,
   type SkillId,
+  type SkillRef,
   type SkillStatus,
   type UserId,
   type Workspace,
@@ -15,6 +17,7 @@ import {
   SkillConflictError,
   type AgentRepository,
   type SkillRepository,
+  type SkillVersionRepository,
 } from "@unioffice/database";
 
 import {
@@ -90,6 +93,12 @@ export interface SkillServiceOptions {
   };
   tools: Pick<ToolRegistry, "list">;
   eventRecorder: Pick<EventRecorder, "record">;
+  /**
+   * Where published versions are kept, unchanged, so a mission can go on
+   * using the version it started with. Absent, skills work as before and
+   * nothing is pinned.
+   */
+  versions?: SkillVersionRepository;
   now?: () => Date;
 }
 
@@ -193,6 +202,7 @@ export class SkillService {
       throw error;
     }
 
+    await this.remember(created);
     await this.audit(access.userId, created, "skill.created", {});
     return this.get(access, created.id);
   }
@@ -311,8 +321,57 @@ export class SkillService {
       throw new SkillStateError("This skill changed since you opened it. Reload it and make your change again.");
     }
 
+    await this.remember(saved);
     await this.audit(access.userId, saved, type, { previousVersion: current.version });
     return this.get(access, saved.id);
+  }
+
+  /**
+   * Keeps this version as it is now. Every published version is kept, so a
+   * step that pinned one can still be run the way it was written, however
+   * much the skill has moved on since.
+   */
+  private async remember(skill: Skill): Promise<void> {
+    if (!skill.organizationId) return;
+    await this.options.versions?.record(skill.organizationId, skill);
+  }
+
+  /**
+   * Pins a skill for a step that is about to use it, and returns the version
+   * that is now on record. A system skill is remembered the first time an
+   * organization uses it, which is the first time there is anything to keep.
+   */
+  async pin(organizationId: OrganizationId, skill: Skill): Promise<Skill> {
+    if (!this.options.versions) return skill;
+    return this.options.versions.record(organizationId, skill);
+  }
+
+  /**
+   * The exact version a step pinned, as it was written then. Null when it was
+   * never recorded - which is what a mission planned before versions were
+   * kept looks like, and the caller says so rather than quietly using a
+   * different version.
+   */
+  async pinned(organizationId: OrganizationId, ref: SkillRef, version: number): Promise<Skill | null> {
+    if (!this.options.versions) return null;
+    return this.options.versions.find(organizationId, ref, version);
+  }
+
+  /** Every version of one skill that is on record, newest first. */
+  async history(access: Access, skillId: string): Promise<Skill[]> {
+    const skill = await this.resolveForHistory(access, skillId);
+    if (!this.options.versions) return [skill];
+    return this.options.versions.history(access.organizationId, skillRefOf(skill));
+  }
+
+  private async resolveForHistory(access: Access, skillId: string): Promise<Skill> {
+    if (skillId.startsWith("system:")) {
+      const system = systemSkills().find((entry) => entry.id === skillId);
+      if (!system) throw new SkillNotFoundError();
+      return { ...system, organizationId: access.organizationId };
+    }
+
+    return this.stored(access, skillId);
   }
 
   private validate(input: Record<string, unknown>, base?: Skill): SkillDraft {

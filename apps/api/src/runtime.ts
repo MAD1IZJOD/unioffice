@@ -10,6 +10,7 @@ import {
   SupabaseArtifactRepository,
   SupabaseConnectionRepository,
   SupabaseSkillRepository,
+  SupabaseSkillVersionRepository,
   SupabaseEventRepository,
   SupabaseExecutionJobRepository,
   SupabaseKnowledgeLinkRepository,
@@ -103,6 +104,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const membershipRepository = new SupabaseMembershipRepository(supabase);
   const connectionRepository = new SupabaseConnectionRepository(supabase);
   const skillRepository = new SupabaseSkillRepository(supabase);
+  const skillVersionRepository = new SupabaseSkillVersionRepository(supabase);
 
   // Tokens are checked with the auth server; what a verified person may do
   // comes from their membership, which only the API reads and writes.
@@ -158,6 +160,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workspaces: workspaceRepository,
     tools: toolRegistry,
     eventRecorder,
+    versions: skillVersionRepository,
   });
 
   // Governance is built before the agent runtime because the runtime's tool
