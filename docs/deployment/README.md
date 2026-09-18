@@ -65,14 +65,44 @@ A full content security policy is deliberately not set yet: `connect-src`
 cannot be written correctly until the API's own origin is fixed. Add it in the
 same file once that is decided.
 
-## The API
+## The API and the worker
 
-The API is a long-running Fastify server, with a separate worker process, and
-it reaches a model through Ollama. It is not a serverless function and does
-not belong on Vercel. It needs a host that can run Node continuously and reach
-whatever model backend is configured.
+Two long-lived Node processes. The API is Fastify and answers the browser; the
+worker takes objectives off the durable queue and runs them. Neither is a
+serverless function, and neither belongs on Vercel.
 
-Wherever it runs, it needs to allow the application's origin:
+```
+pnpm install                          # dev dependencies included; see below
+pnpm --filter @unioffice/api start
+pnpm --filter @unioffice/worker start
+```
+
+Both run the TypeScript entrypoint through `tsx`, which is why `tsx` is a
+dependency of both apps rather than a tool of the workspace: these processes
+need it to start, so an install that drops development dependencies still
+produces a host that works.
+
+They share one configuration and can be started, stopped and restarted
+independently. Jobs are claimed with a conditional update, so more than one
+worker is safe; the API is not, because stream tickets and rate limiting are
+per-process - one API instance is the supported shape.
+
+### Listening
+
+`HOST` decides the address. It defaults to `127.0.0.1`, so a development
+machine is never quietly serving the network, and a deployment whose reverse
+proxy is on the same host keeps that default. A container has to be reachable
+from outside itself:
+
+```
+HOST=0.0.0.0
+API_PORT=4000
+```
+
+Anything that is not a bare address - a scheme, a path, whitespace - is
+refused at startup rather than becoming a server nobody can reach.
+
+### Origins
 
 ```
 API_CORS_ORIGINS=https://unioffice.pro,https://www.unioffice.pro
@@ -80,9 +110,87 @@ WEB_URL=https://unioffice.pro
 API_URL=https://api.unioffice.pro
 ```
 
-`API_CORS_ORIGINS` is an explicit list of origins. There is no wildcard and no
-pattern matching; an origin that is not listed gets no CORS header at all.
-Keep the localhost entries in the development `.env` and out of production.
+`API_CORS_ORIGINS` is an explicit list. There is no wildcard and no pattern
+matching; an origin that is not listed gets no CORS header at all. Keep the
+localhost entries in the development `.env` and out of production.
+
+### Server-only configuration
+
+Set on the API and the worker, never on the web project, and never with a
+`VITE_` prefix.
+
+| Variable | Production value |
+| --- | --- |
+| `SUPABASE_URL` | the project URL (required) |
+| `SUPABASE_SERVICE_ROLE_KEY` | the service-role key (required) - **secret** |
+| `HOST` | `127.0.0.1` behind a local proxy, `0.0.0.0` in a container |
+| `API_PORT` | `4000` |
+| `API_URL` | `https://api.unioffice.pro` |
+| `WEB_URL` | `https://unioffice.pro` |
+| `API_CORS_ORIGINS` | `https://unioffice.pro,https://www.unioffice.pro` |
+| `OLLAMA_BASE_URL` | where the model is served |
+| `OLLAMA_MODEL` | `qwen3:8b` |
+| `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text`, or empty for keyword recall only |
+| `SEED_DEVELOPMENT_WORKFORCE` | **`false`** |
+| `WORKER_POLL_INTERVAL_MS`, `WORKER_LEASE_MS`, `WORKER_CONCURRENCY` | defaults are fine to start |
+| `EXECUTION_STALE_AFTER_MINUTES`, `STREAM_TAIL_INTERVAL_MS` | defaults are fine to start |
+
+`SEED_DEVELOPMENT_WORKFORCE` must be `false` in production. Left `true`, the
+API creates the development organization and its demo workforce in the real
+database on every start.
+
+Only if connections are enabled: `CONNECT_ENCRYPTION_KEY` (required once
+either provider is set), `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`,
+`GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET`. All secret.
+
+Configuration is read from the environment. The repository-root `.env` is
+loaded when it exists and is ignored when it does not, so a host that sets
+real environment variables needs no file; `UNIOFFICE_ENV_FILE` points at one
+elsewhere if you prefer.
+
+### Is it up, and can it work
+
+| Endpoint | Question | Answer |
+| --- | --- | --- |
+| `GET /health` | Is this process alive? | Always 200 while it is running. Asks nothing of Supabase, the model or the queue. |
+| `GET /readiness` | Can it do its job? | 200 with what it found, or 503 naming what is down. |
+
+Point a process manager's restart check at `/health` and a load balancer's
+health check at `/readiness`. They are deliberately different questions:
+restarting the API because Supabase is briefly unreachable turns one outage
+into two.
+
+The model backend is **reported but not required** by readiness. One instance
+serves both reading a mission and planning one, so refusing all traffic while
+the model restarts would take the whole product down to protect the part that
+needs it. While `ollama` reads `unreachable`, everything except planning and
+execution keeps working, and planning fails with its own message.
+
+Neither endpoint needs a session, and neither returns anything about the
+company.
+
+### A simple host
+
+One machine running the API, the worker, Ollama and Caddy is enough for the
+first testers, and keeps `OLLAMA_BASE_URL` on loopback.
+
+```
+unioffice.pro      -> Vercel (the web app)
+api.unioffice.pro  -> Caddy -> 127.0.0.1:4000 (the API)
+                      worker (no inbound port)
+                      Ollama on 127.0.0.1:11434
+```
+
+Caddy terminates TLS and does not buffer responses, so the live channel works
+through it unchanged. The stream already sends `x-accel-buffering: no` and its
+own keep-alive frames, so an nginx in front of it would also work without
+extra configuration. Allow at least 120 seconds for a request: planning runs
+inside `POST /work/:id/plan` and has been measured at 60-90 seconds.
+
+Sizing is decided by the model, not by this code: the two Node processes sit
+around 100-150 MB each, while `qwen3:8b` wants roughly 8-10 GB of RAM on CPU.
+Pointing `OLLAMA_BASE_URL` at a machine or service that hosts the model
+elsewhere needs no code change at all.
 
 ## Signing in
 
