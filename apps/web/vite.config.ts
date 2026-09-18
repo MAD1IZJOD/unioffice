@@ -32,6 +32,11 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_API_URL": JSON.stringify(
         process.env.VITE_API_URL ?? env.VITE_API_URL ?? env.API_URL ?? "",
       ),
+      // The origin this build is served from, used to decide where sign-in is
+      // allowed to return to. Empty in development, where localhost is used.
+      "import.meta.env.VITE_APP_ORIGIN": JSON.stringify(
+        process.env.VITE_APP_ORIGIN ?? env.VITE_APP_ORIGIN ?? "",
+      ),
     },
   };
 });

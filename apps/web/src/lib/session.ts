@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { Session } from "@supabase/auth-js";
 
+import { redirectTo } from "./origins";
 import { supabaseAuth } from "./supabase";
 
 export type SessionState =
@@ -29,7 +30,7 @@ export async function signInWithGoogle(): Promise<void> {
 
   const { error } = await client.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: window.location.origin },
+    options: { redirectTo: redirectTo() },
   });
 
   if (error) throw error;
@@ -42,7 +43,7 @@ export async function sendSignInLink(email: string): Promise<void> {
 
   const { error } = await client.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
+    options: { emailRedirectTo: redirectTo(), shouldCreateUser: true },
   });
 
   if (error) throw error;
