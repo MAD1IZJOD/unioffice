@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 
 import rateLimit from "@fastify/rate-limit";
 
@@ -319,7 +319,7 @@ export function buildApiServer(
     instance.addHook("preHandler", async (request) => {
       const route = request.routeOptions.url;
 
-      if (request.method === "OPTIONS" || route === "/health") return;
+      if (request.method === "OPTIONS" || route === "/health" || route === "/readiness") return;
 
       // A provider sends the browser back here with no session attached. The
       // callback proves who it belongs to with its single-use state instead,
@@ -395,8 +395,9 @@ export function buildApiServer(
       });
     });
 
-    instance.get("/health", healthHandler(services));
-    instance.post("/health", healthHandler(services));
+    instance.get("/health", healthHandler());
+    instance.post("/health", healthHandler());
+    instance.get("/readiness", readinessHandler(services));
 
     // ---------------------------------------------------------------------
     // The live channel.
@@ -2166,11 +2167,37 @@ function parseWorkStatus(value: unknown): WorkStatus | undefined {
   return text as WorkStatus;
 }
 
-function healthHandler(services: ApiServices) {
+/**
+ * Liveness: this process is up and answering.
+ *
+ * It asks nothing of Supabase, the model or the queue, because a process
+ * manager reads this to decide whether to restart the API - and restarting it
+ * because something else is briefly down turns one outage into two.
+ */
+function healthHandler() {
   return async () => ({
     status: "ok",
-    checks: await services.healthCheck(),
+    uptimeSeconds: Math.round(process.uptime()),
   });
+}
+
+/**
+ * Readiness: whether this API can do its job right now.
+ *
+ * What it depends on is decided by the check itself; a failure here means
+ * "do not send traffic yet", not "this process is broken".
+ */
+function readinessHandler(services: ApiServices) {
+  return async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      return { status: "ready", checks: await services.healthCheck() };
+    } catch (error) {
+      return reply.code(503).send({
+        status: "not_ready",
+        reason: error instanceof Error ? error.message : "A required dependency is unavailable.",
+      });
+    }
+  };
 }
 
 /** One field of a query or body that may not be an object at all (a GET has no body). */

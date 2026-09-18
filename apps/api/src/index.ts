@@ -115,11 +115,16 @@ export async function createApiServer() {
         throw new Error(`Supabase health check failed: ${error.message}`);
       }
 
-      const ollamaResponse = await fetch(`${config.ollamaBaseUrl}/api/tags`);
-
-      if (!ollamaResponse.ok) {
-        throw new Error(`Ollama health check failed: ${ollamaResponse.status}`);
-      }
+      // The model backend is reported, not required.
+      //
+      // One instance serves reading a mission and planning one. Refusing all
+      // traffic because the model is restarting would take the whole product
+      // down to protect the one part of it that needs the model, so this says
+      // what it found and lets the rest keep working. Planning fails with its
+      // own message while this is "unreachable".
+      const ollama = await fetch(`${config.ollamaBaseUrl}/api/tags`)
+        .then((response) => (response.ok ? "ready" : `unreachable (${response.status})`))
+        .catch(() => "unreachable");
 
       // The queue is the API's link to the worker, so an unreachable queue
       // table is a real outage even when everything else answers.
@@ -138,7 +143,7 @@ export async function createApiServer() {
 
       return {
         supabase: "ready",
-        ollama: "ready",
+        ollama,
         executionQueue: queueDepth,
         model: config.ollamaModel,
         developmentOrganizationId: developmentOrganization?.organization.id,

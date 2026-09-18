@@ -73,6 +73,42 @@ test("the health check stays reachable without a session", async () => {
   assert.notEqual(response.statusCode, 401);
 });
 
+test("liveness says the process is up without asking anything else", async () => {
+  let asked = 0;
+  const app = buildTestServer(services({ healthCheck: async () => { asked += 1; return {}; } }));
+
+  const response = await app.inject({ method: "GET", url: "/health" });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().status, "ok");
+  assert.equal(asked, 0, "liveness must not depend on anything that can be down");
+  assert.equal(typeof response.json().uptimeSeconds, "number");
+});
+
+test("readiness reports the dependencies, and stays reachable without a session", async () => {
+  const app = buildTestServer(services({
+    healthCheck: async () => ({ supabase: "ready", ollama: "unreachable", executionQueue: "ready" }),
+  }));
+
+  const response = await app.inject({ method: "GET", url: "/readiness", headers: { authorization: "" } });
+
+  assert.equal(response.statusCode, 200, "a model that is briefly down does not take the API out of rotation");
+  assert.equal(response.json().status, "ready");
+  assert.equal(response.json().checks.ollama, "unreachable");
+});
+
+test("readiness refuses traffic when something it needs is down", async () => {
+  const app = buildTestServer(services({
+    healthCheck: async () => { throw new Error("Supabase health check failed: connection refused"); },
+  }));
+
+  const response = await app.inject({ method: "GET", url: "/readiness" });
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().status, "not_ready");
+  assert.match(response.json().reason, /Supabase health check failed/);
+});
+
 test("the browser may send the Authorization header", async () => {
   const app = buildTestServer(services());
   const response = await app.inject({ method: "OPTIONS", url: "/work", headers: { origin: "http://localhost:5173", authorization: "" } });
