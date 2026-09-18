@@ -25,6 +25,13 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(
         process.env.VITE_SUPABASE_ANON_KEY ?? env.VITE_SUPABASE_ANON_KEY ?? env.SUPABASE_ANON_KEY ?? "",
       ),
+      // Where the browser reaches the API. Locally this is the API on this
+      // machine; in a deployment it is whatever host the API is served from,
+      // and it has to be set there - a build that inherits the local default
+      // would send every tester's browser to their own computer.
+      "import.meta.env.VITE_API_URL": JSON.stringify(
+        process.env.VITE_API_URL ?? env.VITE_API_URL ?? env.API_URL ?? "",
+      ),
     },
   };
 });

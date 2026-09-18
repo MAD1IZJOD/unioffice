@@ -1010,11 +1010,33 @@ let activeOrganizationId: string | undefined;
 const READ_TIMEOUT_MS = 30_000;
 const MODEL_TIMEOUT_MS = 600_000;
 
+/**
+ * Where the API is.
+ *
+ * Set at build time. Locally it is the API on this machine; anywhere else it
+ * has to be given, because the local default would send a visitor's browser
+ * to their own computer and fail in a way that looks like the product is
+ * broken. A build served from a real origin without it says so plainly.
+ */
 function apiBaseUrl(): string {
-  return (
-    (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
-    "http://127.0.0.1:4000"
+  const configured = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, "");
+
+  if (configured) return configured;
+
+  if (isLocalHost()) return "http://127.0.0.1:4000";
+
+  throw new ApiError(
+    "This deployment has no API address configured, so nothing can be loaded. Set VITE_API_URL where the site is built.",
+    0,
   );
+}
+
+/** Whether this page is being served from a development machine. */
+function isLocalHost(): boolean {
+  if (typeof window === "undefined") return true;
+
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
 }
 
 /**
