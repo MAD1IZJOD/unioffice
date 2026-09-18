@@ -14,6 +14,7 @@
   "dependencies": {
     "@unioffice/api": "workspace:*",
     "@unioffice/core": "workspace:*",
-    "@unioffice/database": "workspace:*"
+    "@unioffice/database": "workspace:*",
+    "tsx": "^4.23.13"
   }
 }

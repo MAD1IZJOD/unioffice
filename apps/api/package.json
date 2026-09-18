@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts",
     "owner:claim": "tsx src/claim-owner.ts"
@@ -23,6 +24,7 @@
     "@unioffice/skills": "workspace:*",
     "@unioffice/tools": "workspace:*",
     "dotenv": "^17.4.2",
-    "fastify": "^5.12.4"
+    "fastify": "^5.12.4",
+    "tsx": "^4.23.13"
   }
 }

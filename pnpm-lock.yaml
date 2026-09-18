@@ -261,6 +261,9 @@ importers:
       fastify:
         specifier: ^5.12.4
         version: 5.12.4
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
 
   apps/web:
     dependencies:
@@ -349,6 +352,9 @@ importers:
       '@unioffice/database':
         specifier: workspace:*
         version: link:../../packages/database
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
 
   packages/agents:
     dependencies:
