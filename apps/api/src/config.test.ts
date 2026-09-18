@@ -87,3 +87,29 @@ test("a provider's client id and secret must come together, and the error names 
     (error: Error) => /must be set together/.test(error.message) && !error.message.includes("do-not-print"),
   );
 });
+
+test("listens on loopback unless a deployment asks for something else", () => {
+  assert.equal(loadApiConfig(environment()).host, "127.0.0.1", "a development machine is not on the network by accident");
+  assert.equal(loadApiConfig(environment({ HOST: "0.0.0.0" })).host, "0.0.0.0");
+  assert.equal(loadApiConfig(environment({ HOST: "localhost" })).host, "localhost");
+  assert.equal(loadApiConfig(environment({ HOST: "::1" })).host, "::1");
+  assert.equal(loadApiConfig(environment({ HOST: "  0.0.0.0  " })).host, "0.0.0.0");
+  assert.equal(loadApiConfig(environment({ HOST: "" })).host, "127.0.0.1");
+});
+
+test("a host that is not a bare address is refused rather than guessed at", () => {
+  for (const host of ["http://0.0.0.0", "0.0.0.0/8", "two hosts"]) {
+    assert.throws(
+      () => loadApiConfig(environment({ HOST: host })),
+      /HOST must be a bare address/,
+      `${host} should be refused`,
+    );
+  }
+});
+
+test("the port keeps working exactly as it did", () => {
+  assert.equal(loadApiConfig(environment()).port, 4000);
+  assert.equal(loadApiConfig(environment({ API_PORT: "8080" })).port, 8080);
+  assert.throws(() => loadApiConfig(environment({ API_PORT: "0" })), /API_PORT/);
+  assert.throws(() => loadApiConfig(environment({ API_PORT: "not-a-port" })), /API_PORT/);
+});

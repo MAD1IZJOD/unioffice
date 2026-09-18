@@ -34,6 +34,16 @@ export interface ConnectConfig {
 
 export interface ApiConfig {
   port: number;
+
+  /**
+   * The address the API listens on.
+   *
+   * Loopback by default, so a development machine is not quietly serving the
+   * network. A deployment that sits behind its own reverse proxy on the same
+   * host keeps that default; one inside a container has to be reachable from
+   * outside it, and sets 0.0.0.0.
+   */
+  host: string;
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
   ollamaBaseUrl: string;
@@ -88,6 +98,7 @@ export function loadApiConfig(
 
   return {
     port,
+    host: parseHost(env.HOST),
     supabaseUrl: requiredUrl(env, "SUPABASE_URL"),
     supabaseServiceRoleKey: required(
       env,
@@ -206,6 +217,23 @@ function parseStaleRunMinutes(value: string | undefined): number {
   }
 
   return parsed;
+}
+
+/**
+ * The listen address. Only a bare host - no scheme, no port, no path - so a
+ * mistake is refused at startup rather than becoming a server nobody can
+ * reach, or one reachable from more places than intended.
+ */
+function parseHost(value: string | undefined): string {
+  const host = value?.trim();
+
+  if (!host) return "127.0.0.1";
+
+  if (/[/\\\s]/.test(host) || host.includes("://")) {
+    throw new Error("HOST must be a bare address such as 127.0.0.1 or 0.0.0.0.");
+  }
+
+  return host;
 }
 
 function parseCorsOrigins(value: string | undefined): string[] {
