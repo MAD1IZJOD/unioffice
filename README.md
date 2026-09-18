@@ -12,8 +12,9 @@ Documentation lives in [`docs/`](docs/architecture/README.md): the
 [system overview](docs/architecture/system-overview.md),
 [skills](docs/skills/README.md), [features](docs/product/features.md),
 [governance and approvals](docs/governance/README.md),
-[the Company Brain](docs/memory/README.md), [agents](docs/agents/agent-model.md)
-and [workflows](docs/workflows/workflow-model.md). Release notes are in
+[the Company Brain](docs/memory/README.md), [agents](docs/agents/agent-model.md),
+[workflows](docs/workflows/workflow-model.md) and
+[deployment](docs/deployment/README.md). Release notes are in
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Running locally
