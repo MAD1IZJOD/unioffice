@@ -175,6 +175,7 @@ import {
 import { LastOwnerError, MemberConflictError } from "@unioffice/database";
 import { featuresFor, type FeatureEnvironment } from "./features/feature-registry.js";
 import { briefApprovals, type ApprovalBriefingDependencies } from "./approval-briefing.js";
+import type { MissionLauncher } from "./mission-launcher.js";
 import {
   SkillNotFoundError,
   SkillStateError,
@@ -220,6 +221,11 @@ export interface ApiServices {
   workCancellationService: WorkCancellationService;
   missionControlService: MissionControlService;
   executionQueueService: ExecutionQueueService;
+  /**
+   * Plans and queues a mission on the server in one step. Optional so the
+   * many route tests that never launch anything need not build one.
+   */
+  missionLauncher?: MissionLauncher;
   executionRoomService: ExecutionRoomService;
   executionStream: ExecutionStream;
   companyBrainService: CompanyBrainService;
@@ -755,6 +761,41 @@ export function buildApiServer(
     instance.post("/work/:id/plan", async (request) => {
       const workId = await operableWorkId(services, request);
       return services.workService.planWork(workId);
+    });
+
+    // Plans the mission and queues it, on the server, and answers at once.
+    // Planning a mission takes a minute or two; the browser does not hold a
+    // request open for it, and nothing it does afterwards - closing the tab
+    // included - can leave the mission planned but never queued. Progress is
+    // read from the mission itself, as the room already does.
+    instance.post("/work/:id/launch", async (request, reply) => {
+      const work = await visibleWork(services, request);
+      await confirmAllowed(services, request, "missions.operate", work.workspaceId);
+
+      if (!services.missionLauncher) {
+        throw new ApiError(503, "Launching missions is not available on this server.");
+      }
+
+      if (work.status !== "queued" || services.missionLauncher.isLaunching(work.id)) {
+        throw new ApiError(
+          409,
+          work.status === "planning" || services.missionLauncher.isLaunching(work.id)
+            ? "This mission is already being planned."
+            : `This mission cannot be launched while it is ${work.status}.`,
+        );
+      }
+
+      if (typeof work.metadata?.plan === "object" && work.metadata.plan !== null) {
+        throw new ApiError(409, "This mission already has a plan. Run it instead.");
+      }
+
+      const { started } = services.missionLauncher.launch(work.id);
+
+      if (!started) {
+        throw new ApiError(409, "This mission is already being planned.");
+      }
+
+      return reply.code(202).send({ launched: true, workId: work.id });
     });
 
     // Puts the work on the durable queue and returns immediately. A worker

@@ -15,6 +15,7 @@ import type {
 
 import { InMemoryMembershipRepository } from "@unioffice/database";
 
+import { MissionLauncher } from "../mission-launcher.js";
 import { buildApiServer, type ApiServices } from "../server.js";
 
 import { AccessError, AccessResolver } from "./access-resolver.js";
@@ -31,15 +32,24 @@ const companyWide = "c0000000-0000-4000-8000-000000000001" as WorkId;
 const financeWork = "c0000000-0000-4000-8000-000000000002" as WorkId;
 const legalWork = "c0000000-0000-4000-8000-000000000003" as WorkId;
 const theirWork = "c0000000-0000-4000-8000-000000000004" as WorkId;
+const plannedWork = "c0000000-0000-4000-8000-000000000005" as WorkId;
+const planningWork = "c0000000-0000-4000-8000-000000000006" as WorkId;
 
 const works = new Map<WorkId, Work>([
-  [companyWide, { id: companyWide, organizationId: orgA } as Work],
-  [financeWork, { id: financeWork, organizationId: orgA, workspaceId: finance } as Work],
-  [legalWork, { id: legalWork, organizationId: orgA, workspaceId: legal } as Work],
-  [theirWork, { id: theirWork, organizationId: orgB } as Work],
+  [companyWide, { id: companyWide, organizationId: orgA, status: "queued", metadata: {} } as unknown as Work],
+  [financeWork, { id: financeWork, organizationId: orgA, workspaceId: finance, status: "queued", metadata: {} } as unknown as Work],
+  [legalWork, { id: legalWork, organizationId: orgA, workspaceId: legal, status: "queued", metadata: {} } as unknown as Work],
+  [theirWork, { id: theirWork, organizationId: orgB, status: "queued", metadata: {} } as unknown as Work],
+  [plannedWork, { id: plannedWork, organizationId: orgA, status: "queued", metadata: { plan: { taskCount: 2 } } } as unknown as Work],
+  [planningWork, { id: planningWork, organizationId: orgA, status: "planning", metadata: {} } as unknown as Work],
 ]);
 
-async function company(options: { resolver?: (real: AccessResolver) => ApiServices["accessResolver"] } = {}) {
+async function company(options: {
+  resolver?: (real: AccessResolver) => ApiServices["accessResolver"];
+  withoutLauncher?: boolean;
+  /** Holds planning open, the way a real minute-long plan does. */
+  planning?: Promise<void>;
+} = {}) {
   const members = new InMemoryMembershipRepository();
   const identities = new Map<string, Identity>();
   const done: string[] = [];
@@ -84,6 +94,21 @@ async function company(options: { resolver?: (real: AccessResolver) => ApiServic
 
   const real = new AccessResolver(members, () => now);
 
+  // The real launcher over the same stubs, so a launch is observable in `done`.
+  const launches: Array<Promise<void>> = [];
+  const realLauncher = new MissionLauncher({
+    async planWork(id) { done.push(`plan:${id}`); await options.planning; },
+    async enqueueWork(id) { done.push(`execute:${id}`); },
+  });
+  const launcher = {
+    isLaunching: (id: WorkId) => realLauncher.isLaunching(id),
+    launch(id: WorkId) {
+      const result = realLauncher.launch(id);
+      launches.push(result.settled);
+      return result;
+    },
+  } as unknown as MissionLauncher;
+
   const services = {
     authenticator: { verify: async (token: string) => identities.get(token) ?? null },
     accessResolver: options.resolver ? options.resolver(real) : real,
@@ -99,6 +124,7 @@ async function company(options: { resolver?: (real: AccessResolver) => ApiServic
     executionRoomService: { async getRoom(id: WorkId) { return { work: { id }, agents: [], cast: [] }; } },
     workService: { async planWork(id: WorkId) { done.push(`plan:${id}`); return { id }; } },
     executionQueueService: { async enqueueWork(id: WorkId) { done.push(`execute:${id}`); return { enqueued: true }; } },
+    missionLauncher: options.withoutLauncher ? undefined : launcher,
     workRecoveryService: { async retryWork(id: WorkId) { done.push(`retry:${id}`); return { mode: "replan" }; } },
     workCancellationService: { async cancelWork(id: WorkId) { done.push(`cancel:${id}`); return { id }; } },
     missionControlService: { async acknowledge(_org: OrganizationId, id: WorkId) { done.push(`acknowledge:${id}`); return { workId: id }; } },
@@ -111,7 +137,9 @@ async function company(options: { resolver?: (real: AccessResolver) => ApiServic
   const app = buildApiServer(services);
   const as = (name: string) => ({ authorization: `Bearer token-${name}` });
 
-  return { app, as, done };
+  const settled = () => Promise.all(launches);
+
+  return { app, as, done, settled };
 }
 
 const operations = ["plan", "execute", "retry", "cancel", "acknowledge"] as const;
@@ -191,4 +219,79 @@ test("a member suspended while their request is in flight does not get to run th
 
   assert.equal(response.statusCode, 403);
   assert.deepEqual(done, []);
+});
+
+test("launching answers at once, then plans and queues the mission on the server", async () => {
+  const { app, as, done, settled } = await company();
+
+  const response = await app.inject({ method: "POST", url: `/work/${financeWork}/launch`, headers: as("financeMember"), payload: {} });
+
+  assert.equal(response.statusCode, 202);
+  assert.deepEqual(response.json(), { launched: true, workId: financeWork });
+
+  await settled();
+  assert.deepEqual(done, [`plan:${financeWork}`, `execute:${financeWork}`], "queueing follows planning without a second request");
+});
+
+test("launching needs the same permission as running a mission", async () => {
+  const { app, as, done, settled } = await company();
+
+  assert.equal((await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("viewer"), payload: {} })).statusCode, 403);
+  assert.equal((await app.inject({ method: "POST", url: `/work/${financeWork}/launch`, headers: as("financeViewer"), payload: {} })).statusCode, 403);
+  assert.equal((await app.inject({ method: "POST", url: `/work/${legalWork}/launch`, headers: as("ungranted"), payload: {} })).statusCode, 404);
+  assert.equal((await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("outsider"), payload: {} })).statusCode, 404);
+  assert.equal((await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, payload: {} })).statusCode, 401);
+
+  await settled();
+  assert.deepEqual(done, [], "nothing was planned for anyone who may not run it");
+});
+
+test("a mission already being planned, or already planned, is not launched again", async () => {
+  let finishPlanning!: () => void;
+  const planningHeld = new Promise<void>((resolve) => { finishPlanning = resolve; });
+  const { app, as, done, settled } = await company({ planning: planningHeld });
+
+  const planning = await app.inject({ method: "POST", url: `/work/${planningWork}/launch`, headers: as("owner"), payload: {} });
+  assert.equal(planning.statusCode, 409);
+  assert.match(planning.json().error.message, /already being planned/);
+
+  const planned = await app.inject({ method: "POST", url: `/work/${plannedWork}/launch`, headers: as("owner"), payload: {} });
+  assert.equal(planned.statusCode, 409);
+  assert.match(planned.json().error.message, /already has a plan/);
+
+  const first = await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("owner"), payload: {} });
+  const second = await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("owner"), payload: {} });
+  assert.equal(first.statusCode, 202);
+  assert.equal(second.statusCode, 409, "a double click does not plan the mission twice");
+
+  finishPlanning();
+  await settled();
+  assert.deepEqual(done, [`plan:${companyWide}`, `execute:${companyWide}`]);
+});
+
+test("a member suspended while their launch is in flight does not get to plan anything", async () => {
+  let calls = 0;
+  const { app, as, done, settled } = await company({
+    resolver: (real) => ({
+      organizationsFor: (identity) => real.organizationsFor(identity),
+      async resolve(identity, requested) {
+        calls += 1;
+        if (calls > 1) throw new AccessError(403, "Your access to this organization is suspended.");
+        return real.resolve(identity, requested);
+      },
+    }),
+  });
+
+  const response = await app.inject({ method: "POST", url: `/work/${financeWork}/launch`, headers: as("financeMember"), payload: {} });
+
+  assert.equal(response.statusCode, 403);
+  await settled();
+  assert.deepEqual(done, []);
+});
+
+test("a server without a launcher says so rather than pretending", async () => {
+  const { app, as } = await company({ withoutLauncher: true });
+
+  const response = await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("owner"), payload: {} });
+  assert.equal(response.statusCode, 503);
 });

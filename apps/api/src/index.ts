@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 
 import { StreamTickets } from "./access/stream-tickets.js";
 import { loadApiConfig } from "./config.js";
+import { MissionLauncher } from "./mission-launcher.js";
 import { ensureDevelopmentWorkforce } from "./development-workforce.js";
 import { createExecutionRuntime } from "./runtime.js";
 import { buildApiServer } from "./server.js";
@@ -93,6 +94,15 @@ export async function createApiServer() {
     workCancellationService: runtime.workCancellationService,
     missionControlService: runtime.missionControlService,
     executionQueueService: runtime.executionQueueService,
+    missionLauncher: new MissionLauncher({
+      planWork: (workId) => runtime.workService.planWork(workId),
+      enqueueWork: (workId) => runtime.executionQueueService.enqueueWork(workId, "requested"),
+      // Nobody is waiting on a launch, so its failures are written down here.
+      // A failed plan is also recorded on the mission, which is what people see.
+      onError: (workId, stage, error) => {
+        console.warn(`Launching mission ${workId} failed while ${stage}: ${errorMessage(error)}`);
+      },
+    }),
     executionRoomService: runtime.executionRoomService,
     executionStream: runtime.executionStream,
     companyBrainService: runtime.companyBrainService,
