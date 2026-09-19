@@ -287,33 +287,112 @@ Process ownership
 NPU INVESTIGATION
 ==============================================================================
 
-(filled in during Phase G - secondary to go-live)
+VERDICT: actual NPU inference was NOT proven. Stopped by instruction.
+Full record: D:\NPU-Test\README.txt and D:\NPU-Test\results\.
+Nothing in UNIOFFICE uses or depends on any of this.
 
+Real OS (resolved, 20:30 - 20:35)
+  Registry ProductName says "Windows 10 Home Single Language" - a known
+  Microsoft quirk: that value was never updated for Windows 11, and it is
+  what Get-ComputerInfo reports. The real OS, from WMI and systeminfo:
+    Windows 11 Home Single Language, 25H2, build 26200.9445
+  Meets AMD's minimum (build >= 22621.3527).
+
+Hardware and driver
+  NPU Compute Accelerator Device, AMD, PCI\VEN_1022&DEV_17F0, status OK
+  Driver 32.0.203.314 (oem13.inf). AMD's minimum is 32.0.203.280; AMD's
+  current production driver is 32.0.203.376 - this one is older.
+
+Official AMD route: NOT taken
+  Ryzen AI Software 1.8.0 requires an AMD account login to download and a
+  license acceptance in its installer. Neither can be done on the owner's
+  behalf.
+
+Route taken: Windows ML (Microsoft), VitisAI execution provider
+  Everything under D:\NPU-Test: uv-managed CPython 3.12.13, a venv,
+  onnxruntime-windowsml 1.25.2, wasdk-* 2.3.0. Global Python untouched (one
+  uv shim in C:\Users\madhavan\.local\bin was created and removed).
+  The provider resolves to Windows package Microsoft.WinML.AMD.NPU.EP.2
+  0.0.68.0 (system level, installed by the Windows ML catalog; whether it was
+  already present could not be established).
+
+Step 1 - selection ........ PASSED
+  ONNX Runtime lists VitisAIExecutionProvider on device type NPU,
+  vendor 0x1022, device 0x17f0 (the NPU's PCI IDs), adapter LUID 67706.
+
+Step 2 - inference ........ NOT PROVEN, on two models (20:41 - 20:48)
+  resnet50-v2-7 (FP32):
+    strict (CPU fallback disabled) - session failed: graph nodes assigned
+    to the CPU. Fallback allowed - profiler: 3952/3952 node executions on
+    CPU, 0 on VitisAI; NPU hardware counter 0 %; output identical to CPU
+    (cosine exactly 1.0); 27.3 ms vs 24.9 ms on CPU.
+    AMD's compiler wrote "AIE 100 / CPU 0" and runner_type "hw" - its plan,
+    which the run did not follow ("Invalid NodeIndex" errors).
+  resnet50-v1-12-qdq (INT8 QDQ, the format Microsoft prepares for NPUs):
+    strict - session failed, same error. Fallback allowed - the provider's
+    partitioner logged 562 times that ops were "partitioned to CPU ...
+    doesn't supported by target [AMD_AIE2P_4x8_CMC_Overlay]"; no NPU
+    partition was compiled. Profiler: every compute op on CPU (QLinearConv
+    and the rest, 6552 executions); VitisAI ran only Quantize/Dequantize
+    nodes, on the host. NPU hardware counter 0 %; output identical to CPU;
+    17.9 ms vs 8.4 ms on CPU alone (2.1x slower).
+
+Workloads that might benefit later: not assessed. No UNIOFFICE workload
+was benchmarked on the NPU, because no NPU execution was achieved.
+
+Stopped at 20:48 by instruction. No further runs, downloads, runtime
+installs or Windows changes were made after that.
 
 ==============================================================================
 KNOWN ISSUES
 ==============================================================================
 
-Carried in from earlier sessions, to be re-verified today:
+1. RESOLVED today - planning held a browser request open for 100-120 s
+   (over Cloudflare's documented 100 s timeout), and an interrupted second
+   request stranded missions. Missions now start with POST /launch (202 in
+   ~1.5 s). See CHANGES MADE 1.
 
-1. Planning runs synchronously inside POST /work/:id/plan. Measured at
-   60-114 s. Cloudflare's documented proxy read timeout is 100 s, so this
-   may return 524 to a browser. One run at 114.1 s did succeed through the
-   tunnel on 2026-09-19. Needs measuring again before deciding anything.
+2. qwen3:8b needs roughly 6 GB free to load. It failed with an out-of-memory
+   error at ~2 GB free on 2026-09-19 (earlier session) and loads fine at
+   ~5.6 GB and above. OLLAMA_KEEP_ALIVE is unset, so it unloads after 5 idle
+   minutes and must find that memory again. See MANUAL ACTIONS 6.
 
-2. qwen3:8b needs roughly 6 GB resident. On 2026-09-19 it failed to load
-   with an out-of-memory error at ~2 GB free and succeeded at ~5.6 GB free.
+3. The web app is not yet live on unioffice.pro (404). All remaining steps
+   need the owner's accounts. See MANUAL ACTIONS 1-4.
 
-3. /readiness reports ollama "ready" when the server answers /api/tags,
-   even if the model cannot be loaded.
+4. WSAIFabricSvc ("Windows AI Components Host") was Stopped at session
+   start and was found Running at 20:30, still set to Manual. It was not
+   started or reconfigured by this session; a Manual service is started on
+   demand by Windows. It was left alone. If the RAM matters, stop it again.
 
+5. SEED_DEVELOPMENT_WORKFORCE=true on this machine. Harmless: seeding only
+   creates missing blueprint agents and never overwrites an agent a person
+   has configured. Side effect: the development organization's id appears
+   in the unauthenticated /readiness response. An id alone grants nothing
+   (cross-organization requests return 404 without a membership).
+
+6. /readiness reports ollama "ready" when Ollama answers, even if the model
+   cannot be loaded for lack of memory. Not changed today.
+
+7. One API instance only: stream tickets, rate limits and launch tracking
+   are per process.
+
+8. Residual race, narrow: cancelling a mission that is actively planning is
+   refused until the plan is 15 minutes old. Past that, a cancel is allowed,
+   and planWork's re-read after the model returns catches it. What remains
+   is only the few seconds between that re-read and the final write, and
+   only for a plan already over 15 minutes old (they take about 2).
 
 ==============================================================================
 DEFERRED WORK
 ==============================================================================
 
-(filled in as decisions are made)
 
+- NPU: AMD Ryzen AI Software 1.8.0 (needs the owner's AMD login) and the
+  32.0.203.376 NPU driver, then re-run D:\NPU-Test\scripts unchanged.
+- A content security policy for the web app once the API origin is final.
+- Moving the remaining whole-row work updates (cancellation, approvals) to
+  conditional writes like transitionStatus.
 
 ==============================================================================
 MANUAL ACTIONS REQUIRED
