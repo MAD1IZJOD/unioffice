@@ -49,6 +49,8 @@ async function company(options: {
   withoutLauncher?: boolean;
   /** Holds planning open, the way a real minute-long plan does. */
   planning?: Promise<void>;
+  /** Cancels this mission the instant after it is read - the race a real cancel can win. */
+  cancelAfterRead?: WorkId;
 } = {}) {
   const members = new InMemoryMembershipRepository();
   const identities = new Map<string, Identity>();
@@ -94,6 +96,10 @@ async function company(options: {
 
   const real = new AccessResolver(members, () => now);
 
+  // Each harness gets its own copy, so a status one test changes does not
+  // leak into the next.
+  const missions = new Map([...works].map(([id, work]) => [id, { ...work }]));
+
   // The real launcher over the same stubs, so a launch is observable in `done`.
   const launches: Array<Promise<void>> = [];
   const realLauncher = new MissionLauncher({
@@ -115,14 +121,25 @@ async function company(options: {
     streamTickets: new StreamTickets(),
     workQueryService: {
       async assertWorkInOrganization(id: WorkId, organizationId: OrganizationId) {
-        const work = works.get(id);
+        const work = missions.get(id);
         if (!work || work.organizationId !== organizationId) throw new Error(`Work not found: ${id}`);
-        return work;
+        const seen = { ...work };
+        if (options.cancelAfterRead === id) missions.set(id, { ...work, status: "cancelled" });
+        return seen;
       },
       async getTasks() { return []; },
     },
     executionRoomService: { async getRoom(id: WorkId) { return { work: { id }, agents: [], cast: [] }; } },
-    workService: { async planWork(id: WorkId) { done.push(`plan:${id}`); return { id }; } },
+    workService: {
+      async planWork(id: WorkId) { done.push(`plan:${id}`); return { id }; },
+      // The same rule as the real one: only a waiting mission starts planning.
+      async beginPlanning(id: WorkId) {
+        const work = missions.get(id);
+        if (!work || work.status !== "queued") return false;
+        missions.set(id, { ...work, status: "planning" });
+        return true;
+      },
+    },
     executionQueueService: { async enqueueWork(id: WorkId) { done.push(`execute:${id}`); return { enqueued: true }; } },
     missionLauncher: options.withoutLauncher ? undefined : launcher,
     workRecoveryService: { async retryWork(id: WorkId) { done.push(`retry:${id}`); return { mode: "replan" }; } },
@@ -139,7 +156,7 @@ async function company(options: {
 
   const settled = () => Promise.all(launches);
 
-  return { app, as, done, settled };
+  return { app, as, done, settled, missions };
 }
 
 const operations = ["plan", "execute", "retry", "cancel", "acknowledge"] as const;
@@ -298,3 +315,37 @@ test("a server without a launcher says so rather than pretending", async () => {
   const response = await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("owner"), payload: {} });
   assert.equal(response.statusCode, 503);
 });
+
+test("a launched mission reads as being planned before the launch answers", async () => {
+  const { app, as, missions, settled } = await company();
+
+  const response = await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("owner"), payload: {} });
+
+  assert.equal(response.statusCode, 202);
+  assert.equal(missions.get(companyWide)?.status, "planning", "there is no moment where it still reads as waiting");
+  await settled();
+});
+
+test("a mission cancelled before it could be launched is not planned", async () => {
+  const { app, as, done, missions, settled } = await company();
+  missions.set(companyWide, { ...missions.get(companyWide)!, status: "cancelled" });
+
+  const response = await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("owner"), payload: {} });
+
+  assert.equal(response.statusCode, 409);
+  await settled();
+  assert.deepEqual(done, [], "a cancel that got there first wins");
+});
+
+test("a cancel that lands between reading the mission and starting it wins", async () => {
+  const { app, as, done, missions, settled } = await company({ cancelAfterRead: companyWide });
+
+  const response = await app.inject({ method: "POST", url: `/work/${companyWide}/launch`, headers: as("owner"), payload: {} });
+
+  assert.equal(response.statusCode, 409);
+  assert.match(response.json().error.message, /changed before it could be started/);
+  await settled();
+  assert.deepEqual(done, [], "the cancelled mission is not planned or queued");
+  assert.equal(missions.get(companyWide)?.status, "cancelled", "and the cancellation is not overwritten");
+});
+

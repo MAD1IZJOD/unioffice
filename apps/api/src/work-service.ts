@@ -78,6 +78,30 @@ export class WorkService {
     },
   ) {}
 
+  /**
+   * Marks a mission as being planned, if it is still waiting to be.
+   *
+   * Done as one conditional write, before anything answers the person who
+   * asked, so there is no moment where a launched mission still reads as
+   * waiting. Without that, a cancel landing in that moment was overwritten
+   * by the plan and the cancelled mission went on to run. Cancelling a
+   * mission that is actively being planned is already refused, so once this
+   * returns true the two cannot race. False when it was not waiting.
+   */
+  async beginPlanning(workId: WorkId): Promise<boolean> {
+    const now = new Date();
+
+    if (this.workRepository.transitionStatus) {
+      return (await this.workRepository.transitionStatus(workId, "queued", "planning", now)) !== null;
+    }
+
+    const work = await this.workRepository.findById(workId);
+    if (!work || work.status !== "queued") return false;
+
+    await this.workRepository.update({ ...work, status: "planning", updatedAt: now });
+    return true;
+  }
+
   async planWork(
     workId: WorkId,
   ): Promise<PlanWorkResult> {

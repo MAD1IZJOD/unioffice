@@ -32,5 +32,21 @@ export interface WorkRepository {
 
   update(work: Work): Promise<Work>;
 
+  /**
+   * Moves work from one status to another only if it is still in `from`,
+   * and returns it - or null when something else changed it first.
+   *
+   * A whole-row update from an in-memory copy is last-writer-wins, so two
+   * callers racing for the same transition (starting a plan and cancelling,
+   * say) can silently undo each other. This is the transition done as one
+   * conditional write instead. Optional so test doubles need not provide it.
+   */
+  transitionStatus?(
+    id: WorkId,
+    from: WorkStatus,
+    to: WorkStatus,
+    at: Date,
+  ): Promise<Work | null>;
+
   delete(id: WorkId): Promise<void>;
 }

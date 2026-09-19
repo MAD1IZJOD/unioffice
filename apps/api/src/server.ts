@@ -797,6 +797,13 @@ export function buildApiServer(
         throw new ApiError(409, "This mission already has a plan. Run it instead.");
       }
 
+      // The mission reads as being planned before this answers, and only if
+      // it was still waiting: a cancel that got there first wins, and one
+      // that arrives after is refused because planning is under way.
+      if (!(await services.workService.beginPlanning(work.id))) {
+        throw new ApiError(409, "This mission changed before it could be started. Reload it and try again.");
+      }
+
       const { started } = services.missionLauncher.launch(work.id);
 
       if (!started) {

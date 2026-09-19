@@ -124,6 +124,35 @@ export class SupabaseWorkRepository
       : null;
   }
 
+  async transitionStatus(
+    id: WorkId,
+    from: WorkStatus,
+    to: WorkStatus,
+    at: Date,
+  ): Promise<Work | null> {
+    const { data, error } =
+      await this.supabase
+        .from("works")
+        .update({
+          status: to,
+          updated_at: at.toISOString(),
+        })
+        .eq("id", id)
+        .eq("status", from)
+        .select("*")
+        .maybeSingle();
+
+    if (error) {
+      throw new Error(
+        `Failed to change work status: ${error.message}`,
+      );
+    }
+
+    return data
+      ? toWork(data as WorkRow)
+      : null;
+  }
+
   async findByStatuses(
     statuses: WorkStatus[],
     limit = 200,
