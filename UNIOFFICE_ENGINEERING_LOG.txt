@@ -329,6 +329,20 @@ All read-only, no credentials; nothing was changed anywhere.
   Vercel CLI is not logged in on this machine and no token was requested,
   so these are owner actions. No repository change is needed.
 
+GO-LIVE VERIFIED (2026-09-19, checked read-only after the owner's mission)
+  The owner completed the Vercel environment, domain and Supabase steps.
+  Verified independently here, not taken on report:
+
+  Production frontend
+    https://unioffice.pro ........ 308 Permanent Redirect -> https://www.unioffice.pro
+                                   (path preserved: /missions -> www/missions)
+    https://www.unioffice.pro .... 200, title "UNIOFFICE", no x-vercel-error
+    deep link /missions on www ... 200 (SPA rewrite works on the real domain)
+    production bundle ............ contains https://api.unioffice.pro and
+                                   /launch; no service_role, no secret key
+  Production API
+    https://api.unioffice.pro .... /health 200 (Cloudflare Tunnel -> 127.0.0.1:4000)
+
 ==============================================================================
 LOCAL RUNTIME
 ==============================================================================
@@ -458,8 +472,10 @@ KNOWN ISSUES
    ~5.6 GB and above. OLLAMA_KEEP_ALIVE is unset, so it unloads after 5 idle
    minutes and must find that memory again. See MANUAL ACTIONS 6.
 
-3. The web app is not yet live on unioffice.pro (404). All remaining steps
-   need the owner's accounts. See MANUAL ACTIONS 1-4.
+3. RESOLVED - the web app is live. The owner assigned the domain to the
+   app's Vercel project, set VITE_API_URL, redeployed and configured
+   Supabase. Verified with a real production mission (see FINAL PRODUCTION
+   CHECKLIST).
 
 4. WSAIFabricSvc ("Windows AI Components Host") was Stopped at session
    start and was found Running at 20:30, still set to Manual. It was not
@@ -483,6 +499,9 @@ KNOWN ISSUES
    and planWork's re-read after the model returns catches it. What remains
    is only the few seconds between that re-read and the final write, and
    only for a plan already over 15 minutes old (they take about 2).
+
+9. The backend depends on this Windows machine staying on, awake and
+   connected. There is no failover.
 
 ==============================================================================
 DEFERRED WORK
@@ -542,41 +561,78 @@ session, and no credential was asked for.
 FINAL PRODUCTION CHECKLIST
 ==============================================================================
 
-GO-LIVE STATUS: READY WITH KNOWN LIMITATIONS - backend is ready and live;
-the web app is not yet reachable on unioffice.pro until the owner completes
-the account steps below.
+GO-LIVE STATUS: LIVE - verified with a real production mission.
 
-Verified today, with evidence in this log
+  Frontend ..... https://unioffice.pro (redirects to https://www.unioffice.pro)
+  API .......... https://api.unioffice.pro
+
+Real production mission, read back from the database after the fact
+  Mission ............ af651071-46b2-42cb-913c-d5e763bb1c40
+  Organization ....... unioffice-development (not a test organization)
+  Signed in with ..... Google (auth provider recorded on the requester)
+  Result ............. COMPLETED
+  Times (IST) ........ created 21:57:03, completed 22:06:35 (9 min 32 s,
+                       including two waits for a person's decision)
+
+  Lifecycle, from the mission's own event log (IST)
+    21:57:03  work.created ............ from the production UI
+    21:57:07  work.planning_started ... planning began 4 s after creation
+    21:59:49  work.planning_completed . 162 s of planning, 3 steps, 3 agents
+    21:59:50  work.queued ............. queued by the server 1 s after the
+                                        plan, with no second browser request
+                                        - the /launch path (the production
+                                        bundle calls /launch)
+    21:59:52  work.started ............ durable execution job 1 ("requested")
+    22:01:42  approval.requested ...... bound to a written proposal
+    22:02:03  approval.approved ....... -> job 2 ("approval_resumed")
+    22:04:29  approval.requested ...... bound to a written proposal
+    22:04:41  approval.approved ....... -> job 3 ("approval_resumed")
+    22:06:35  work.completed
+
+  Verified stage by stage
+    [x] Google authentication ........ requester's auth provider is google
+    [x] Mission created in the UI ..... work.created
+    [x] /launch ....................... server queued it 1 s after planning
+    [x] Planning ...................... 162 s, Ollama qwen3:8b, 3 steps
+    [x] Durable execution ............. 3 jobs, all completed, 1 attempt each
+    [x] Worker ........................ all 3 claimed by
+                                        worker-2db26ab7-7be9-4656-abcb-75097611eaa9
+    [x] Ollama / Qwen ................. planned and executed every step
+    [x] Tools ......................... calculator:completed (Harvey's step)
+    [x] Approvals ..................... 2 requested, 2 approved, each bound
+                                        to a proposal; resumed each time
+    [x] Artifacts / result ............ 3 artifacts (analysis), one per step;
+                                        knowledge.created twice
+    Steps: Mike (completed), Harvey (completed, calculator), Peter
+    (completed). None of the three was routed to a skill.
+
+Verified earlier today (evidence above in this log)
   [x] Typecheck, lint, tests (919/919) and build pass without cache
-  [x] API healthy locally and through https://api.unioffice.pro
-  [x] Readiness: Supabase, Ollama and the durable queue all ready
-  [x] Real missions complete end to end through the public URL
-      (planning, skill resolution and version pinning, delegation, queue,
-      worker, Ollama, calculator tool, artifacts, knowledge, events)
-  [x] Missions start with one request; no request is held open for a plan
   [x] A cancelled mission stays cancelled (race reproduced, fixed, re-verified)
-  [x] Authorization enforced server-side (17/17 live checks + launch checks)
-  [x] Cross-organization access returns 404
+  [x] Authorization enforced server-side; cross-organization access -> 404
   [x] CORS allows exactly unioffice.pro and www (plus local development)
-  [x] Database posture: RLS forced everywhere, 0 violations
-  [x] No secrets in tracked files or anywhere in git history
-  [x] Browser bundle holds only the anon key; no server-only values; no
-      source maps
-  [x] Ports 4000 and 11434 not exposed; Cloudflare Tunnel is the only path
-  [x] .env ignored and never committed
+  [x] RLS forced everywhere, 0 posture violations
+  [x] No secrets in tracked files, git history or the browser bundle
+  [x] Ports 4000 and 11434 not exposed; the tunnel is the only public path
 
-Owner actions still required (details in MANUAL ACTIONS REQUIRED)
-  [ ] 1. Vercel: set the four VITE_ variables on the web project; redeploy
-  [ ] 2. Vercel: add unioffice.pro and www.unioffice.pro to that project
-  [ ] 3. Cloudflare DNS: add the records Vercel shows for @ and www
-  [ ] 4. Supabase: Site URL and redirect URLs for https://unioffice.pro
-  [ ] 5. Marketing site: "Enter UNIOFFICE" link to https://unioffice.pro
-  [ ] 6. Recommended: OLLAMA_KEEP_ALIVE so qwen3:8b stays loaded
+Known limitations at go-live
+  - The backend runs on the owner's Windows PC (API, worker, Ollama and
+    cloudflared). If that machine sleeps, shuts down, restarts, or loses its
+    connection, https://www.unioffice.pro still loads and Google sign-in
+    (Supabase) still completes, but the app then cannot load anyone's access
+    or data, or run missions, until the machine is back. This is the main
+    risk of the zero-cost setup.
+  - qwen3:8b needs about 6 GB free to load and OLLAMA_KEEP_ALIVE is unset:
+    the first mission after 5 idle minutes waits ~20 s for the model.
+  - One API instance only (per-process stream tickets, rate limits and
+    launch tracking).
+  - Planning takes about 2-3 minutes on this machine's CPU.
 
-After those, check once in a browser:
-  sign in with Google on https://unioffice.pro -> start a mission -> watch
-  the room go planning -> executing -> completed.
+Still open (owner)
+  [ ] Marketing site on unioffice.online: "Enter UNIOFFICE" link
+  [ ] Recommended: OLLAMA_KEEP_ALIVE so qwen3:8b stays loaded
 
-Not done today
-  [ ] NPU inference - not proven; stopped by instruction (see NPU section)
+Deferred
+  [ ] NPU work - actual NPU inference was not proven; deferred by decision.
+      See NPU INVESTIGATION and D:\NPU-Test\README.txt.
 
