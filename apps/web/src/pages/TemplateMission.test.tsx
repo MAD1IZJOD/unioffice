@@ -59,14 +59,19 @@ function api(
   });
 }
 
+/**
+ * Fills the required answers. Pasted rather than typed key by key: what these
+ * tests check is what the page does with the answers, and typing each one a
+ * character at a time re-rendered the whole page per keystroke - enough to
+ * push a test past its time limit on a busy machine.
+ */
 async function fillRequired() {
   const user = userEvent.setup();
 
-  await user.type(
-    screen.getByLabelText(/What the review should answer/),
-    "Are we on track against the quarter's budget?",
-  );
-  await user.type(screen.getByLabelText(/What should exist at the end/), "A one-page summary.");
+  await user.click(screen.getByLabelText(/What the review should answer/));
+  await user.paste("Are we on track against the quarter's budget?");
+  await user.click(screen.getByLabelText(/What should exist at the end/));
+  await user.paste("A one-page summary.");
 
   return user;
 }
