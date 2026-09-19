@@ -184,8 +184,19 @@ api.unioffice.pro  -> Caddy -> 127.0.0.1:4000 (the API)
 Caddy terminates TLS and does not buffer responses, so the live channel works
 through it unchanged. The stream already sends `x-accel-buffering: no` and its
 own keep-alive frames, so an nginx in front of it would also work without
-extra configuration. Allow at least 120 seconds for a request: planning runs
-inside `POST /work/:id/plan` and has been measured at 60-90 seconds.
+extra configuration.
+
+No request has to stay open for the length of a plan. The web app starts a
+mission with `POST /work/:id/launch`, which answers `202` within a couple of
+seconds; the server then plans the mission (measured at 100-120 seconds on
+`qwen3:8b`, cold model included) and queues it itself, and the room follows
+progress from the mission's own state. This matters behind Cloudflare, whose
+documented proxy timeout is 100 seconds, and it means a closed tab or a
+dropped connection can no longer leave a mission planned but never run.
+
+The older `POST /work/:id/plan` still exists and still holds the request for
+the whole plan. Only the room's "Build the plan" fallback uses it, and it
+refuses while a launch is already planning the same mission.
 
 Sizing is decided by the model, not by this code: the two Node processes sit
 around 100-150 MB each, while `qwen3:8b` wants roughly 8-10 GB of RAM on CPU.
