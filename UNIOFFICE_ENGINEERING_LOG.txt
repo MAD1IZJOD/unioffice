@@ -292,6 +292,43 @@ A production build made here with the production values behaves
 correctly. That proves the code is ready. It does not prove Vercel has been
 given the same values - that needs checking in the Vercel dashboard.
 
+Go-live diagnosis of the unioffice.pro 404 (2026-09-19, after 21:18)
+All read-only, no credentials; nothing was changed anywhere.
+
+  DNS (via DNS-over-HTTPS; direct queries to 1.1.1.1 fail from this network)
+    unioffice.pro ....... NS harley / ingrid .ns.cloudflare.com
+    @ and www ........... resolve to Cloudflare proxy IPs (proxied records)
+    unioffice.online .... 76.76.21.21 (Vercel), NS at dns-parking (Hostinger)
+
+  Who answers the 404
+    https://unioffice.pro/ and www -> 404, Server: cloudflare,
+    x-vercel-error: DEPLOYMENT_NOT_FOUND, x-vercel-id: bom1::...
+    => Cloudflare already sends the traffic to Vercel. Vercel has no project
+       assigned to the hostname unioffice.pro. The domain left the marketing
+       project (which now serves unioffice.online) and was never added to
+       the application's project.
+
+  The application's Vercel deployment exists: https://unioffice.vercel.app
+    200, title "UNIOFFICE"; bundle contains signInWithOAuth and /launch, so
+    it is this repository built from today's code.
+    Root directory / vercel.json ... applied: X-Frame-Options DENY,
+        frame-ancestors 'none', nosniff, strict referrer, permissions and
+        COOP headers all present.
+    SPA rewrite .................... /missions and deep paths serve the app
+        shell; a missing /assets file correctly returns 404.
+    VITE_SUPABASE_URL .............. baked in (project qlavqcbtlnhxlvuqfqiu)
+    VITE_SUPABASE_ANON_KEY ......... baked in, JWT role "anon"
+    server secrets ................. none (no service_role, no sb_secret_)
+    VITE_API_URL ................... NOT SET at build time. The bundle has
+        only the local fallback. Served from a real domain, the app refuses
+        to load data ("no API address configured") - by design.
+    VITE_APP_ORIGIN ................ not set. Not blocking: the code already
+        allows https://unioffice.pro as a sign-in return origin.
+
+  Conclusion: two Vercel dashboard changes are needed, then a redeploy.
+  Vercel CLI is not logged in on this machine and no token was requested,
+  so these are owner actions. No repository change is needed.
+
 ==============================================================================
 LOCAL RUNTIME
 ==============================================================================
