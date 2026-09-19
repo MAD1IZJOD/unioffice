@@ -125,16 +125,18 @@ export class WorkService {
       );
     }
 
-    const planningWork: Work = {
-      ...work,
-      status: "planning",
-      updatedAt: new Date(),
-    };
-
+    // A launch has already marked the mission as planning, with a
+    // conditional write. Writing it again from the copy read above would
+    // overwrite anything that landed in between - a cancellation, say - so
+    // the row is only written here when this is what starts the planning.
     const updatedWork =
-      await this.workRepository.update(
-        planningWork,
-      );
+      work.status === "planning"
+        ? work
+        : await this.workRepository.update({
+            ...work,
+            status: "planning",
+            updatedAt: new Date(),
+          });
 
     await this.eventRecorder.record({
       organizationId: updatedWork.organizationId,
@@ -236,6 +238,19 @@ export class WorkService {
               updatedWork.workspaceId,
           },
         });
+
+      // The model has been thinking for a minute or two. If the mission was
+      // cancelled in that time, nothing is created for it and it is not
+      // put back to waiting: the cancellation stands.
+      const current = await this.workRepository.findById(updatedWork.id);
+
+      if (!current || current.status !== "planning") {
+        return {
+          work: current ?? updatedWork,
+          plan,
+          tasks: [],
+        };
+      }
 
       const tasks: Task[] = [];
 

@@ -24,7 +24,7 @@ export class MissionLauncher {
 
   constructor(
     private readonly deps: {
-      planWork(workId: WorkId): Promise<unknown>;
+      planWork(workId: WorkId): Promise<{ work: { status: string } }>;
       enqueueWork(workId: WorkId): Promise<unknown>;
       /** Told about a failure nobody is waiting on, so it is not lost. */
       onError?(workId: WorkId, stage: "planning" | "queueing", error: unknown): void;
@@ -58,14 +58,20 @@ export class MissionLauncher {
   }
 
   private async run(workId: WorkId): Promise<void> {
+    let planned: { work: { status: string } };
+
     try {
-      await this.deps.planWork(workId);
+      planned = await this.deps.planWork(workId);
     } catch (error) {
       // Planning records its own failure on the mission, which is where the
       // room reads it from. Nothing is queued after a failed plan.
       this.deps.onError?.(workId, "planning", error);
       return;
     }
+
+    // Only a mission the plan left waiting is queued. One cancelled while it
+    // was being planned stays cancelled.
+    if (planned.work.status !== "queued") return;
 
     try {
       await this.deps.enqueueWork(workId);

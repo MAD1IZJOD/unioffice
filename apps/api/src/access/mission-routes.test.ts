@@ -103,7 +103,7 @@ async function company(options: {
   // The real launcher over the same stubs, so a launch is observable in `done`.
   const launches: Array<Promise<void>> = [];
   const realLauncher = new MissionLauncher({
-    async planWork(id) { done.push(`plan:${id}`); await options.planning; },
+    async planWork(id) { done.push(`plan:${id}`); await options.planning; return { work: { status: "queued" } }; },
     async enqueueWork(id) { done.push(`execute:${id}`); },
   });
   const launcher = {

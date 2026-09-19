@@ -7,6 +7,9 @@ import { MissionLauncher } from "./mission-launcher.js";
 
 const mission = "aaaaaaaa-0000-4000-8000-000000000001" as WorkId;
 
+/** What planning returns when it has left the mission waiting to run. */
+const waiting = { work: { status: "queued" } };
+
 function gate() {
   let open!: () => void;
   const opened = new Promise<void>((resolve) => { open = resolve; });
@@ -18,7 +21,7 @@ test("a launch returns before planning finishes, then plans and queues on its ow
   const planning = gate();
 
   const launcher = new MissionLauncher({
-    async planWork() { steps.push("plan started"); await planning.opened; steps.push("plan finished"); },
+    async planWork() { steps.push("plan started"); await planning.opened; steps.push("plan finished"); return waiting; },
     async enqueueWork() { steps.push("queued"); },
   });
 
@@ -40,7 +43,7 @@ test("the same mission is not launched twice while one launch is in flight", asy
   const planning = gate();
 
   const launcher = new MissionLauncher({
-    async planWork() { plans += 1; await planning.opened; },
+    async planWork() { plans += 1; await planning.opened; return waiting; },
     async enqueueWork() {},
   });
 
@@ -78,7 +81,7 @@ test("a failure to queue is reported, and settling never throws", async () => {
   const errors: string[] = [];
 
   const launcher = new MissionLauncher({
-    async planWork() {},
+    async planWork() { return waiting; },
     async enqueueWork() { throw new Error("queue unreachable"); },
     onError(_workId, stage, error) { errors.push(`${stage}: ${(error as Error).message}`); },
   });
@@ -86,3 +89,17 @@ test("a failure to queue is reported, and settling never throws", async () => {
   await assert.doesNotReject(launcher.launch(mission).settled);
   assert.deepEqual(errors, ["queueing: queue unreachable"]);
 });
+
+test("a mission cancelled while it was being planned is not queued", async () => {
+  let queued = false;
+
+  const launcher = new MissionLauncher({
+    async planWork() { return { work: { status: "cancelled" } }; },
+    async enqueueWork() { queued = true; },
+  });
+
+  await launcher.launch(mission).settled;
+
+  assert.equal(queued, false, "the cancellation stands");
+});
+

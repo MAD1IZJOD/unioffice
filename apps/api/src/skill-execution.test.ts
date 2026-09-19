@@ -224,9 +224,11 @@ test("planning offers only skills an available agent holds, and records the rout
   const harvey = agent("Harvey", { skills: ["financial-analysis"] });
   let offered: PlanningContext["availableSkills"];
   const created: Task[] = [];
+  // Reads return what was last written, the way the real repository does.
+  let stored: Work = work;
 
   const service = new WorkService(
-    { async findById() { return work; }, async update(next: Work) { return next; } } as never,
+    { async findById() { return stored; }, async update(next: Work) { stored = next; return next; } } as never,
     { async create(task: Task) { created.push(task); return task; } } as never,
     { async findByOrganization() { return [harvey]; } } as never,
     {
