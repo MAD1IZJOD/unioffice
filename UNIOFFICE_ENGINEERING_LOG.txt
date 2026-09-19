@@ -1,0 +1,215 @@
+# UNIOFFICE ENGINEERING LOG
+
+Date: 2026-09-19 (session started 19:43 IST, +05:30)
+Objective: Production go-live and local AI/NPU investigation
+
+This file is the plain-text record of this session's work. It holds no
+secrets: environment variables are named, never valued.
+
+
+==============================================================================
+CURRENT STATE
+==============================================================================
+
+Repository
+  Path ............ D:\personal projects\unioffice
+  Branch .......... main, tracking origin/main
+  HEAD ............ 5500720 "write down what the api and worker need in production"
+  origin/main ..... 5500720 (in sync at session start)
+  Working tree .... clean at session start
+  Git identity .... Madhavan <175943252+MAD1IZJOD@users.noreply.github.com>
+                    (repo-local user.name / user.email already correct)
+
+Runtime at session start (started by the user, not by this session)
+  API ............. node PID 27716, started 19:23:31, listening 127.0.0.1:4000
+  Worker .......... node PID 7192, started 19:24:28, no listener (expected)
+  Ollama .......... PID 17192, listening 127.0.0.1:11434
+  cloudflared ..... Windows service, Running, Automatic
+  WSAIFabricSvc ... Stopped, Manual (changed by the user before this session;
+                    this session does not re-enable it)
+  Free RAM ........ 8.6 GB of 23.3 GB
+
+Ports 4000 and 11434 bind 127.0.0.1 only. Cloudflare Tunnel is the only
+public path to the API.
+
+
+==============================================================================
+COMPLETED
+==============================================================================
+
+Phase A - Baseline (19:43)
+  - Git identity, branch, remote, sync and clean tree verified.
+  - Runtime identified: user-started API (PID 27716) and worker (PID 7192),
+    Ollama on 127.0.0.1:11434, cloudflared service running.
+
+Phase B - Quality gate (19:50)
+  - Frozen-lockfile install, typecheck, lint, tests and build all green on
+    HEAD 5500720 without any change (see TEST RESULTS).
+
+Phase C - Runtime (19:58)
+  - Local and public /health and /readiness answer; public and local uptime
+    differ by one second, so the tunnel reaches the same process.
+
+Phase D - Real end-to-end missions (20:00 - 20:45)
+  - Measured planning through Cloudflare three times (see LOCAL RUNTIME).
+  - Found and fixed a real defect in how missions start (see CHANGES MADE).
+  - Re-ran the mission end to end through the public URL on the fix.
+
+==============================================================================
+CHANGES MADE
+==============================================================================
+
+1. Missions are planned and queued on the server in one step.
+
+   Problem, reproduced rather than assumed:
+     The room started a mission with two browser requests: POST /plan, held
+     open for the whole plan (measured 102-118 s), then POST /execute. If
+     the browser did not complete the second request - tab closed, laptop
+     asleep, connection dropped, a proxy giving up on a long request - the
+     mission was left planned, status "queued", with ZERO execution jobs.
+     The worker only claims jobs, so nothing would ever run it, while the
+     status said it was waiting. Demonstrated on mission 3760ff44: planned,
+     3 tasks pending, 0 jobs.
+
+   Fix:
+     - apps/api/src/mission-launcher.ts: plans then queues on the server,
+       tracks launches per mission so one mission is never planned twice.
+     - POST /work/:id/launch: same permission as running a mission
+       (missions.operate, re-checked against current membership). Answers
+       202 at once. 409 if already planning or already planned. 503 if the
+       server has no launcher.
+     - POST /work/:id/plan now refuses while a launch is in flight, so the
+       older route cannot start a second plan beside it.
+     - The room's autostart and replan-retry call launch instead of
+       plan-then-execute.
+     - Nothing else changed: planning, queueing, the worker, the queue
+       schema and the database are untouched. No migration.
+
+   This also removes the Cloudflare timeout exposure entirely: no request
+   is now held open for longer than a couple of seconds.
+
+==============================================================================
+COMMITS
+==============================================================================
+
+ede9f87  plan and queue a mission on the server in one step
+d18f893  start missions with one request instead of two
+
+Both: Author and Committer = Madhavan <175943252+MAD1IZJOD@users.noreply.github.com>,
+no trailers, pushed to origin/main.
+
+==============================================================================
+TEST RESULTS
+==============================================================================
+
+Baseline on HEAD 5500720, before any change (19:50)
+  pnpm install --frozen-lockfile ..... up to date
+  pnpm typecheck --force ............. 13/13 tasks passed
+  pnpm lint --force .................. 1/1 passed (web; the only linted package)
+  pnpm test --force .................. 11/11 tasks passed
+      api 469, database 53, memory 48, connect 45, tools 38,
+      orchestrator 37, governance 26, agents 26, skills 22, worker 0,
+      web 134 (22 files)  -> 898 tests, 0 failures
+  pnpm build --force ................. passed, main chunk 720.74 kB (209.08 kB gzip)
+
+After the launch change (20:30)
+  api ................................ 478 passed, 0 failed (+9: 4 launcher, 5 route)
+  web ................................ 136 passed, 0 failed (+2: launch client)
+  web typecheck + eslint ............. clean
+
+==============================================================================
+DEPLOYMENT STATE
+==============================================================================
+
+(filled in during Phase E)
+
+
+==============================================================================
+LOCAL RUNTIME
+==============================================================================
+
+Endpoints (19:58)
+  http://127.0.0.1:4000/health ....... 200 {"status":"ok","uptimeSeconds":1290}
+  http://127.0.0.1:4000/readiness .... 200 supabase ready, ollama ready, queue ready
+  https://api.unioffice.pro/health ... 200, uptimeSeconds 1291 (same process)
+  https://api.unioffice.pro/readiness  200, all ready
+
+Planning latency through Cloudflare (POST /work/:id/plan, test org A)
+  Run                          Result
+  model warm, 2 steps ........ 200 in 102.5 s
+  model warm (earlier) ....... 200 in 114.1 s  (2026-09-19, previous session)
+  model cold (ollama stop) ... 200 in 118.1 s
+  -> Cloudflare's documented 100 s proxy timeout was NOT reproduced on this
+     tunnel: all three runs over 100 s succeeded. The real limit is unknown
+     and undocumented for this path, so relying on it was a risk; the fix
+     above removes the dependence on it.
+
+Full mission, old two-request path (20:05)
+  plan 102.5 s, execute queued in 3.9 s, worker claimed in 1 s,
+  completed at 190 s. financial-analysis v1 + calculator, 2 artifacts.
+
+Full mission, new launch path, client gone after one request (20:40)
+  POST /launch ............... 202 in 1.5 s
+  second launch .............. 409 "already being planned"
+  planning ................... 5 s -> 109 s
+  queued by the server ....... 109 s
+  worker claimed ............. 113 s
+  completed .................. 322 s
+  financial-analysis v1 + calculator:completed, 2 artifacts,
+  knowledge.created, 23 events.
+
+Model residency
+  OLLAMA_KEEP_ALIVE is not set, so qwen3:8b unloads after 5 idle minutes and
+  each cold start adds ~20 s of load time and needs ~6 GB free at that moment.
+
+Process ownership
+  The API was restarted at 20:34 onto the new code: stopped by PID (27716 and
+  its tsx launcher 28388 only), then started with
+  `pnpm --filter @unioffice/api start` in its own visible PowerShell window
+  titled "UNIOFFICE API", so it is not tied to this session.
+  The worker (PID 7192) was not restarted: nothing in this change touches it.
+
+==============================================================================
+NPU INVESTIGATION
+==============================================================================
+
+(filled in during Phase G - secondary to go-live)
+
+
+==============================================================================
+KNOWN ISSUES
+==============================================================================
+
+Carried in from earlier sessions, to be re-verified today:
+
+1. Planning runs synchronously inside POST /work/:id/plan. Measured at
+   60-114 s. Cloudflare's documented proxy read timeout is 100 s, so this
+   may return 524 to a browser. One run at 114.1 s did succeed through the
+   tunnel on 2026-09-19. Needs measuring again before deciding anything.
+
+2. qwen3:8b needs roughly 6 GB resident. On 2026-09-19 it failed to load
+   with an out-of-memory error at ~2 GB free and succeeded at ~5.6 GB free.
+
+3. /readiness reports ollama "ready" when the server answers /api/tags,
+   even if the model cannot be loaded.
+
+
+==============================================================================
+DEFERRED WORK
+==============================================================================
+
+(filled in as decisions are made)
+
+
+==============================================================================
+MANUAL ACTIONS REQUIRED
+==============================================================================
+
+(filled in as they are found)
+
+
+==============================================================================
+FINAL PRODUCTION CHECKLIST
+==============================================================================
+
+(filled in at the end)
