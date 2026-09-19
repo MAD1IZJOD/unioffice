@@ -6,6 +6,11 @@ Objective: Production go-live and local AI/NPU investigation
 This file is the plain-text record of this session's work. It holds no
 secrets: environment variables are named, never valued.
 
+Timestamps: every clock time in this log is anchored to git commit times,
+which are authoritative. An earlier revision of this file carried
+estimated times (for example "21:05 - 21:40") that were wrong; they were
+corrected once ONNX Runtime's own log showed the real clock at 20:37.
+
 
 ==============================================================================
 CURRENT STATE
@@ -42,27 +47,27 @@ Phase A - Baseline (19:43)
   - Runtime identified: user-started API (PID 27716) and worker (PID 7192),
     Ollama on 127.0.0.1:11434, cloudflared service running.
 
-Phase B - Quality gate (19:50)
+Phase B - Quality gate (19:43 - before 19:59)
   - Frozen-lockfile install, typecheck, lint, tests and build all green on
     HEAD 5500720 without any change (see TEST RESULTS).
 
-Phase C - Runtime (19:58)
+Phase C - Runtime (before 19:59)
   - Local and public /health and /readiness answer; public and local uptime
     differ by one second, so the tunnel reaches the same process.
 
-Phase D - Real end-to-end missions (20:00 - 20:45)
+Phase D - Real end-to-end missions (before 19:59, then 20:01 - 20:09)
   - Measured planning through Cloudflare three times (see LOCAL RUNTIME).
   - Found and fixed a real defect in how missions start (see CHANGES MADE).
   - Re-ran the mission end to end through the public URL on the fix.
 
-Phase E - Deployment (20:50 - 21:05)
+Phase E - Deployment (after 20:09, before 20:17)
   - Vercel CLI is not logged in on this machine, so the Vercel project could
     not be inspected or changed from here (see MANUAL ACTIONS REQUIRED).
   - Read-only checks of both domains (see DEPLOYMENT STATE).
   - Found and fixed a launch blocker: the live API refused the production
     origin (see CHANGES MADE, item 3).
 
-Phase F - Security (21:05 - 21:40)
+Phase F - Security (20:09 - 20:29)
   - Live authorization checks, launch permission checks, CORS, database
     posture, secrets scan of tracked files and all history, browser bundle.
   - A permission probe exposed a real race in the new launch path (a
@@ -160,7 +165,7 @@ no trailers, pushed to origin/main immediately after committing.
 TEST RESULTS
 ==============================================================================
 
-Baseline on HEAD 5500720, before any change (19:50)
+Baseline on HEAD 5500720, before any change (19:43 - 19:59)
   pnpm install --frozen-lockfile ..... up to date
   pnpm typecheck --force ............. 13/13 tasks passed
   pnpm lint --force .................. 1/1 passed (web; the only linted package)
@@ -170,12 +175,12 @@ Baseline on HEAD 5500720, before any change (19:50)
       web 134 (22 files)  -> 898 tests, 0 failures
   pnpm build --force ................. passed, main chunk 720.74 kB (209.08 kB gzip)
 
-After the launch change (20:30)
+After the launch change (before commit d18f893, 20:01)
   api ................................ 478 passed, 0 failed (+9: 4 launcher, 5 route)
   web ................................ 136 passed, 0 failed (+2: launch client)
   web typecheck + eslint ............. clean
 
-After the cancel-race fixes (21:30)
+After the cancel-race fixes (before commit 85705a5, 20:24)
   api ................................ 488 passed, 0 failed
   database ........................... 53 passed, 0 failed (typecheck clean)
 
@@ -209,7 +214,7 @@ Live checks against the real stack
 DEPLOYMENT STATE
 ==============================================================================
 
-Observed read-only at 20:55. Nothing was changed on Vercel, Cloudflare DNS
+Observed read-only between 20:09 and 20:17. Nothing was changed on Vercel, Cloudflare DNS
 or Supabase in this session.
 
   https://unioffice.online ...... 200, Vercel. The MARKETING site (title
@@ -237,7 +242,7 @@ given the same values - that needs checking in the Vercel dashboard.
 LOCAL RUNTIME
 ==============================================================================
 
-Endpoints (19:58)
+Endpoints (before 19:59)
   http://127.0.0.1:4000/health ....... 200 {"status":"ok","uptimeSeconds":1290}
   http://127.0.0.1:4000/readiness .... 200 supabase ready, ollama ready, queue ready
   https://api.unioffice.pro/health ... 200, uptimeSeconds 1291 (same process)
@@ -253,11 +258,11 @@ Planning latency through Cloudflare (POST /work/:id/plan, test org A)
      and undocumented for this path, so relying on it was a risk; the fix
      above removes the dependence on it.
 
-Full mission, old two-request path (20:05)
+Full mission, old two-request path (before 19:59)
   plan 102.5 s, execute queued in 3.9 s, worker claimed in 1 s,
   completed at 190 s. financial-analysis v1 + calculator, 2 artifacts.
 
-Full mission, new launch path, client gone after one request (20:40)
+Full mission, new launch path, client gone after one request (between 20:01 and 20:09)
   POST /launch ............... 202 in 1.5 s
   second launch .............. 409 "already being planned"
   planning ................... 5 s -> 109 s
@@ -272,7 +277,7 @@ Model residency
   each cold start adds ~20 s of load time and needs ~6 GB free at that moment.
 
 Process ownership
-  The API was restarted at 20:34 onto the new code: stopped by PID (27716 and
+  The API was restarted just after 20:01 onto the new code: stopped by PID (27716 and
   its tsx launcher 28388 only), then started with
   `pnpm --filter @unioffice/api start` in its own visible PowerShell window
   titled "UNIOFFICE API", so it is not tied to this session.
