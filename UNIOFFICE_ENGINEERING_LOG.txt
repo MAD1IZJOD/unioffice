@@ -38,6 +38,21 @@ Ports 4000 and 11434 bind 127.0.0.1 only. Cloudflare Tunnel is the only
 public path to the API.
 
 
+At session end (21:18)
+  HEAD / origin ... in sync, working tree clean (see COMMITS for the last hash)
+  API ............. node PID 8820, started 20:24:37 - after 85705a5 (20:24:11),
+                    the last commit that touched API code. Running in its own
+                    visible PowerShell window titled "UNIOFFICE API".
+                    Earlier windows from the restarts may remain open at a
+                    prompt; they hold no process and can be closed.
+  Worker .......... node PID 7192, started 19:24:28 by the owner, not
+                    restarted. Nothing changed today runs in the worker:
+                    planning, the launcher and the new conditional write are
+                    all API-side.
+  Ollama .......... 127.0.0.1:11434 only
+  cloudflared ..... Running
+  Free RAM ........ 10.0 GB
+
 ==============================================================================
 COMPLETED
 ==============================================================================
@@ -73,6 +88,15 @@ Phase F - Security (20:09 - 20:29)
   - A permission probe exposed a real race in the new launch path (a
     cancelled mission ran to completion). Fixed in two steps and verified
     live after the plans had time to finish (see CHANGES MADE, item 2).
+
+Phase G - NPU (runs 20:30 - 20:48; recorded by 21:13)
+  - Stopped by instruction after the QDQ run. See NPU INVESTIGATION.
+
+Phase H - Final validation (21:13 - 21:18)
+  - Full typecheck, lint, tests and build without cache. The first full test
+    run FAILED 2 web tests; diagnosed as a timing flake under load and fixed
+    at the cause (see CHANGES MADE 4); the re-run passed.
+  - Final live checks of the running stack (see LOCAL RUNTIME).
 
 ==============================================================================
 CHANGES MADE
@@ -147,19 +171,38 @@ CHANGES MADE
    machine. Verified through the public URL: unioffice.pro and www allowed;
    unioffice.online and an arbitrary origin get no CORS header.
 
+4. A web test file no longer times out on a busy machine.
+
+   The first final full run (`pnpm test --force`) failed 2 tests in
+   apps/web/src/pages/TemplateMission.test.tsx: one timed out at 5078 ms
+   against a 5000 ms limit, one missed the transient "Starting..." state.
+   The same file passed 3/3 alone and the web suite passed 136/136 alone, so
+   it was load, not a regression - but `pnpm test` is the gate, and it could
+   fail at random. Cause: the shared helper typed ~66 characters key by key,
+   and each keystroke re-rendered the whole template page. It now pastes the
+   answers (still real user-event focus and input). No assertion changed.
+   File time fell from ~4.6 s to ~1.9 s of test time; the full run then
+   passed under the same load.
+
 ==============================================================================
 COMMITS
 ==============================================================================
+
+All pushed to origin/main immediately after committing. Every one:
+Author and Committer = Madhavan <175943252+MAD1IZJOD@users.noreply.github.com>,
+no Co-Authored-By, no Claude or AI trailers, no amend, rebase or force push.
 
 ede9f87  plan and queue a mission on the server in one step
 d18f893  start missions with one request instead of two
 0e6fdb3  start an engineering log for the go-live pass
 0382397  don't let a launch undo a cancel
 85705a5  keep a cancellation that lands while a plan is being written
-
-Every commit: Author and Committer =
-  Madhavan <175943252+MAD1IZJOD@users.noreply.github.com>
-no trailers, pushed to origin/main immediately after committing.
+9747f04  log the deployment and security findings
+a1e0464  correct the times in the engineering log
+eaeca12  say how missions start now in the deployment notes
+49a351c  record the npu result and the known issues
+60be4e8  fill template answers without typing each key
+(this file's final update is the last commit of the session)
 
 ==============================================================================
 TEST RESULTS
@@ -209,6 +252,17 @@ Live checks against the real stack
       no source maps.
   Exposure ........................... 4000 and 11434 bound to 127.0.0.1
       only; nothing of ours on 0.0.0.0.
+
+Final validation, all without cache (21:13 - 21:18)
+  pnpm typecheck --force ............. 13/13 passed
+  pnpm lint --force .................. 1/1 passed
+  pnpm test --force, first run ....... FAILED: 10/11 tasks; web 134/136
+                                        (2 timing failures, see CHANGES 4)
+  pnpm test --force, after the fix ... 11/11 passed
+      api 488, database 53, memory 48, connect 45, tools 38,
+      orchestrator 37, governance 26, agents 26, skills 22, worker 0,
+      web 136 (22 files)  -> 919 tests, 0 failures
+  pnpm build --force ................. passed, main chunk 720.81 kB (209.13 kB gzip)
 
 ==============================================================================
 DEPLOYMENT STATE
@@ -283,6 +337,15 @@ Process ownership
   titled "UNIOFFICE API", so it is not tied to this session.
   The worker (PID 7192) was not restarted: nothing in this change touches it.
 
+Final live check (21:18)
+  local  /health ..... 200, uptime 3197 s
+  local  /readiness .. ready: supabase, ollama, queue; model qwen3:8b
+  public /health ..... 200, uptime 3198 s (same process through the tunnel)
+  public /readiness .. ready
+  public POST /work/:id/launch without a token -> 401 (route live, guarded)
+  CORS preflight from https://unioffice.pro -> allowed
+  ports 4000 and 11434 -> 127.0.0.1 only
+
 ==============================================================================
 NPU INVESTIGATION
 ==============================================================================
@@ -340,8 +403,9 @@ Step 2 - inference ........ NOT PROVEN, on two models (20:41 - 20:48)
 Workloads that might benefit later: not assessed. No UNIOFFICE workload
 was benchmarked on the NPU, because no NPU execution was achieved.
 
-Stopped at 20:48 by instruction. No further runs, downloads, runtime
-installs or Windows changes were made after that.
+The last run ended at 20:48. After the instruction to stop, only the
+existing result files were read: no further runs, downloads, runtime
+installs or Windows changes.
 
 ==============================================================================
 KNOWN ISSUES
@@ -441,4 +505,41 @@ session, and no credential was asked for.
 FINAL PRODUCTION CHECKLIST
 ==============================================================================
 
-(filled in at the end)
+GO-LIVE STATUS: READY WITH KNOWN LIMITATIONS - backend is ready and live;
+the web app is not yet reachable on unioffice.pro until the owner completes
+the account steps below.
+
+Verified today, with evidence in this log
+  [x] Typecheck, lint, tests (919/919) and build pass without cache
+  [x] API healthy locally and through https://api.unioffice.pro
+  [x] Readiness: Supabase, Ollama and the durable queue all ready
+  [x] Real missions complete end to end through the public URL
+      (planning, skill resolution and version pinning, delegation, queue,
+      worker, Ollama, calculator tool, artifacts, knowledge, events)
+  [x] Missions start with one request; no request is held open for a plan
+  [x] A cancelled mission stays cancelled (race reproduced, fixed, re-verified)
+  [x] Authorization enforced server-side (17/17 live checks + launch checks)
+  [x] Cross-organization access returns 404
+  [x] CORS allows exactly unioffice.pro and www (plus local development)
+  [x] Database posture: RLS forced everywhere, 0 violations
+  [x] No secrets in tracked files or anywhere in git history
+  [x] Browser bundle holds only the anon key; no server-only values; no
+      source maps
+  [x] Ports 4000 and 11434 not exposed; Cloudflare Tunnel is the only path
+  [x] .env ignored and never committed
+
+Owner actions still required (details in MANUAL ACTIONS REQUIRED)
+  [ ] 1. Vercel: set the four VITE_ variables on the web project; redeploy
+  [ ] 2. Vercel: add unioffice.pro and www.unioffice.pro to that project
+  [ ] 3. Cloudflare DNS: add the records Vercel shows for @ and www
+  [ ] 4. Supabase: Site URL and redirect URLs for https://unioffice.pro
+  [ ] 5. Marketing site: "Enter UNIOFFICE" link to https://unioffice.pro
+  [ ] 6. Recommended: OLLAMA_KEEP_ALIVE so qwen3:8b stays loaded
+
+After those, check once in a browser:
+  sign in with Google on https://unioffice.pro -> start a mission -> watch
+  the room go planning -> executing -> completed.
+
+Not done today
+  [ ] NPU inference - not proven; stopped by instruction (see NPU section)
+
