@@ -2000,6 +2000,17 @@ export async function planWork(workId: string): Promise<{
 }
 
 /**
+ * Plans a mission and queues it, both on the server, and returns as soon as
+ * that has started. Planning takes a minute or two on a local model; the page
+ * does not hold a request open for it, so a closed tab or a dropped
+ * connection cannot leave a mission planned but never run. Progress shows up
+ * in the room, which reads the mission's own state.
+ */
+export async function launchWork(workId: string): Promise<{ launched: boolean; workId: string }> {
+  return post(`/work/${workId}/launch`, {}, READ_TIMEOUT_MS);
+}
+
+/**
  * Starts execution and returns as soon as the run is scheduled. Progress is
  * observed by polling the work detail, which is why this does not need the
  * long model timeout.

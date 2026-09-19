@@ -14,6 +14,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   cancelWork,
   executeWork,
+  launchWork,
   fetchExecutionRoom,
   fetchMissionKnowledge,
   formatDuration,
@@ -154,10 +155,9 @@ export default function Room() {
 
     navigate(location.pathname, { replace: true, state: null });
 
-    void run("open", async () => {
-      await planWork(missionId);
-      await executeWork(missionId);
-    });
+    // One request that answers at once. The server plans and queues the
+    // mission itself, so leaving this page mid-plan changes nothing.
+    void run("open", () => launchWork(missionId));
   }, [autostart, location.pathname, missionId, navigate, run]);
 
   if (room.loading) {
@@ -387,8 +387,7 @@ export default function Room() {
                   run("retry", async () => {
                     const retried = await retryWork(work.id);
                     if (retried.mode === "replan") {
-                      await planWork(work.id);
-                      await executeWork(work.id);
+                      await launchWork(work.id);
                     }
                   })
                 }

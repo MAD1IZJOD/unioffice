@@ -264,6 +264,9 @@ test("a mission already being planned, or already planned, is not launched again
   assert.equal(first.statusCode, 202);
   assert.equal(second.statusCode, 409, "a double click does not plan the mission twice");
 
+  const beside = await app.inject({ method: "POST", url: `/work/${companyWide}/plan`, headers: as("owner"), payload: {} });
+  assert.equal(beside.statusCode, 409, "the older plan route cannot start a second plan beside a launch");
+
   finishPlanning();
   await settled();
   assert.deepEqual(done, [`plan:${companyWide}`, `execute:${companyWide}`]);

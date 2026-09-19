@@ -760,6 +760,14 @@ export function buildApiServer(
 
     instance.post("/work/:id/plan", async (request) => {
       const workId = await operableWorkId(services, request);
+
+      // Planning accepts a mission already marked as planning, so an
+      // interrupted plan can be picked up again. That must not let a second
+      // plan start beside a launch that is still writing the first one.
+      if (services.missionLauncher?.isLaunching(workId)) {
+        throw new ApiError(409, "This mission is already being planned.");
+      }
+
       return services.workService.planWork(workId);
     });
 
