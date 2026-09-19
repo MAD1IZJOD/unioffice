@@ -55,6 +55,20 @@ Phase D - Real end-to-end missions (20:00 - 20:45)
   - Found and fixed a real defect in how missions start (see CHANGES MADE).
   - Re-ran the mission end to end through the public URL on the fix.
 
+Phase E - Deployment (20:50 - 21:05)
+  - Vercel CLI is not logged in on this machine, so the Vercel project could
+    not be inspected or changed from here (see MANUAL ACTIONS REQUIRED).
+  - Read-only checks of both domains (see DEPLOYMENT STATE).
+  - Found and fixed a launch blocker: the live API refused the production
+    origin (see CHANGES MADE, item 3).
+
+Phase F - Security (21:05 - 21:40)
+  - Live authorization checks, launch permission checks, CORS, database
+    posture, secrets scan of tracked files and all history, browser bundle.
+  - A permission probe exposed a real race in the new launch path (a
+    cancelled mission ran to completion). Fixed in two steps and verified
+    live after the plans had time to finish (see CHANGES MADE, item 2).
+
 ==============================================================================
 CHANGES MADE
 ==============================================================================
@@ -88,15 +102,59 @@ CHANGES MADE
    This also removes the Cloudflare timeout exposure entirely: no request
    is now held open for longer than a couple of seconds.
 
+2. A cancelled mission can no longer be revived by a launch.
+
+   Found live, not in review: a permission probe cancelled a mission a
+   moment after launching it. The mission ran to completion anyway.
+
+   Cause: two stale whole-row writes. The cancel landed in the gap before
+   the background plan marked the mission as planning, and the plan then
+   wrote its own copy over the cancellation, finished, and queued it.
+
+   Fix, in two commits:
+     a) 0382397 - the launch route marks the mission as planning with a
+        conditional write (WorkRepository.transitionStatus: update ... where
+        status = 'queued') BEFORE answering 202. A cancel that got there
+        first wins (launch gets 409); one that arrives after is refused,
+        because cancelling a mission that is actively planning was already
+        refused.
+     b) 85705a5 - planWork no longer rewrites a mission a launch already
+        marked as planning, and re-reads the mission after the model
+        returns: if it was cancelled meanwhile, no steps are created and it
+        is not put back to waiting. The launcher queues only a mission the
+        plan left waiting.
+
+   (a) alone was NOT enough. Re-running the race on 0382397 and waiting for
+   the plans to finish showed a mission reported cancelled that still went
+   on to complete. (b) closes it: re-running on 85705a5, all three cancelled
+   missions stayed cancelled with 0 tasks and 0 jobs, checked after their
+   plans would have finished.
+
+3. The live API now accepts the production web origin (local config only).
+
+   The API's CORS allow-list comes from API_CORS_ORIGINS. It was not set in
+   the local .env, so it defaulted to localhost only: every browser request
+   from https://unioffice.pro would have been refused. Added to the local
+   .env (not committed, never tracked):
+     API_CORS_ORIGINS = https://unioffice.pro, https://www.unioffice.pro,
+                        http://localhost:5173, http://127.0.0.1:5173
+   The localhost entries stay because this machine is also the development
+   machine. Verified through the public URL: unioffice.pro and www allowed;
+   unioffice.online and an arbitrary origin get no CORS header.
+
 ==============================================================================
 COMMITS
 ==============================================================================
 
 ede9f87  plan and queue a mission on the server in one step
 d18f893  start missions with one request instead of two
+0e6fdb3  start an engineering log for the go-live pass
+0382397  don't let a launch undo a cancel
+85705a5  keep a cancellation that lands while a plan is being written
 
-Both: Author and Committer = Madhavan <175943252+MAD1IZJOD@users.noreply.github.com>,
-no trailers, pushed to origin/main.
+Every commit: Author and Committer =
+  Madhavan <175943252+MAD1IZJOD@users.noreply.github.com>
+no trailers, pushed to origin/main immediately after committing.
 
 ==============================================================================
 TEST RESULTS
@@ -117,12 +175,63 @@ After the launch change (20:30)
   web ................................ 136 passed, 0 failed (+2: launch client)
   web typecheck + eslint ............. clean
 
+After the cancel-race fixes (21:30)
+  api ................................ 488 passed, 0 failed
+  database ........................... 53 passed, 0 failed (typecheck clean)
+
+Live checks against the real stack
+  Authorization (localhost:4000) ..... 17/17 passed
+      no token and forged token -> 401 on /me, /skills, /work, /approvals,
+      /members; owner of A -> 404 on B's skills, missions, members; viewer
+      -> 403 writing a skill and inviting an owner; invented role -> 400;
+      client-chosen system scope -> 400; unknown CORS origin -> no header.
+  Launch permissions (public URL) .... no token 401, forged 401, viewer 403,
+      owner of A launching B's mission 404 (both ways of naming it); the
+      probe mission was not planned by any of them.
+      Note: an earlier probe reported 202 for "another organization's
+      owner". That account (test-b) is an active MEMBER of organization A,
+      so 202 was correct. The probe was wrong, not the server.
+  Cancel race (public URL) ........... on 85705a5: 3/3 rounds cancelled,
+      0 tasks, 0 jobs, re-checked after the plans had time to finish.
+  Database posture ................... supabase/checks/posture.sql: 0 rows
+      (RLS enabled and forced everywhere, no browser-role privileges).
+  Secrets ............................ .env never tracked and never in
+      history; 0 credential-shaped strings in tracked files or in any line
+      ever added to history; the tracked unioffice.md.docx scanned
+      separately: none.
+  Browser bundle (production values).. API URL and origin baked in, uses
+      /launch, only the anon key (JWT role "anon"), no server-only names,
+      no source maps.
+  Exposure ........................... 4000 and 11434 bound to 127.0.0.1
+      only; nothing of ours on 0.0.0.0.
+
 ==============================================================================
 DEPLOYMENT STATE
 ==============================================================================
 
-(filled in during Phase E)
+Observed read-only at 20:55. Nothing was changed on Vercel, Cloudflare DNS
+or Supabase in this session.
 
+  https://unioffice.online ...... 200, Vercel. The MARKETING site (title
+                                  "UNIOFFICE - The AI-Native Operating
+                                  System", waitlist; the same bundle it
+                                  served on unioffice.pro before). It has
+                                  no link to unioffice.pro yet.
+  https://www.unioffice.online .. 200, Vercel, same site.
+  https://unioffice.pro ......... 404, served by Cloudflare. The zone is on
+                                  Cloudflare now (needed for the tunnel) and
+                                  the apex has no record pointing at Vercel.
+                                  The application is NOT live on this domain.
+  https://www.unioffice.pro ..... 404, same.
+  https://api.unioffice.pro ..... 200, Cloudflare Tunnel -> 127.0.0.1:4000.
+
+  Vercel CLI .................... not logged in on this machine; the web
+                                  project could not be inspected. No token
+                                  was requested.
+
+A production build made here with the production values behaves
+correctly. That proves the code is ready. It does not prove Vercel has been
+given the same values - that needs checking in the Vercel dashboard.
 
 ==============================================================================
 LOCAL RUNTIME
@@ -205,8 +314,44 @@ DEFERRED WORK
 MANUAL ACTIONS REQUIRED
 ==============================================================================
 
-(filled in as they are found)
+Each of these needs an account only the owner holds. None was done in this
+session, and no credential was asked for.
 
+1. Vercel - the web project built from apps/web
+   Settings -> Environment Variables (Production):
+     VITE_API_URL ........... https://api.unioffice.pro
+     VITE_APP_ORIGIN ........ https://unioffice.pro
+     VITE_SUPABASE_URL ...... the project URL
+     VITE_SUPABASE_ANON_KEY . the anon key ONLY
+   Then Deployments -> Redeploy. Vite bakes these in at build time, so an
+   existing deployment keeps its old values until it is rebuilt.
+   Never add SUPABASE_SERVICE_ROLE_KEY or any server-only value here.
+
+2. Vercel - same project -> Settings -> Domains
+   Add unioffice.pro and www.unioffice.pro. Vercel then shows the exact DNS
+   records it wants.
+
+3. Cloudflare - DNS for the unioffice.pro zone
+   Add the records Vercel showed in step 2, for @ and www, exactly as shown.
+   Leave api.unioffice.pro (the tunnel) untouched. Follow Vercel's domain
+   page on the proxy setting; for a domain served by Vercel it normally
+   asks for "DNS only" (grey cloud) so it can issue the certificate.
+
+4. Supabase - Authentication -> URL Configuration
+   Site URL ....... https://unioffice.pro
+   Redirect URLs .. https://unioffice.pro/**, https://www.unioffice.pro/**,
+                    http://localhost:5173/**
+   Without this, Google and the email link complete and then return people
+   to the old Site URL, which looks like sign-in silently failing.
+
+5. Marketing site (separate Vercel project on unioffice.online)
+   Add the "Enter UNIOFFICE" call to action pointing at https://unioffice.pro.
+
+6. Optional, recommended - Ollama
+   Set OLLAMA_KEEP_ALIVE (for example 24h) for the Ollama service and
+   restart it, so qwen3:8b stays loaded. Unset, it unloads after 5 idle
+   minutes and the next plan waits ~20 s to load it and needs ~6 GB free
+   at that moment.
 
 ==============================================================================
 FINAL PRODUCTION CHECKLIST
