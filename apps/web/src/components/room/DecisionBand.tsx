@@ -22,8 +22,8 @@ export function DecisionBand({
   approvals: ApprovalItem[];
   /** Names the agent that asked, rather than printing its id. */
   requestedBy: (agentId: string | undefined) => string;
-  /** Names the step this decision is holding up. */
-  holding: (resource: string) => string;
+  /** Names the step this decision is holding up, when it can be named. */
+  holding: (resource: string, taskId?: string) => string | undefined;
   busy: boolean;
   onDecide: (approvalId: string, decision: "approve" | "reject") => void;
 }) {
@@ -42,7 +42,7 @@ export function DecisionBand({
         </div>
 
         {approvals.map((approval) => {
-          const step = holding(approval.resource);
+          const step = holding(approval.resource, approval.taskId);
 
           return (
             <div key={approval.id} className="decision">
@@ -67,7 +67,7 @@ export function DecisionBand({
               <div className="decision-provenance">
                 {/* The action and the step it blocks are usually the same
                     sentence, and saying it twice is noise, not context. */}
-                {step !== approval.action && <>holding up {step} · </>}
+                {step && step !== approval.action && <>holding up {step} · </>}
                 asked by {requestedBy(approval.agentId)} ·{" "}
                 {formatRelativeTime(approval.createdAt)}
               </div>

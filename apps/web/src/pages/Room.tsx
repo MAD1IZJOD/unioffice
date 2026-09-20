@@ -217,11 +217,15 @@ export default function Room() {
   const agentName = (id?: string) =>
     data.agents.find((agent) => agent.id === id)?.name ?? "Unassigned";
 
-  // An approval's resource is stored as "task:<uuid>", which is the right way
-  // to store it and the wrong way to read it.
-  const stepNamed = (resource: string) => {
-    const taskId = resource.startsWith("task:") ? resource.slice(5) : undefined;
-    return plan.nodes.find((node) => node.taskId === taskId)?.title ?? resource;
+  // A decision points at what it covers as "task:<uuid>" or, since approvals
+  // bind to a written proposal, "proposal:<uuid>". Both are the right way to
+  // store it and the wrong way to read it: an id tells a person nothing, so
+  // the step is named, and when it cannot be named nothing is shown at all.
+  const stepNamed = (resource: string, taskId?: string): string | undefined => {
+    const fromResource = resource.startsWith("task:") ? resource.slice(5) : undefined;
+    const id = fromResource ?? taskId;
+
+    return id ? plan.nodes.find((node) => node.taskId === id)?.title : undefined;
   };
 
   // What the company's rules did to this mission, counted from its own log.
@@ -606,11 +610,13 @@ export default function Room() {
                         <div className="text-[12.5px] font-semibold text-ink-primary">
                           {approval.action}
                         </div>
-                        {stepNamed(approval.resource) !== approval.action && (
-                          <div className="t-machine mt-1">
-                            held up {stepNamed(approval.resource)}
-                          </div>
-                        )}
+                        {(() => {
+                          const step = stepNamed(approval.resource, approval.taskId);
+
+                          return step && step !== approval.action ? (
+                            <div className="t-machine mt-1">held up {step}</div>
+                          ) : null;
+                        })()}
                       </div>
 
                       <StatusPill
