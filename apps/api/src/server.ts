@@ -119,6 +119,10 @@ import type {
 } from "./company-overview-service.js";
 
 import type {
+  CompanyReadinessService,
+} from "./company-readiness-service.js";
+
+import type {
   WorkspaceService,
 } from "./workspace-service.js";
 
@@ -230,6 +234,11 @@ export interface ApiServices {
   executionStream: ExecutionStream;
   companyBrainService: CompanyBrainService;
   companyOverviewService: CompanyOverviewService;
+  /**
+   * What the workforce can be asked for. Optional so the route tests that
+   * have nothing to do with readiness need not build one.
+   */
+  companyReadinessService?: Pick<CompanyReadinessService, "getReadiness">;
   governanceService: GovernanceService;
   governanceOverviewService: GovernanceOverviewService;
   workspaceService: WorkspaceService;
@@ -662,6 +671,21 @@ export function buildApiServer(
           reach: reachOf(accessOf(request)),
         },
       );
+    });
+
+    // What the workforce can be asked for, and what it cannot do yet.
+    //
+    // Read-only, and derived from the agent rows and the skill catalogue the
+    // delegator and the skill resolver already read - so what this says the
+    // company can do is what a real mission would find. Someone who reaches
+    // only some workspaces is answered for those; remediation is offered only
+    // where their role could actually carry it out.
+    instance.get("/company-readiness", async (request) => {
+      if (!services.companyReadinessService) {
+        throw new ApiError(503, "Company readiness is not available on this server.");
+      }
+
+      return services.companyReadinessService.getReadiness(accessOf(request));
     });
 
     // What needs a person, in one ranked answer every surface reads. The rail

@@ -107,6 +107,7 @@ export async function createApiServer() {
     executionStream: runtime.executionStream,
     companyBrainService: runtime.companyBrainService,
     companyOverviewService: runtime.companyOverviewService,
+    companyReadinessService: runtime.companyReadinessService,
     governanceService: runtime.governanceService,
     governanceOverviewService: runtime.governanceOverviewService,
     workspaceService: runtime.workspaceService,

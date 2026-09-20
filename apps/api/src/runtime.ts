@@ -57,6 +57,7 @@ import { WorkforceService } from "./workforce-service.js";
 import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
+import { CompanyReadinessService } from "./company-readiness-service.js";
 import { EventRecorder } from "./event-recorder.js";
 import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
 import { KnowledgeGovernance } from "./knowledge-governance.js";
@@ -413,6 +414,18 @@ export function createExecutionRuntime(config: ApiConfig) {
     toolRegistry,
   );
 
+  // What the workforce can be asked for, from the same skill resolution and
+  // the same agent rows delegation uses. Nothing is computed twice: it reads
+  // the skill service rather than the skill table, so an organization's own
+  // version of a skill is the one readiness is judged against.
+  const companyReadinessService = new CompanyReadinessService({
+    agents: agentRepository,
+    workspaces: workspaceRepository,
+    skills: skillService,
+    tools: toolRegistry,
+    reads: operationalReads,
+  });
+
   const governanceOverviewService = new GovernanceOverviewService(
     policyRepository,
     agentRepository,
@@ -505,6 +518,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     knowledgeCaptureService,
     knowledgeGovernance,
     companyOverviewService,
+    companyReadinessService,
     governanceService,
     governanceOverviewService,
     taskGovernanceGate,
