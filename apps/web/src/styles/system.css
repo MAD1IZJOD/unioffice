@@ -2433,3 +2433,34 @@
   color: var(--warning-muted);
   font-size: var(--text-sm);
 }
+
+/* Detail on demand.
+
+   The machinery underneath a surface - a tool's schema, the steps a tool call
+   goes through - is true and worth keeping, but it is not what someone came
+   to the page to read. Closed until asked for. */
+.tech-detail > summary {
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  list-style: none;
+}
+
+.tech-detail > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tech-detail > summary::before {
+  content: "+ ";
+}
+
+.tech-detail[open] > summary::before {
+  content: "- ";
+}
+
+.tech-detail > summary:hover {
+  color: var(--ink-muted);
+}

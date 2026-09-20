@@ -119,8 +119,8 @@ export default function Tools() {
                     <div className="infra-grants">
                       {authorized.length === 0 ? (
                         <span className="grant grant-none">
-                          No agent holds this — the delegator will refuse any
-                          task that requires it
+                          No agent can use this yet — a mission that needs it
+                          will stop before it starts
                         </span>
                       ) : (
                         authorized.map((agent) => (
@@ -140,10 +140,13 @@ export default function Tools() {
                   </div>
 
                   <div className="min-w-0">
-                    <div className="detail-label">Input schema</div>
-                    <pre className="code-block mt-2">
-                      {safeStringify(tool.inputSchema, 2)}
-                    </pre>
+                    <details className="tech-detail">
+                      <summary>Technical details</summary>
+                      <div className="detail-label mt-3">Input schema</div>
+                      <pre className="code-block mt-2">
+                        {safeStringify(tool.inputSchema, 2)}
+                      </pre>
+                    </details>
                   </div>
                 </div>
               );
@@ -151,6 +154,9 @@ export default function Tools() {
           </div>
 
           <Chapter index="—" title="How a tool call actually works" />
+
+          <details className="tech-detail max-w-[74ch]">
+            <summary>What happens behind a tool call</summary>
 
           <ol className="tool-protocol max-w-[74ch]">
             <li>The planner marks a task as requiring a specific tool by id.</li>
@@ -175,6 +181,7 @@ export default function Tools() {
               asked again, so a confident guess cannot pass as a tool result.
             </li>
           </ol>
+          </details>
         </>
       )}
     </div>
