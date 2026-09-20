@@ -82,7 +82,11 @@ export default function Readiness() {
         title="COMPANY READINESS"
         lead={data.headline}
         detail={data.detail}
-        tone={data.state === "ready" ? "quiet" : data.state === "partly_ready" ? "waiting" : "broken"}
+        // Having something still to set up is the ordinary state of a new
+        // company, not an alarm - the count in the strip says it plainly
+        // enough. Only a workforce that can be given nothing at all is a
+        // problem worth colouring the page over.
+        tone={data.state === "ready" || data.state === "partly_ready" ? "quiet" : "broken"}
         action={
           data.firstRun.canStartMission && data.summary.ready > 0 ? (
             <Link to="/missions/new" className="button-primary">
