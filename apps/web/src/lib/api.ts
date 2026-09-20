@@ -2327,3 +2327,77 @@ export async function setSkillStatus(id: string, status: SkillStatus, expectedVe
   );
   return skill;
 }
+
+/* --------------------------------------------------------------------------
+   Company readiness.
+
+   What the workforce can be asked for, and what it cannot do yet. Every
+   answer here is the server's, read from the same agent rows and skill
+   resolution that decide whether a real mission can be routed - so an ability
+   this reports as ready is one a mission would actually find someone for.
+   -------------------------------------------------------------------------- */
+
+export interface ReadinessAgent {
+  id: string;
+  name: string;
+}
+
+export interface ReadinessShortfall {
+  kind:
+    | "no_workforce"
+    | "unassigned"
+    | "agent_unavailable"
+    | "missing_tool"
+    | "missing_capability";
+  agent?: ReadinessAgent;
+  tools: Array<{ id: string; name: string }>;
+  capabilities: string[];
+}
+
+export interface ReadinessAbility {
+  slug: string;
+  name: string;
+  description: string;
+  area: SkillCategory;
+  workspace?: { id: string; name: string };
+  ready: boolean;
+  agents: ReadinessAgent[];
+  needsApproval: boolean;
+  reason: string;
+  shortfall?: ReadinessShortfall;
+  /** Where to fix it. The server omits it for anyone who could not. */
+  fix?: { label: string; path: string };
+}
+
+export interface ReadinessArea {
+  area: SkillCategory;
+  name: string;
+  ready: ReadinessAbility[];
+  blocked: ReadinessAbility[];
+}
+
+export interface CompanyReadiness {
+  organizationId: string;
+  generatedAt: string;
+  state: "ready" | "partly_ready" | "not_ready" | "no_workforce";
+  headline: string;
+  detail: string;
+  summary: {
+    abilities: number;
+    ready: number;
+    blocked: number;
+    agents: number;
+    activeAgents: number;
+  };
+  areas: ReadinessArea[];
+  /** Whether this company has ever been given a mission, and what this person may do. */
+  firstRun: {
+    pending: boolean;
+    canPrepareWorkforce: boolean;
+    canStartMission: boolean;
+  };
+}
+
+export async function fetchCompanyReadiness(): Promise<CompanyReadiness> {
+  return get<CompanyReadiness>(scoped("/company-readiness"));
+}
