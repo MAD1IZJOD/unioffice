@@ -79,6 +79,57 @@ export function isRecovering(job: ExecutionJobSummary | null | undefined): boole
   );
 }
 
+/**
+ * What went wrong inside a mission that still reached the end.
+ *
+ * Only things the system recorded as having gone wrong: a step that failed
+ * or was cancelled, a step that recorded an error, a tool call that did not
+ * succeed, a step that could not follow the procedure it was meant to. The
+ * quality of what an agent wrote is not judged here - the product does not
+ * know whether an answer is any good, and saying otherwise would be a lie
+ * dressed as a status.
+ */
+function limitationsOf(tasks: TaskItem[]): string[] {
+  const limits: string[] = [];
+
+  const unfinished = tasks.filter(
+    (task) => task.status === "failed" || task.status === "cancelled",
+  );
+  if (unfinished.length > 0) {
+    limits.push(
+      `${unfinished.length} of ${tasks.length} ${tasks.length === 1 ? "step" : "steps"} did not finish.`,
+    );
+  }
+
+  const errored = tasks.filter(
+    (task) => task.status !== "failed" && task.metadata.execution?.error,
+  );
+  if (errored.length > 0) {
+    limits.push(
+      `${errored.length} ${errored.length === 1 ? "step hit an error" : "steps hit errors"} on the way.`,
+    );
+  }
+
+  const failedCalls = tasks.flatMap((task) =>
+    (task.metadata.execution?.toolCalls ?? []).filter((call) => call.status !== "completed"),
+  );
+  if (failedCalls.length > 0) {
+    const names = [...new Set(failedCalls.map((call) => call.toolId))];
+    limits.push(
+      `${names.join(", ")} did not return a result, so a step worked without it.`,
+    );
+  }
+
+  const withoutProcedure = tasks
+    .map((task) => task.metadata.execution?.skillNote)
+    .filter((note): note is string => Boolean(note));
+  if (withoutProcedure.length > 0) {
+    limits.push(withoutProcedure[0]!);
+  }
+
+  return limits;
+}
+
 export function readMission(data: MissionData): MissionState {
   const { work, tasks, approvals, executionJob } = data;
 
@@ -114,14 +165,27 @@ export function readMission(data: MissionData): MissionState {
   }
 
   if (work.status === "completed") {
+    const limits = limitationsOf(tasks);
+    const carried = tasks.length > 0
+      ? `${tasks.length} ${tasks.length === 1 ? "step" : "steps"} carried it.`
+      : undefined;
+
+    if (limits.length > 0) {
+      return {
+        phase: "delivered",
+        label: "Finished with limits",
+        line: "The company finished this mission, but not everything in it worked.",
+        note: `${limits.join(" ")} Read the result before relying on it.`,
+        tone: "warning",
+        live: false,
+      };
+    }
+
     return {
       phase: "delivered",
       label: "Delivered",
       line: "The company finished this mission.",
-      note:
-        tasks.length > 0
-          ? `${tasks.length} ${tasks.length === 1 ? "task" : "tasks"} carried it.`
-          : undefined,
+      note: carried,
       tone: "live",
       live: false,
     };
