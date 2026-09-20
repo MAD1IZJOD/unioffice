@@ -2090,9 +2090,25 @@ export function formatDuration(
   if (ms < 1_000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1_000).toFixed(1)}s`;
 
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1_000);
-  return `${minutes}m ${seconds}s`;
+  if (ms < 3_600_000) {
+    const minutes = Math.floor(ms / 60_000);
+    const seconds = Math.round((ms % 60_000) / 1_000);
+    return `${minutes}m ${seconds}s`;
+  }
+
+  // Past an hour, minutes stop meaning anything: a mission interrupted by a
+  // restart and finished days later read as "8585m 34s", which looks like a
+  // fault rather than the wall-clock time it is. Same number, units a person
+  // can hold.
+  if (ms < 86_400_000) {
+    const hours = Math.floor(ms / 3_600_000);
+    const minutes = Math.round((ms % 3_600_000) / 60_000);
+    return `${hours}h ${minutes}m`;
+  }
+
+  const days = Math.floor(ms / 86_400_000);
+  const hours = Math.round((ms % 86_400_000) / 3_600_000);
+  return `${days}d ${hours}h`;
 }
 
 /* --------------------------------------------------------------------------

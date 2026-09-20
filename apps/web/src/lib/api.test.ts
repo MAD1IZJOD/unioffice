@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { json, stubNetwork } from "../test/network";
 
-import { humaneMessage, launchWork, setActiveOrganization } from "./api";
+import { formatDuration, humaneMessage, launchWork, setActiveOrganization } from "./api";
 
 describe("error messages people read", () => {
   it("never shows a server fault's own words", () => {
@@ -46,6 +46,25 @@ describe("starting a mission", () => {
     stubNetwork(() => json(409, { error: { code: "CONFLICT", message: "This mission is already being planned." } }));
 
     await expect(launchWork("work-1")).rejects.toThrow("This mission is already being planned.");
+  });
+});
+
+describe("how long something took", () => {
+  const from = "2026-09-19T00:00:00.000Z";
+  const after = (ms: number) => new Date(Date.parse(from) + ms).toISOString();
+
+  it("reads in units a person can hold, however long it ran", () => {
+    expect(formatDuration(from, after(840))).toBe("840ms");
+    expect(formatDuration(from, after(48_300))).toBe("48.3s");
+    expect(formatDuration(from, after(404_000))).toBe("6m 44s");
+    expect(formatDuration(from, after(9_000_000))).toBe("2h 30m");
+    // The mission that read as "8585m 34s" before: interrupted, finished days later.
+    expect(formatDuration(from, after(515_134_000))).toBe("5d 23h");
+  });
+
+  it("says nothing rather than guessing when it cannot know", () => {
+    expect(formatDuration(undefined, after(1000))).toBe("—");
+    expect(formatDuration(after(1000), from)).toBe("—");
   });
 });
 
