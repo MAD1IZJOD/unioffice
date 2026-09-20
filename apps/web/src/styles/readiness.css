@@ -229,3 +229,43 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* --------------------------------------------------------------------------
+   The first morning on the Command Center.
+
+   A band rather than a panel: the page below it is a triage queue, and this
+   has to read as the thing to do first without pretending to be an alert.
+   -------------------------------------------------------------------------- */
+
+.first-morning {
+  margin-bottom: var(--space-7);
+  padding: var(--space-6);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+}
+
+.first-morning-line {
+  max-width: 44ch;
+  margin: var(--space-3) 0 0;
+  color: var(--ink-primary);
+  font-size: clamp(20px, 2.6vw, 27px);
+  font-weight: 620;
+  letter-spacing: -0.03em;
+  line-height: var(--leading-tight);
+}
+
+.first-morning-detail {
+  max-width: 68ch;
+  margin: var(--space-3) 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+
+.first-morning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}

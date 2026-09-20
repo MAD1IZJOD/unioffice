@@ -13,19 +13,22 @@ import {
 
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
   acknowledgeMission,
+  fetchCompanyReadiness,
   formatRelativeTime,
   type AttentionItem,
   type AttentionQueue,
+  type CompanyReadiness,
   type MissionCard,
   type MissionControl,
 } from "../lib/api";
 
 import { useCan } from "../lib/access";
+import { useResource } from "../lib/useResource";
 import { attentionTime, attentionTone } from "../lib/attention";
 
 import {
@@ -86,6 +89,16 @@ export default function Command() {
   const control = useMissionControl();
   const now = useNow();
   const data = control.data;
+
+  // Only to answer one question: has this company ever been given anything to
+  // do. Mission Control has already counted its missions, so a company with
+  // even one is not asked about at all - the read happens only where the
+  // answer could still be yes. A company that has worked is never shown the
+  // first morning again, and a read that fails just leaves the page as it was.
+  const readiness = useResource<CompanyReadiness>(
+    useCallback(() => fetchCompanyReadiness(), []),
+    { enabled: data?.summary.total === 0 },
+  );
 
   if (!data) {
     if (control.error) {
@@ -194,6 +207,8 @@ export default function Command() {
             </button>
           </div>
         )}
+
+        {readiness.data?.firstRun.pending && <FirstMorning readiness={readiness.data} />}
 
         <NeedsYou queue={data.attention} onChanged={control.reload} />
 
@@ -326,6 +341,53 @@ export default function Command() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* --------------------------------------------------------------------------
+   The first morning
+
+   The Command Center is built on exceptions, which is exactly wrong for a
+   company that has never done anything: there is nothing to except, so a new
+   owner met an empty triage queue and had to guess what this was. Until the
+   first mission exists, the page says where the company stands and what the
+   next thing to do is - and then this disappears for good, because opening a
+   mission is what ends it.
+   -------------------------------------------------------------------------- */
+
+function FirstMorning({ readiness }: { readiness: CompanyReadiness }) {
+  const { summary, firstRun } = readiness;
+
+  return (
+    <section className="first-morning" aria-label="Getting started">
+      <div className="t-eyebrow">New here</div>
+
+      <h3 className="first-morning-line">
+        {summary.ready > 0
+          ? "Your company is ready for its first mission."
+          : "Your company needs setting up before its first mission."}
+      </h3>
+
+      <p className="first-morning-detail">
+        {summary.ready > 0
+          ? `${summary.ready} ${summary.ready === 1 ? "kind" : "kinds"} of work can be given to someone today${summary.blocked > 0 ? `, and ${summary.blocked} still ${summary.blocked === 1 ? "needs" : "need"} setting up` : ""}. You give an objective; UNIOFFICE works out who does it.`
+          : readiness.detail}
+      </p>
+
+      <div className="first-morning-actions">
+        {summary.ready > 0 && firstRun.canStartMission && (
+          <Link to="/missions/new" className="button-primary">
+            <Zap size={13} />
+            Start your first mission
+          </Link>
+        )}
+
+        <Link to="/readiness" className={summary.ready > 0 ? "button-ghost" : "button-primary"}>
+          See what your company can do
+          <ArrowRight size={11} />
+        </Link>
+      </div>
+    </section>
   );
 }
 

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AttentionItem, MissionCard, MissionControl } from "../lib/api";
+import type { AttentionItem, CompanyReadiness, MissionCard, MissionControl } from "../lib/api";
 import type { LiveResource } from "../lib/live";
 import { deferred, json, stubNetwork, type RecordedCall } from "../test/network";
 import Command from "./Command";
@@ -75,8 +75,30 @@ function item(id: string, overrides: Partial<AttentionItem> = {}): AttentionItem
   };
 }
 
-function renderPage(route: (call: RecordedCall) => Response | Promise<Response>) {
-  const calls = stubNetwork(route);
+/**
+ * Readiness, which the page reads only to ask whether this company has ever
+ * been given a mission. The default is a company that has, so every test
+ * about triage sees the page as it has always been.
+ */
+function readiness(overrides: Partial<CompanyReadiness["firstRun"]> = {}): CompanyReadiness {
+  return {
+    organizationId: ORGANIZATION,
+    generatedAt: iso(),
+    state: "ready",
+    headline: "Your workforce is ready to work.",
+    detail: "4 things the company knows how to do, and someone to do every one of them.",
+    summary: { abilities: 4, ready: 4, blocked: 0, agents: 6, activeAgents: 6 },
+    areas: [],
+    firstRun: { pending: false, canPrepareWorkforce: true, canStartMission: true, ...overrides },
+  };
+}
+
+function renderPage(
+  route: (call: RecordedCall) => Response | Promise<Response>,
+  company: CompanyReadiness = readiness(),
+) {
+  const calls = stubNetwork((call) =>
+    call.url.pathname === "/company-readiness" ? json(200, company) : route(call));
 
   const router = createMemoryRouter(
     [
@@ -121,6 +143,55 @@ describe("the Command Center", () => {
     expect(screen.getByRole("link", { name: "From a template" }).getAttribute("href")).toBe("/missions/new#templates");
 
     expect(readsOf(calls)[0]!.url.searchParams.get("organizationId")).toBe(ORGANIZATION);
+  });
+
+  it("leads a company that has never worked to its readiness rather than to an empty queue", async () => {
+    renderPage(() => json(200, view()), readiness({ pending: true }));
+
+    const welcome = await screen.findByRole("region", { name: "Getting started" });
+
+    expect(within(welcome).getByText("Your company is ready for its first mission.")).toBeDefined();
+    expect(within(welcome).getByRole("link", { name: /Start your first mission/ }).getAttribute("href"))
+      .toBe("/missions/new");
+    expect(within(welcome).getByRole("link", { name: /See what your company can do/ }).getAttribute("href"))
+      .toBe("/readiness");
+  });
+
+  it("tells a company that is not ready yet to prepare before offering it a mission", async () => {
+    const notReady: CompanyReadiness = {
+      ...readiness({ pending: true }),
+      state: "not_ready",
+      headline: "Your workforce is not ready yet.",
+      detail: "6 agents are working, but nothing the company knows how to do can be given to any of them yet.",
+      summary: { abilities: 4, ready: 0, blocked: 4, agents: 6, activeAgents: 6 },
+    };
+
+    renderPage(() => json(200, view()), notReady);
+
+    const welcome = await screen.findByRole("region", { name: "Getting started" });
+
+    expect(within(welcome).getByText("Your company needs setting up before its first mission.")).toBeDefined();
+    expect(within(welcome).queryByRole("link", { name: /Start your first mission/ })).toBeNull();
+    expect(within(welcome).getByRole("link", { name: /See what your company can do/ })).toBeDefined();
+  });
+
+  it("never shows the first morning to a company that has already worked", async () => {
+    renderPage(() => json(200, view({
+      summary: { running: 0, blocked: 0, needsYou: 0, finishedToday: 1, failedToday: 0, setAside: 0, total: 1 },
+    })));
+
+    await screen.findByText("Nothing needs you");
+    expect(screen.queryByRole("region", { name: "Getting started" })).toBeNull();
+  });
+
+  it("does not ask about readiness at all once the company has missions", async () => {
+    const { calls } = renderPage(() => json(200, view({
+      summary: { running: 1, blocked: 0, needsYou: 0, finishedToday: 0, failedToday: 0, setAside: 0, total: 1 },
+      running: [card("w1")],
+    })));
+
+    await screen.findByText("THE COMPANY");
+    expect(calls.some((call) => call.url.pathname === "/company-readiness")).toBe(false);
   });
 
   it("when the read fails with nothing to show, it says so and can try again", async () => {
