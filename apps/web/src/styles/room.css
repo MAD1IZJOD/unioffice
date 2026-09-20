@@ -904,6 +904,41 @@
   line-height: 1.55;
 }
 
+/* The ranking record behind the sentence, for whoever wants it. Closed by
+   default: the answer to "why them?" is the sentence, not the arithmetic. */
+.cast-reason-detail {
+  margin-top: 6px;
+}
+
+.cast-reason-detail > summary {
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  list-style: none;
+}
+
+.cast-reason-detail > summary::-webkit-details-marker {
+  display: none;
+}
+
+.cast-reason-detail > summary::before {
+  content: "+ ";
+}
+
+.cast-reason-detail[open] > summary::before {
+  content: "- ";
+}
+
+.cast-reason-detail > summary:hover {
+  color: var(--ink-muted);
+}
+
+.cast-reason-detail[open] {
+  color: var(--ink-faint);
+}
+
 /* --------------------------------------------------------------------------
    Settled decisions
    -------------------------------------------------------------------------- */

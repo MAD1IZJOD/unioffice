@@ -17,6 +17,52 @@ import { StatusPill } from "../primitives";
  * surface. What each one is doing comes from its task rows, so an idle agent
  * reads as idle rather than being animated into looking busy.
  */
+/**
+ * Why this agent, in a sentence a person can read.
+ *
+ * The delegator's own reason is a ranking record - scores, workspace
+ * compatibility, availability - which answers an engineer's question, not
+ * "why them?". The same facts say it plainly: what the step asked for, and
+ * what this agent can do. The original sentence is kept underneath for
+ * anyone who wants it.
+ */
+function whyThisAgent(
+  room: ExecutionRoom,
+  member: ExecutionRoom["cast"][number],
+): { plain: string; detail?: string } {
+  const name = member.agent.name;
+  const steps = room.plan.nodes.filter((node) => node.assignedAgentId === member.agent.id);
+
+  const asked = (field: "requiredCapabilities" | "requiredTools") =>
+    [...new Set(steps.flatMap((step) => step[field]))];
+
+  const held = new Set(member.agent.capabilities);
+  const matched = asked("requiredCapabilities").filter((capability) => held.has(capability));
+  const missing = asked("requiredCapabilities").filter((capability) => !held.has(capability));
+
+  const toolNames = asked("requiredTools")
+    .filter((toolId) => member.agent.toolIds.includes(toolId))
+    .map((toolId) => room.tools.find((tool) => tool.id === toolId)?.name ?? toolId);
+
+  const readable = (capability: string) => capability.replace(/_/g, " ");
+  const list = (items: string[]) =>
+    items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+
+  const can = matched.length > 0 ? `can ${list(matched.map(readable))}` : undefined;
+  const cleared = toolNames.length > 0 ? `is cleared to use ${list(toolNames)}` : undefined;
+  const both = [can, cleared].filter(Boolean).join(", and ");
+
+  const plain = member.stretched
+    ? missing.length > 0
+      ? `${name} is the closest available match: ${can ?? "able to take this on"}, but not ${list(missing.map(readable))}.`
+      : `${name} is the closest available match for this work.`
+    : both
+      ? `${name} ${both}.`
+      : `${name} was free to take this on.`;
+
+  return { plain, detail: member.selectionReason };
+}
+
 export function RoomCast({ room }: { room: ExecutionRoom }) {
   if (room.cast.length === 0) return null;
 
@@ -101,12 +147,21 @@ export function RoomCast({ room }: { room: ExecutionRoom }) {
                 )}
               </span>
 
-              {member.selectionReason && (
-                <span className="cast-reason">
-                  {member.stretched ? "Closest match: " : "Chosen because "}
-                  {member.selectionReason}
-                </span>
-              )}
+              {member.selectionReason && (() => {
+                const why = whyThisAgent(room, member);
+
+                return (
+                  <span className="cast-reason">
+                    {why.plain}
+                    {why.detail && (
+                      <details className="cast-reason-detail">
+                        <summary>How it was decided</summary>
+                        {why.detail}
+                      </details>
+                    )}
+                  </span>
+                );
+              })()}
             </span>
 
             <StatusPill tone={tone} pulse={member.running > 0}>
