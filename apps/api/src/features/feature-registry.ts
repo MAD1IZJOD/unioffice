@@ -56,6 +56,7 @@ export const FEATURES: readonly FeatureDefinition[] = [
   { id: "missions", name: "Missions", description: "Work the company is doing, from objective to outcome.", area: "work", path: "/missions", permission: "organization.read", dependsOn: [] },
   { id: "approvals", name: "Approvals", description: "Decisions the work is waiting on.", area: "work", path: "/approvals", permission: "organization.read", dependsOn: ["missions", "governance"] },
   { id: "artifacts", name: "Artifacts", description: "What the work produced.", area: "work", path: "/artifacts", permission: "organization.read", dependsOn: ["missions"] },
+  { id: "readiness", name: "Readiness", description: "What the workforce can be asked for, and what needs setting up first.", area: "workforce", path: "/readiness", permission: "organization.read", dependsOn: ["workforce", "skills"] },
   { id: "workforce", name: "Agents", description: "Who works for the company and what they are doing.", area: "workforce", path: "/workforce", permission: "organization.read", dependsOn: [] },
   { id: "skills", name: "Skills", description: "What the workforce knows how to do.", area: "workforce", path: "/skills", permission: "organization.read", dependsOn: ["workforce", "governance"] },
   { id: "tools", name: "Tools", description: "The executable primitives agents can be granted.", area: "workforce", path: "/tools", permission: "organization.read", dependsOn: ["workforce"] },

@@ -46,6 +46,7 @@ export const router = createBrowserRouter([
         path: "work/:workId",
         loader: ({ params }) => redirect(`/missions/${params.workId ?? ""}`),
       },
+      { path: "readiness", ...page(() => import("../pages/Readiness")) },
       { path: "workforce", ...page(() => import("../pages/Workforce")) },
       { path: "workforce/:agentId", ...page(() => import("../pages/Agent")) },
       // Agents became the workforce. Links to the old paths keep working.

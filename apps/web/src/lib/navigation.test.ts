@@ -14,7 +14,7 @@ describe("navigation", () => {
     const groups = buildNavigation(features);
 
     expect(groups.map((group) => group.label)).toEqual(["Command", "Work", "Workforce", "Knowledge", "Company"]);
-    expect(groups.find((group) => group.area === "workforce")!.entries.map((entry) => entry.label)).toEqual(["Agents", "Skills", "Tools"]);
+    expect(groups.find((group) => group.area === "workforce")!.entries.map((entry) => entry.label)).toEqual(["Readiness", "Agents", "Skills", "Tools"]);
 
     const connections = groups.flatMap((group) => group.entries).find((entry) => entry.id === "connections")!;
     expect(connections.status).toBe("needs_configuration");
