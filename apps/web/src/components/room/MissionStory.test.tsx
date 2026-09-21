@@ -329,6 +329,23 @@ describe("the mission result", () => {
     expect(opened).toHaveBeenCalledWith(artifact);
   });
 
+  it("keeps rendering when the server it is talking to is a version behind", () => {
+    // The page and the API deploy separately, so for a few minutes a browser
+    // can hold fields the server does not send yet. Losing a detail is
+    // acceptable; taking the whole mission room down is not.
+    const older = {
+      ...outcome({ status: "completed_with_limitations", label: "Finished with limitations" }),
+      limitations: [{ kind: "procedure_missing", detail: "No skill matched this step." }],
+      unfinished: undefined,
+    } as unknown as MissionResult;
+
+    mount(<MissionResultBrief outcome={older} artifacts={[]} onOpenArtifact={() => {}} />);
+
+    expect(screen.getByText("Finished with limitations")).toBeDefined();
+    expect(screen.getByText("No skill matched this step.")).toBeDefined();
+    expect(screen.queryByText(/^Steps? /)).toBeNull();
+  });
+
   it("stands on its own for a mission that stopped before producing anything", () => {
     mount(<MissionResultBrief
       outcome={outcome({

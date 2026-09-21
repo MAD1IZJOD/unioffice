@@ -285,35 +285,42 @@ export function MissionResultBrief({
       <p className="brief-summary">{outcome.summary}</p>
       <p className="brief-confidence-reason">{outcome.confidenceReason}</p>
 
-      {outcome.limitations.length > 0 && (
+      {(outcome.limitations ?? []).length > 0 && (
         <div className="brief-limits">
           <div className="detail-label mb-2">What limits this result</div>
 
           <ul>
-            {outcome.limitations.map((limitation, index) => (
-              <li key={`${limitation.kind}-${index}`}>
-                {limitation.steps.length > 0 && (
-                  <span className="brief-limit-step">
-                    {limitation.steps.length === 1
-                      ? `Step ${limitation.steps[0]}`
-                      : `Steps ${limitation.steps.join(", ")}`}
-                  </span>
-                )}
-                {limitation.detail}
-              </li>
-            ))}
+            {outcome.limitations.map((limitation, index) => {
+              // The API and this page deploy separately, so a browser can be
+              // a version ahead of the server it is talking to for a few
+              // minutes. A missing field must degrade to saying less, not
+              // take the whole mission room down with it.
+              const steps = limitation.steps ?? [];
+
+              return (
+                <li key={`${limitation.kind}-${index}`}>
+                  {steps.length > 0 && (
+                    <span className="brief-limit-step">
+                      {steps.length === 1 ? `Step ${steps[0]}` : `Steps ${steps.join(", ")}`}
+                    </span>
+                  )}
+                  {limitation.detail}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
 
-      {outcome.unfinished.length > 0 && (
+      {(outcome.unfinished ?? []).length > 0 && (
         <div className="brief-limits">
           <div className="detail-label mb-2">
-            {outcome.unfinished.length} {outcome.unfinished.length === 1 ? "step" : "steps"} never ran
+            {(outcome.unfinished ?? []).length}{" "}
+            {(outcome.unfinished ?? []).length === 1 ? "step" : "steps"} never ran
           </div>
 
           <ul>
-            {outcome.unfinished.map((title) => (
+            {(outcome.unfinished ?? []).map((title) => (
               <li key={title}>{title}</li>
             ))}
           </ul>
