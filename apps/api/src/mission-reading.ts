@@ -249,6 +249,13 @@ export function describeEvent(event: Event, agents: Map<AgentId, Agent>): string
   const who = event.agentId ? agents.get(event.agentId)?.name : undefined;
 
   switch (event.type) {
+    // The mission's own first moment. Every other event in the log could be
+    // named and this one could not, which left any record built from the log
+    // starting partway through its own story.
+    case "work.created":
+      return "The mission was opened";
+    case "work.planning_started":
+      return "Working out the steps";
     case "work.planning_completed": {
       const count = typeof payload.taskCount === "number" ? payload.taskCount : undefined;
       return count === undefined ? "Plan written" : `Plan written: ${count} ${plural(count, "step")}`;
