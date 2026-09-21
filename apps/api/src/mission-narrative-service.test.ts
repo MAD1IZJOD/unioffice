@@ -400,7 +400,7 @@ test("a step that did not use the tool it was told to use finishes with limitati
 
   const limitation = narrative.outcome.limitations[0]!;
   assert.equal(limitation.kind, "tool_unavailable");
-  assert.equal(limitation.step, 1);
+  assert.deepEqual(limitation.steps, [1]);
   assert.match(limitation.detail, /was meant to use calculator and did not/);
 });
 
@@ -528,4 +528,20 @@ test("several limitations are all reported, worst one setting the confidence", (
     ["tool_unavailable", "partial_match", "knowledge_withheld"],
   );
   assert.equal(narrative.outcome.confidence, "limited");
+});
+
+test("the same limitation across several steps is said once, naming all of them", () => {
+  const note = "No skill matches what this step asks for.";
+
+  const narrative = read({
+    tasks: [
+      task("task-1", "Work out the cost", harvey, { skillNote: note }),
+      task("task-2", "Write it up", nova, { skillNote: note, minutes: 5 }),
+      task("task-3", "Check it", tony, { skillNote: note, minutes: 8 }),
+    ],
+  });
+
+  assert.equal(narrative.outcome.limitations.length, 1, "one problem, not three");
+  assert.deepEqual(narrative.outcome.limitations[0]!.steps, [1, 2, 3]);
+  assert.match(narrative.outcome.summary, /1 thing limits/);
 });

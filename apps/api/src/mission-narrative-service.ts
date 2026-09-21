@@ -137,8 +137,13 @@ export interface Limitation {
     | "step_failed";
   /** One sentence a person can act on. */
   detail: string;
-  /** The step it concerned, by its number in the plan. */
-  step?: number;
+  /**
+   * The steps it concerned, by their number in the plan. Empty when it is
+   * about the mission rather than about a step. The same limitation hitting
+   * several steps is one entry naming all of them rather than the identical
+   * sentence repeated, which is what it looked like on a real mission.
+   */
+  steps: number[];
 }
 
 export interface MissionOutcome {
@@ -427,7 +432,7 @@ function readOutcome(
       const required = strings(metadata.requiredTools);
       limitations.push({
         kind: "tool_unavailable",
-        step,
+        steps: step === undefined ? [] : [step],
         detail: required.length > 0
           ? `${quoted(clip(task.title, 80))} was meant to use ${readableList(required)} and did not, so its figures were not computed.`
           : `${quoted(clip(task.title, 80))} did not use the tool the work called for.`,
@@ -437,7 +442,7 @@ function readOutcome(
     // A step that ran without the procedure it was planned around.
     const note = text(execution?.skillNote) ?? text(routing?.skillNote);
     if (note) {
-      limitations.push({ kind: "procedure_missing", step, detail: clip(note, 240) });
+      limitations.push({ kind: "procedure_missing", steps: step === undefined ? [] : [step], detail: clip(note, 240) });
     }
 
     // The delegator settled for the closest available agent rather than one
@@ -446,7 +451,7 @@ function readOutcome(
     if (unmatched.length > 0) {
       limitations.push({
         kind: "partial_match",
-        step,
+        steps: step === undefined ? [] : [step],
         detail: `${quoted(clip(task.title, 80))} went to the closest available agent, which does not have ${readableList(unmatched.map(readable))}.`,
       });
     }
@@ -454,7 +459,7 @@ function readOutcome(
     if (task.status === "failed") {
       limitations.push({
         kind: "step_failed",
-        step,
+        steps: step === undefined ? [] : [step],
         detail: `${quoted(clip(task.title, 80))} did not finish.`,
       });
     }
@@ -464,6 +469,7 @@ function readOutcome(
     if (approval.status !== "rejected") continue;
     limitations.push({
       kind: "decision_refused",
+      steps: [],
       detail: `A person refused ${quoted(clip(approval.action, 80))}, so that part of the work did not happen.`,
     });
   }
@@ -472,27 +478,56 @@ function readOutcome(
     const count = input.withheldKnowledge!;
     limitations.push({
       kind: "knowledge_withheld",
+      steps: [],
       detail: `A company rule kept ${count} ${plural(count, "piece")} of company knowledge out of the planning.`,
     });
   }
+
+  const collapsed = collapse(limitations);
 
   const unfinished = ordered
     .filter((task) => task.status !== "completed" && task.status !== "failed")
     .map((task) => clip(task.title, 120));
 
-  const status = statusOf(work, ordered, approvals, limitations);
-  const confidence = confidenceOf(status, limitations);
+  const status = statusOf(work, ordered, approvals, collapsed);
+  const confidence = confidenceOf(status, collapsed);
 
   return {
     status,
     label: LABEL[status],
-    summary: summaryOf(status, limitations, unfinished, work),
+    summary: summaryOf(status, collapsed, unfinished, work),
     confidence,
-    confidenceReason: confidenceReasonOf(confidence, status, limitations),
-    limitations,
+    confidenceReason: confidenceReasonOf(confidence, status, collapsed),
+    limitations: collapsed,
     unfinished: status === "completed" || status === "completed_with_limitations" ? [] : unfinished,
     finishedAt: work.completedAt,
   };
+}
+
+/**
+ * The same limitation reaching several steps, said once.
+ *
+ * A mission where no step could be given a procedure reported the identical
+ * sentence per step, which read like several different problems and inflated
+ * the count in the summary. One entry naming every step it touched is both
+ * shorter and more accurate about how many things are actually wrong.
+ */
+function collapse(limitations: Limitation[]): Limitation[] {
+  const byText = new Map<string, Limitation>();
+
+  for (const limitation of limitations) {
+    const key = `${limitation.kind}::${limitation.detail}`;
+    const seen = byText.get(key);
+
+    if (seen) {
+      seen.steps = [...new Set([...seen.steps, ...limitation.steps])].sort((a, b) => a - b);
+      continue;
+    }
+
+    byText.set(key, { ...limitation, steps: [...limitation.steps] });
+  }
+
+  return [...byText.values()];
 }
 
 function statusOf(

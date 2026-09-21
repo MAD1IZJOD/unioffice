@@ -250,7 +250,7 @@ describe("the mission result", () => {
         summary: "The mission finished, but 1 thing limits what the result can be used for.",
         confidence: "limited",
         confidenceReason: "Part of this answer was not produced the way it was supposed to be.",
-        limitations: [{ kind: "tool_unavailable", step: 1, detail: "“Work out the cost” was meant to use Calculator and did not." }],
+        limitations: [{ kind: "tool_unavailable", steps: [1], detail: "“Work out the cost” was meant to use Calculator and did not." }],
       })}
       artifacts={[]}
       onOpenArtifact={() => {}}
@@ -262,6 +262,23 @@ describe("the mission result", () => {
     expect(screen.getByText(/was meant to use Calculator and did not/)).toBeDefined();
     expect(screen.getByText("Step 1")).toBeDefined();
     expect(screen.queryByText("Finished", { exact: true })).toBeNull();
+  });
+
+  it("says one limitation once, naming every step it touched", () => {
+    mount(<MissionResultBrief
+      outcome={outcome({
+        status: "completed_with_limitations",
+        label: "Finished with limitations",
+        summary: "The mission finished, but 1 thing limits what the result can be used for.",
+        confidence: "moderate",
+        limitations: [{ kind: "procedure_missing", steps: [1, 2, 3], detail: "No skill matches what these steps ask for." }],
+      })}
+      artifacts={[]}
+      onOpenArtifact={() => {}}
+    />);
+
+    expect(screen.getByText("Steps 1, 2, 3")).toBeDefined();
+    expect(screen.getAllByText(/No skill matches/)).toHaveLength(1);
   });
 
   it("shows no confidence at all when the server could not judge one", () => {

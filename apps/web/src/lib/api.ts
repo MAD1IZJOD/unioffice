@@ -657,7 +657,8 @@ export interface Limitation {
     | "knowledge_withheld"
     | "step_failed";
   detail: string;
-  step?: number;
+  /** The steps it concerned. Empty when it is about the mission itself. */
+  steps: number[];
 }
 
 /**

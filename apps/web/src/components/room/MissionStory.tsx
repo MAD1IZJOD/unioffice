@@ -292,7 +292,13 @@ export function MissionResultBrief({
           <ul>
             {outcome.limitations.map((limitation, index) => (
               <li key={`${limitation.kind}-${index}`}>
-                {limitation.step !== undefined && <span className="brief-limit-step">Step {limitation.step}</span>}
+                {limitation.steps.length > 0 && (
+                  <span className="brief-limit-step">
+                    {limitation.steps.length === 1
+                      ? `Step ${limitation.steps[0]}`
+                      : `Steps ${limitation.steps.join(", ")}`}
+                  </span>
+                )}
                 {limitation.detail}
               </li>
             ))}
