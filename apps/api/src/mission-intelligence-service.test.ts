@@ -381,7 +381,7 @@ test("a limitation the planner recorded makes the mission partly ready, not bloc
   assert.equal(result.preflight.state, "partially_ready");
   assert.equal(result.preflight.canStart, true);
   assert.equal(checkOf(result, "inputs")!.state, "warning");
-  assert.match(result.preflight.detail, /The mission can still run/);
+  assert.match(result.preflight.detail, /It can still run, but the result may be less complete/);
 });
 
 test("steps that depend on each other in a circle are reported rather than papered over", async () => {

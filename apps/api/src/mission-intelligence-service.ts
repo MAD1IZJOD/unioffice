@@ -609,12 +609,17 @@ export class MissionIntelligenceService {
       [],
     );
 
-    /* Missing information ------------------------------------------------ */
+    /* What may limit the result ------------------------------------------ */
+    //
+    // Named for what it is rather than for where it came from. A step the
+    // server could not put a skill on, or one that went to the nearest match,
+    // does not stop the mission - it changes how complete the answer will be,
+    // and that is the one thing a person deciding wants to be told.
     const limits = findings.filter((finding) => finding.limitation !== undefined);
     if (limits.length > 0) {
       add(
         "inputs",
-        "Missing information",
+        "What may limit this",
         "warning",
         limits[0]!.limitation!,
         limits.map((finding) => finding.number),
@@ -752,7 +757,7 @@ export class MissionIntelligenceService {
       case "blocked":
         return blocked[0]!.summary;
       case "partially_ready":
-        return `${warnings[0]!.summary} The mission can still run.`;
+        return `${warnings[0]!.summary} It can still run, but the result may be less complete than it would otherwise be.`;
       default:
         return approvals > 0
           ? `Everything this mission needs is in place. ${countOf(approvals, "step")} will stop to ask you.`
