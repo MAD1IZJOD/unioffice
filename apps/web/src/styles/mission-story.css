@@ -1,0 +1,325 @@
+/* --------------------------------------------------------------------------
+   The mission as an operation you watch.
+
+   A timeline, the moments work changed hands, and what the answer is worth.
+   Set as a record rather than as a console: one line per moment, the clock in
+   the margin where the eye can run down it, and the state carried by a small
+   mark rather than by a coloured block.
+   -------------------------------------------------------------------------- */
+
+.story-empty {
+  max-width: 58ch;
+  margin: 0 0 var(--space-6);
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.story-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.story-entry {
+  position: relative;
+  display: grid;
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  grid-template-columns: 20px 52px minmax(0, 1fr);
+}
+
+/* The thread running down the margin, which is what makes it a timeline
+   rather than a list. It stops at the last entry instead of trailing off. */
+.story-entry::before {
+  position: absolute;
+  top: 28px;
+  bottom: -4px;
+  left: 9px;
+  width: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.story-entry:last-child::before {
+  display: none;
+}
+
+.story-mark {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-0);
+  color: currentColor;
+}
+
+.story-time {
+  padding-top: 3px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.story-sentence {
+  max-width: 64ch;
+  margin: 2px 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+}
+
+.story-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.story-state {
+  color: currentColor;
+  font-size: var(--text-2xs);
+  font-weight: 620;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.story-step {
+  color: var(--ink-ghost);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+}
+
+.story-agent {
+  color: var(--ink-muted);
+  font-size: var(--text-2xs);
+  text-decoration: none;
+}
+
+.story-agent:hover {
+  color: var(--accent-ink);
+}
+
+/* --------------------------------------------------------------------------
+   Handoffs
+   -------------------------------------------------------------------------- */
+
+.handoffs {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-7);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.handoff {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.handoff-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.handoff-agent {
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+  font-weight: 620;
+  letter-spacing: -0.015em;
+  text-decoration: none;
+}
+
+.handoff-agent:hover {
+  color: var(--accent-ink);
+}
+
+.handoff-arrow {
+  color: var(--ink-ghost);
+}
+
+.handoff-sentence {
+  max-width: 54ch;
+  margin: var(--space-3) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.handoff-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-subtle);
+}
+
+.handoff-steps {
+  color: var(--ink-ghost);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+}
+
+/* --------------------------------------------------------------------------
+   The result, read as a brief
+   -------------------------------------------------------------------------- */
+
+.brief {
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.brief-completed {
+  border-color: var(--success-line);
+}
+
+.brief-completed_with_limitations,
+.brief-blocked {
+  border-color: var(--warning-line);
+}
+
+.brief-failed {
+  border-color: var(--red-line);
+}
+
+.brief-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brief-confidence {
+  color: currentColor;
+  font-size: var(--text-2xs);
+  font-weight: 620;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brief-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-faint);
+  font-size: var(--text-2xs);
+}
+
+.brief-summary {
+  max-width: 62ch;
+  margin: var(--space-4) 0 0;
+  color: var(--ink-primary);
+  font-size: clamp(17px, 2.2vw, 21px);
+  font-weight: 600;
+  letter-spacing: -0.024em;
+  line-height: var(--leading-tight);
+}
+
+.brief-confidence-reason {
+  max-width: 66ch;
+  margin: var(--space-2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+
+.brief-limits {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+}
+
+.brief-limits ul {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.brief-limits li {
+  max-width: 62ch;
+  color: var(--warning-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.brief-limit-step {
+  margin-right: var(--space-2);
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+}
+
+.brief-answer {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+}
+
+.brief-artifacts {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line-subtle);
+}
+
+.brief-artifact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.brief-artifact {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.brief-artifact:hover {
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+
+@media (max-width: 720px) {
+  .story-entry {
+    gap: var(--space-2);
+    grid-template-columns: 20px 46px minmax(0, 1fr);
+  }
+
+  .handoffs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brief {
+    padding: var(--space-4);
+  }
+}
+
+/* The two spinning marks are the only motion here, and both stop when the
+   reader has asked for none. */
+@media (prefers-reduced-motion: reduce) {
+  .story-mark .spin-slow {
+    animation: none;
+  }
+}

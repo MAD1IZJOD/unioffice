@@ -51,7 +51,11 @@ import { Chapter, Chip, Connecting, Failure, Quiet, StatusPill } from "../compon
 
 import { ArtifactSheet } from "../components/ArtifactSheet";
 import { MissionRecord } from "../components/MissionRecord";
-import { ResultBody } from "../components/ResultBody";
+import {
+  MissionHandoffs,
+  MissionResultBrief,
+  MissionTimeline,
+} from "../components/room/MissionStory";
 import { WorkspaceMark } from "../components/WorkspaceMark";
 
 import { DecisionBand } from "../components/room/DecisionBand";
@@ -195,7 +199,8 @@ export default function Room() {
   }
 
   const data = room.data;
-  const { work, plan, approvals, artifacts, executionJob, workspace } = data;
+  const { work, plan, approvals, artifacts, executionJob, workspace, narrative } = data;
+
   const review = knowledge.data?.review ?? [];
   const toDecide = review.filter((item) => item.outcome === "pending").length;
   const used = knowledge.data?.used.filter((entry) => !entry.fromThisMission) ?? [];
@@ -210,6 +215,21 @@ export default function Room() {
   const pending = approvals.filter((approval) => approval.status === "pending");
   const settled = approvals.filter((approval) => approval.status !== "pending");
   const result = roomResult(data);
+
+  // Every chapter is conditional on the mission having got that far, so their
+  // numbers are worked out from which ones are actually present rather than
+  // written in. Computed, not counted during render - a counter incremented
+  // mid-render is a different number on the next one.
+  const chapters = [
+    plan.totalCount > 0 ? "floor" : undefined,
+    data.cast.length > 0 ? "cast" : undefined,
+    narrative.handoffs.length > 0 ? "handoffs" : undefined,
+    "timeline",
+    settled.length > 0 ? "decisions" : undefined,
+    artifacts.length > 0 || review.length > 0 || used.length > 0 ? "left" : undefined,
+  ].filter((name): name is string => name !== undefined);
+
+  const chapter = (name: string) => String(chapters.indexOf(name) + 1).padStart(2, "0");
   const failure = messageOf(work);
   const briefing = briefingOf(work);
   const planner = data.orchestrator?.name;
@@ -532,25 +552,25 @@ export default function Room() {
             </div>
           )}
 
-          {/* The answer, before any of the machinery that produced it. */}
-          {result && (
-            <section className="delivery">
-              <div className="delivery-eyebrow">What the company produced</div>
-
-              <div className="delivery-body">
-                <ResultBody value={result.result} />
-              </div>
-
-              <div className="delivery-foot">
-                <span className="t-machine">
-                  {agentName(result.assignedAgentId)}
-                </span>
-                <span className="t-machine">{result.title}</span>
-                <span className="t-machine">
-                  {formatRelativeTime(result.completedAt ?? result.updatedAt)}
-                </span>
-              </div>
-            </section>
+          {/* What the answer is worth, then the answer. A mission that
+              executed perfectly can still have produced something nobody
+              should act on, and leading with the prose hid that. */}
+          {(result || narrative.outcome.status !== "running") && (
+            <MissionResultBrief
+              outcome={narrative.outcome}
+              result={
+                result
+                  ? {
+                      value: result.result,
+                      title: result.title,
+                      at: result.completedAt ?? result.updatedAt,
+                    }
+                  : undefined
+              }
+              producedBy={result ? agentName(result.assignedAgentId) : undefined}
+              artifacts={artifacts}
+              onOpenArtifact={setOpenArtifact}
+            />
           )}
 
           {plan.totalCount === 0 && !work.metadata.planningError && !opening ? (
@@ -562,7 +582,7 @@ export default function Room() {
             plan.totalCount > 0 && (
               <>
                 <Chapter
-                  index="01"
+                  index={chapter("floor")}
                   title="The floor"
                   action={
                     <span className="t-machine">
@@ -585,7 +605,7 @@ export default function Room() {
           {data.cast.length > 0 && (
             <>
               <Chapter
-                index="02"
+                index={chapter("cast")}
                 title="Who is on it"
                 action={
                   <span className="t-machine">
@@ -598,9 +618,42 @@ export default function Room() {
             </>
           )}
 
+          {narrative.handoffs.length > 0 && (
+            <>
+              <Chapter
+                index={chapter("handoffs")}
+                title="Where work changed hands"
+                action={
+                  <span className="t-machine">
+                    one specialist's finished work becoming another's input
+                  </span>
+                }
+              />
+
+              <MissionHandoffs
+                handoffs={narrative.handoffs}
+                artifacts={artifacts}
+                onOpenArtifact={setOpenArtifact}
+              />
+            </>
+          )}
+
+          <Chapter
+            index={chapter("timeline")}
+            title="What happened"
+            action={
+              <span className="t-machine">
+                {narrative.timeline.length}{" "}
+                {narrative.timeline.length === 1 ? "moment" : "moments"}
+              </span>
+            }
+          />
+
+          <MissionTimeline entries={narrative.timeline} />
+
           {settled.length > 0 && (
             <>
-              <Chapter index="03" title="What needed a person" />
+              <Chapter index={chapter("decisions")} title="What needed a person" />
 
               <div className="space-y-2">
                 {settled.map((approval) => (
@@ -644,7 +697,7 @@ export default function Room() {
 
           {(artifacts.length > 0 || review.length > 0 || used.length > 0) && (
             <>
-              <Chapter index={settled.length > 0 ? "04" : "03"} title="What it left behind" />
+              <Chapter index={chapter("left")} title="What it left behind" />
 
               {artifacts.length > 0 && (
                 <>
