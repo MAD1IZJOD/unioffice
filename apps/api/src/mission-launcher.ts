@@ -44,20 +44,40 @@ export class MissionLauncher {
    * not wait on it, and it never rejects.
    */
   launch(workId: WorkId): { started: boolean; settled: Promise<void> } {
+    return this.begin(workId, true);
+  }
+
+  /**
+   * Writes the plan and stops there.
+   *
+   * The same work as a launch, minus the queueing - for the case where a
+   * person is going to read the plan and decide before anything runs. It has
+   * to happen here rather than in a request the browser holds open for two
+   * minutes, for exactly the reason a launch does: a closed tab or a proxy
+   * giving up must not be able to lose the plan halfway through writing it.
+   *
+   * Nothing is started by this. The mission is left waiting, and only an
+   * ordinary authorized request to run it puts it on the queue.
+   */
+  prepare(workId: WorkId): { started: boolean; settled: Promise<void> } {
+    return this.begin(workId, false);
+  }
+
+  private begin(workId: WorkId, queue: boolean): { started: boolean; settled: Promise<void> } {
     if (this.inFlight.has(workId)) {
       return { started: false, settled: Promise.resolve() };
     }
 
     this.inFlight.add(workId);
 
-    const settled = this.run(workId).finally(() => {
+    const settled = this.run(workId, queue).finally(() => {
       this.inFlight.delete(workId);
     });
 
     return { started: true, settled };
   }
 
-  private async run(workId: WorkId): Promise<void> {
+  private async run(workId: WorkId, queue: boolean): Promise<void> {
     let planned: { work: { status: string } };
 
     try {
@@ -70,8 +90,9 @@ export class MissionLauncher {
     }
 
     // Only a mission the plan left waiting is queued. One cancelled while it
-    // was being planned stays cancelled.
-    if (planned.work.status !== "queued") return;
+    // was being planned stays cancelled - and a mission being prepared for
+    // someone to read is never queued at all.
+    if (!queue || planned.work.status !== "queued") return;
 
     try {
       await this.deps.enqueueWork(workId);

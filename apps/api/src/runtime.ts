@@ -58,6 +58,7 @@ import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
 import { CompanyReadinessService } from "./company-readiness-service.js";
+import { MissionIntelligenceService } from "./mission-intelligence-service.js";
 import { EventRecorder } from "./event-recorder.js";
 import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
 import { KnowledgeGovernance } from "./knowledge-governance.js";
@@ -426,6 +427,17 @@ export function createExecutionRuntime(config: ApiConfig) {
     reads: operationalReads,
   });
 
+  // A mission read for the person about to commit to it. Every field comes
+  // from rows something else already wrote - the mission, its task rows, the
+  // agents, the policies - so what it shows is what will actually happen.
+  const missionIntelligenceService = new MissionIntelligenceService({
+    tasks: taskRepository,
+    agents: agentRepository,
+    workspaces: workspaceRepository,
+    policies: policyRepository,
+    tools: toolRegistry,
+  });
+
   const governanceOverviewService = new GovernanceOverviewService(
     policyRepository,
     agentRepository,
@@ -519,6 +531,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     knowledgeGovernance,
     companyOverviewService,
     companyReadinessService,
+    missionIntelligenceService,
     governanceService,
     governanceOverviewService,
     taskGovernanceGate,

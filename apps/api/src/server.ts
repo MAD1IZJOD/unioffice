@@ -123,6 +123,10 @@ import type {
 } from "./company-readiness-service.js";
 
 import type {
+  MissionIntelligenceService,
+} from "./mission-intelligence-service.js";
+
+import type {
   WorkspaceService,
 } from "./workspace-service.js";
 
@@ -239,6 +243,11 @@ export interface ApiServices {
    * have nothing to do with readiness need not build one.
    */
   companyReadinessService?: Pick<CompanyReadinessService, "getReadiness">;
+  /**
+   * What a mission was understood to be, whether it can run, and how. Optional
+   * so the many route tests that never read one need not build it.
+   */
+  missionIntelligenceService?: Pick<MissionIntelligenceService, "getIntelligence">;
   governanceService: GovernanceService;
   governanceOverviewService: GovernanceOverviewService;
   workspaceService: WorkspaceService;
@@ -780,6 +789,58 @@ export function buildApiServer(
 
     instance.get("/work/:id", async (request) => {
       return { work: await visibleWork(services, request) };
+    });
+
+    // What UNIOFFICE understood, whether the company can do it, and how it
+    // means to - read from the mission's own row and the task rows the
+    // planner already wrote. Read-only: nothing here starts anything, and
+    // starting still goes through the ordinary authorized route, which
+    // checks everything again at the moment it acts.
+    instance.get("/work/:id/intelligence", async (request) => {
+      const work = await visibleWork(services, request);
+
+      if (!services.missionIntelligenceService) {
+        throw new ApiError(503, "Mission intelligence is not available on this server.");
+      }
+
+      return services.missionIntelligenceService.getIntelligence(accessOf(request), work);
+    });
+
+    // Writes the plan and stops. The mission is left waiting so a person can
+    // read what it will do before committing to it; running it is a separate
+    // request they make deliberately.
+    instance.post("/work/:id/prepare", async (request, reply) => {
+      const work = await visibleWork(services, request);
+      await confirmAllowed(services, request, "missions.operate", work.workspaceId);
+
+      if (!services.missionLauncher) {
+        throw new ApiError(503, "Preparing missions is not available on this server.");
+      }
+
+      if (typeof work.metadata?.plan === "object" && work.metadata.plan !== null) {
+        return reply.code(200).send({ prepared: true, workId: work.id, alreadyPlanned: true });
+      }
+
+      if (work.status !== "queued" || services.missionLauncher.isLaunching(work.id)) {
+        throw new ApiError(
+          409,
+          work.status === "planning" || services.missionLauncher.isLaunching(work.id)
+            ? "This mission is already being prepared."
+            : `This mission cannot be prepared while it is ${work.status}.`,
+        );
+      }
+
+      if (!(await services.workService.beginPlanning(work.id))) {
+        throw new ApiError(409, "This mission changed before it could be prepared. Reload it and try again.");
+      }
+
+      const { started } = services.missionLauncher.prepare(work.id);
+
+      if (!started) {
+        throw new ApiError(409, "This mission is already being prepared.");
+      }
+
+      return reply.code(202).send({ prepared: true, workId: work.id, alreadyPlanned: false });
     });
 
     instance.post("/work/:id/plan", async (request) => {
