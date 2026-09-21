@@ -92,10 +92,12 @@ export default function MissionStart() {
         workspaceId: workspaceId ?? undefined,
       });
 
-      // The mission surface takes it from here: it runs the planning and the
-      // queueing itself, so the person watches the operation start on the page
-      // that will keep showing it rather than at a spinner on this one.
-      navigate(`/missions/${work.id}`, { state: { autostart: true } });
+      // Nothing runs yet. The brief takes it from here: it has the plan
+      // written on the server, shows what was understood and whether the
+      // company can actually do it, and only then offers to start it. An
+      // objective going straight to a worker was how a misread request, or a
+      // workforce short of a tool, first became visible in the result.
+      navigate(`/missions/${work.id}/brief`);
     } catch (caught) {
       setError((caught as Error).message);
       setOpening(false);
@@ -113,8 +115,8 @@ export default function MissionStart() {
 
       <p className="mission-ask-detail">
         {planner
-          ? `${planner} turns it into a plan, routes each task to whoever holds the right capability, and the workforce executes it. You are asked only when a step needs a person.`
-          : "It becomes a plan, each task goes to whoever holds the right capability, and the workforce executes it. You are asked only when a step needs a person."}
+          ? `${planner} turns it into a plan and routes each step to whoever can actually do it. You see what that plan is, and what it needs, before anything runs.`
+          : "It becomes a plan, and each step goes to whoever can actually do it. You see what that plan is, and what it needs, before anything runs."}
       </p>
 
       <div className="mission-field">
