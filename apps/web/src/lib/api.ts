@@ -597,6 +597,93 @@ export interface RoomMember {
   stretched: boolean;
 }
 
+/* --------------------------------------------------------------------------
+   The mission as something to watch.
+
+   What happened in order, where one specialist handed work to another, and
+   what the result is actually worth. All three are computed on the server
+   from the mission's own rows and arrive inside the room read, so nothing
+   here is a second opinion about the same execution.
+   -------------------------------------------------------------------------- */
+
+export type TimelineState =
+  | "queued"
+  | "planning"
+  | "running"
+  | "waiting"
+  | "resumed"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "blocked";
+
+export interface TimelineEntry {
+  at: string;
+  state: TimelineState;
+  sentence: string;
+  agent?: { id: string; name: string };
+  /** The step it concerned, by its number in the plan. */
+  step?: number;
+}
+
+export interface Handoff {
+  from: { id: string; name: string };
+  to: { id: string; name: string };
+  fromStep: { number: number; title: string };
+  toStep: { number: number; title: string };
+  delivered?: { artifactId: string; name: string };
+  state: "in_progress" | "waiting" | "delivered" | "stalled";
+  sentence: string;
+  at: string;
+}
+
+export type OutcomeStatus =
+  | "running"
+  | "completed"
+  | "completed_with_limitations"
+  | "blocked"
+  | "failed"
+  | "cancelled";
+
+/** Four words, never a percentage. The server owns this value. */
+export type Confidence = "high" | "moderate" | "limited" | "unknown";
+
+export interface Limitation {
+  kind:
+    | "tool_unavailable"
+    | "procedure_missing"
+    | "partial_match"
+    | "decision_refused"
+    | "knowledge_withheld"
+    | "step_failed";
+  detail: string;
+  step?: number;
+}
+
+/**
+ * How a mission actually ended, as opposed to whether execution succeeded.
+ *
+ * Named MissionResult rather than MissionOutcome because the Command Center
+ * already uses that word for a line in its activity feed, which is a
+ * different thing entirely.
+ */
+export interface MissionResult {
+  status: OutcomeStatus;
+  label: string;
+  summary: string;
+  confidence: Confidence;
+  confidenceReason: string;
+  limitations: Limitation[];
+  unfinished: string[];
+  finishedAt?: string;
+}
+
+export interface MissionNarrative {
+  timeline: TimelineEntry[];
+  handoffs: Handoff[];
+  outcome: MissionResult;
+}
+
 export interface ExecutionRoom {
   work: WorkItem;
   workspace?: WorkspaceItem;
@@ -610,6 +697,8 @@ export interface ExecutionRoom {
   orchestrator?: AgentSummary;
   cast: RoomMember[];
   plan: ExecutionPlan;
+  /** The same operation, read as something to watch rather than to inspect. */
+  narrative: MissionNarrative;
   tools: Array<{ id: string; name: string; description: string }>;
 }
 
