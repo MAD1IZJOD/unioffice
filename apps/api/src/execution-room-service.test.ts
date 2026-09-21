@@ -334,3 +334,39 @@ test("a workspace belonging to another organization is not attached", async () =
 
   assert.equal(room.workspace, undefined);
 });
+
+test("the room's story is read from the same rows the room itself returns", async () => {
+  const service = buildService({
+    roster: [agent("Nova"), agent("Tony")],
+    tasks: [
+      task("t1", {
+        assignedAgentId: "Nova" as AgentId,
+        title: "Research the requirements",
+        status: "completed",
+        completedAt: now,
+      }),
+      task("t2", {
+        assignedAgentId: "Tony" as AgentId,
+        title: "Assess the impact",
+        status: "running",
+        dependsOn: ["t1" as TaskId],
+      }),
+    ],
+  });
+
+  const room = await service.getRoom(workId);
+
+  // The handoff is the dependency edge the room already carries, named.
+  assert.equal(room.narrative.handoffs.length, 1);
+  assert.equal(room.narrative.handoffs[0]!.from.name, "Nova");
+  assert.equal(room.narrative.handoffs[0]!.to.name, "Tony");
+  assert.equal(room.narrative.handoffs[0]!.fromStep.number, 1);
+
+  // A mission still going is never given an outcome it has not reached.
+  assert.equal(room.narrative.outcome.status, "running");
+  assert.equal(room.narrative.outcome.confidence, "unknown");
+
+  // And every step the plan knows about, the story numbers the same way.
+  assert.equal(room.plan.nodes.length, 2);
+  assert.ok(room.narrative.timeline.length > 0);
+});

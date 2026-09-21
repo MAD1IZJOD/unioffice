@@ -28,6 +28,7 @@ import type {
 import type { ToolRegistry } from "@unioffice/tools";
 
 import { buildExecutionPlan, type ExecutionPlan } from "./execution-plan.js";
+import { readNarrative, type MissionNarrative } from "./mission-narrative-service.js";
 
 /** A tool, as the room needs to name it. The schema belongs on /tools. */
 export interface RoomTool {
@@ -87,6 +88,14 @@ export interface ExecutionRoom {
 
   /** The plan as a dependency graph rather than a list. */
   plan: ExecutionPlan;
+
+  /**
+   * The same operation read as something to watch: what happened in order,
+   * where one specialist handed work to another, and what the result is
+   * actually worth. Computed from the rows already read above rather than
+   * from a second query, so it can never disagree with them.
+   */
+  narrative: MissionNarrative;
 
   tools: RoomTool[];
 }
@@ -177,6 +186,15 @@ export class ExecutionRoomService {
       plan: buildExecutionPlan(tasks, {
         awaitingApprovalTaskIds: pendingTaskIds,
       }),
+      narrative: readNarrative({
+        work,
+        tasks,
+        events,
+        artifacts,
+        approvals,
+        agents,
+        withheldKnowledge: withheldKnowledgeOf(work),
+      }),
       tools: this.toolRegistry.list().map((tool) => ({
         id: tool.id,
         name: tool.name,
@@ -184,6 +202,18 @@ export class ExecutionRoomService {
       })),
     };
   }
+}
+
+/**
+ * How much company knowledge a rule kept out of this mission's planning, as
+ * the plan itself recorded it at the time. Absent on a mission planned before
+ * knowledge existed, which reads as none rather than as unknown.
+ */
+function withheldKnowledgeOf(work: Work): number {
+  const plan = work.metadata.plan as { knowledge?: { withheldByPolicy?: unknown } } | undefined;
+  const withheld = plan?.knowledge?.withheldByPolicy;
+
+  return typeof withheld === "number" && Number.isFinite(withheld) ? withheld : 0;
 }
 
 /**
