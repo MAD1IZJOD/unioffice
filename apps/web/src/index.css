@@ -15,6 +15,7 @@
 @import "./styles/skills.css";
 @import "./styles/workforce.css";
 @import "./styles/readiness.css";
+@import "./styles/mission-intel.css";
 
 /* The design tokens, as Tailwind utilities: text-ink-secondary, border-line,
    bg-surface-2 and so on. Pages use these rather than raw hex values, so a

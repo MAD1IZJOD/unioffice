@@ -1,0 +1,432 @@
+/* --------------------------------------------------------------------------
+   Mission intelligence: the brief, the check and the plan.
+
+   Set as one continuous reading rather than three panels, because it is one
+   argument - here is what you asked for, here is whether we can, here is how
+   - and a person should be able to run down it once and then decide.
+   -------------------------------------------------------------------------- */
+
+.mission-intel {
+  padding-bottom: var(--space-9);
+}
+
+.intel-title {
+  max-width: 24ch;
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: clamp(27px, 4vw, 44px);
+  font-weight: 640;
+  letter-spacing: -0.035em;
+  line-height: var(--leading-tight);
+}
+
+.intel-lede {
+  margin-top: var(--space-6);
+}
+
+.intel-lede-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--ink-faint);
+  font-size: var(--text-2xs);
+  font-weight: 620;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.intel-objective {
+  max-width: 62ch;
+  margin: 0;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--accent-line);
+  color: var(--ink-secondary);
+  font-size: var(--text-lg);
+  line-height: var(--leading-body);
+}
+
+.intel-briefing {
+  max-width: 62ch;
+  margin: 0;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--line);
+  color: var(--ink-muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+
+.intel-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line-subtle);
+}
+
+.intel-fact-label {
+  display: block;
+  color: var(--ink-faint);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.intel-fact-value {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.intel-preparing {
+  padding: var(--space-8) 0;
+}
+
+.intel-note {
+  max-width: 64ch;
+  margin: 0 0 var(--space-5);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.intel-note-warning {
+  color: var(--warning-muted);
+}
+
+.intel-criteria {
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  list-style: none;
+}
+
+.intel-criteria li {
+  position: relative;
+  max-width: 62ch;
+  padding: var(--space-2) 0 var(--space-2) var(--space-5);
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+}
+
+.intel-criteria li::before {
+  position: absolute;
+  top: 15px;
+  left: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--ink-ghost);
+  content: "";
+}
+
+.intel-cast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.intel-cast-member {
+  display: inline-flex;
+  flex-direction: column;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  text-decoration: none;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.intel-cast-member:hover {
+  border-color: var(--line-strong);
+}
+
+.intel-cast-name {
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.intel-cast-role {
+  margin-top: 1px;
+  color: var(--ink-faint);
+  font-size: var(--text-2xs);
+}
+
+.intel-gaps {
+  margin-bottom: var(--space-7);
+  padding: var(--space-4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+}
+
+.intel-gaps ul,
+.intel-outputs ul {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.intel-gaps li {
+  max-width: 62ch;
+  color: var(--warning-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+/* --------------------------------------------------------------------------
+   The verdict
+   -------------------------------------------------------------------------- */
+
+.intel-verdict {
+  margin-bottom: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.intel-verdict-ready {
+  border-color: var(--success-line);
+  background: var(--success-soft);
+}
+
+.intel-verdict-partially_ready {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+}
+
+.intel-verdict-blocked {
+  border-color: var(--red-line);
+  background: var(--red-soft);
+}
+
+.intel-verdict-line {
+  margin: var(--space-3) 0 0;
+  color: var(--ink-primary);
+  font-size: clamp(18px, 2.4vw, 23px);
+  font-weight: 620;
+  letter-spacing: -0.028em;
+  line-height: var(--leading-tight);
+}
+
+.intel-verdict-detail {
+  max-width: 66ch;
+  margin: var(--space-2) 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+
+.intel-checks {
+  margin: 0 0 var(--space-7);
+  padding: 0;
+  list-style: none;
+}
+
+.intel-check {
+  display: grid;
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line-subtle);
+  grid-template-columns: 16px minmax(0, 1fr);
+}
+
+.intel-check:last-child {
+  border-bottom: none;
+}
+
+.intel-check > svg {
+  margin-top: 2px;
+}
+
+.intel-check-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.intel-check-steps {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.intel-check-summary {
+  max-width: 66ch;
+  margin: 2px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.intel-check-blocked .intel-check-summary {
+  color: var(--red-muted);
+}
+
+.intel-check-warning .intel-check-summary {
+  color: var(--warning-muted);
+}
+
+/* --------------------------------------------------------------------------
+   The plan
+   -------------------------------------------------------------------------- */
+
+.intel-plan {
+  margin: 0 0 var(--space-7);
+  padding: 0;
+  list-style: none;
+}
+
+.intel-step {
+  display: grid;
+  align-items: start;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--line-subtle);
+  grid-template-columns: 26px minmax(0, 1fr);
+}
+
+.intel-step:last-child {
+  border-bottom: none;
+}
+
+.intel-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-muted);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+}
+
+.intel-step-title {
+  color: var(--ink-primary);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.intel-step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.intel-step-agent {
+  color: var(--accent-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.intel-step-agent:hover {
+  text-decoration: underline;
+}
+
+.intel-step-agent-none {
+  color: var(--ink-faint);
+}
+
+.intel-step-ability,
+.intel-step-after {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.intel-step-why {
+  max-width: 66ch;
+  margin: var(--space-2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.intel-step-why-warning {
+  color: var(--warning-muted);
+}
+
+.intel-technical {
+  display: grid;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-3) 0 0;
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.intel-technical dt {
+  color: var(--ink-faint);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.intel-technical dd {
+  margin: 0;
+  color: var(--ink-muted);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-body);
+  overflow-wrap: anywhere;
+}
+
+.intel-outputs {
+  margin-bottom: var(--space-7);
+}
+
+.intel-outputs li {
+  max-width: 62ch;
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+
+/* --------------------------------------------------------------------------
+   Committing to it
+   -------------------------------------------------------------------------- */
+
+.intel-commit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
+.intel-commit-note {
+  flex: 1 1 24ch;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+@media (max-width: 720px) {
+  .intel-facts {
+    gap: var(--space-4);
+  }
+
+  .intel-step {
+    gap: var(--space-3);
+  }
+
+  .intel-technical {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

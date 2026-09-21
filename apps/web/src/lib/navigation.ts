@@ -141,6 +141,7 @@ export function buildNavigation(features: FeatureItem[]): NavigationGroup[] {
 const DETAIL_PAGES: Array<{ prefix: string; area: FeatureArea; title: string }> = [
   { prefix: "/missions/new/", area: "work", title: "Start from a template" },
   { prefix: "/missions/", area: "work", title: "Execution room" },
+
   { prefix: "/workforce/", area: "workforce", title: "Agent" },
   { prefix: "/skills/", area: "workforce", title: "Skill" },
   { prefix: "/brain/", area: "knowledge", title: "Knowledge" },
@@ -151,6 +152,11 @@ const DETAIL_PAGES: Array<{ prefix: string; area: FeatureArea; title: string }> 
 /** Where a path sits, for the breadcrumb: its area and its own name. */
 export function locate(pathname: string, groups: NavigationGroup[]): { group: string; title: string } {
   if (pathname === "/missions/new") return { group: AREA_LABEL.work, title: "Open a mission" };
+  // Matched before the /missions/ detail prefix, which would otherwise claim
+  // this as the execution room.
+  if (pathname.startsWith("/missions/") && pathname.endsWith("/brief")) {
+    return { group: AREA_LABEL.work, title: "Before it runs" };
+  }
   if (pathname === "/skills/new") return { group: AREA_LABEL.workforce, title: "New skill" };
 
   for (const group of groups) {
