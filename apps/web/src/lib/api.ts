@@ -2401,3 +2401,136 @@ export interface CompanyReadiness {
 export async function fetchCompanyReadiness(): Promise<CompanyReadiness> {
   return get<CompanyReadiness>(scoped("/company-readiness"));
 }
+
+/* --------------------------------------------------------------------------
+   Mission intelligence.
+
+   What UNIOFFICE understood, whether the company can do it, and how it means
+   to - read before anyone commits to running it. Every field is the server's,
+   derived from the mission's own row and the task rows the planner already
+   wrote, so the plan shown here is the plan that will execute.
+   -------------------------------------------------------------------------- */
+
+/** Where a line in the brief came from. Never a guess presented as a fact. */
+export type BriefSource = "requested" | "planned";
+
+export interface BriefLine {
+  text: string;
+  source: BriefSource;
+}
+
+export interface MissionBrief {
+  title: string;
+  titleSource: BriefSource;
+  objective: string;
+  briefing?: string;
+  priority: WorkItem["priority"];
+  workspace?: { id: string; name: string };
+  successCriteria: BriefLine[];
+  workAreas: string[];
+  participants: Array<{ id: string; name: string; role: string }>;
+  gaps: string[];
+}
+
+export type PreflightState = "ready" | "partially_ready" | "blocked" | "unknown";
+
+export type CheckState = "ok" | "warning" | "blocked" | "unknown";
+
+export type PreflightCheckId =
+  | "workforce"
+  | "skills"
+  | "capabilities"
+  | "tools"
+  | "permissions"
+  | "governance"
+  | "approvals"
+  | "inputs"
+  | "dependencies";
+
+export interface PreflightCheck {
+  id: PreflightCheckId;
+  name: string;
+  state: CheckState;
+  summary: string;
+  /** The steps this concerns, by their number in the plan. */
+  steps: number[];
+  /** Where to fix it. The server omits it for anyone who could not. */
+  fix?: { label: string; path: string };
+}
+
+export interface MissionPreflight {
+  state: PreflightState;
+  headline: string;
+  detail: string;
+  checks: PreflightCheck[];
+  /** Advisory only: starting is authorized again on the server. */
+  canStart: boolean;
+  startNote?: string;
+}
+
+export interface PlanStep {
+  number: number;
+  title: string;
+  description: string;
+  agent?: { id: string; name: string };
+  why?: string;
+  dependsOn: number[];
+  lane: number;
+  needsApproval: boolean;
+  approvalReason?: string;
+  ability?: string;
+  uses: string[];
+  status: TaskStatus;
+  problem?: string;
+  /** Behind "How this was decided". Identifiers live here and nowhere else. */
+  technical: {
+    requiredTools: string[];
+    requiredCapabilities: string[];
+    skill?: { slug: string; version: number; scope: string };
+    selectionReason?: string;
+    note?: string;
+  };
+}
+
+export interface MissionPlanView {
+  steps: PlanStep[];
+  widestLane: number;
+  hasCycle: boolean;
+  expectedOutputs: string[];
+  approvalCount: number;
+}
+
+export type MissionStage =
+  | "awaiting_plan"
+  | "planning"
+  | "planned"
+  | "planning_failed"
+  | "under_way";
+
+export interface MissionIntelligence {
+  missionId: string;
+  generatedAt: string;
+  status: WorkStatus;
+  stage: MissionStage;
+  brief: MissionBrief;
+  preflight: MissionPreflight;
+  plan: MissionPlanView | null;
+}
+
+export async function fetchMissionIntelligence(missionId: string): Promise<MissionIntelligence> {
+  return get<MissionIntelligence>(scoped(`/work/${encodeURIComponent(missionId)}/intelligence`));
+}
+
+/**
+ * Writes the plan without running anything. Answers at once; the plan is
+ * written on the server, so leaving the page cannot lose it.
+ */
+export async function prepareMission(
+  missionId: string,
+): Promise<{ prepared: boolean; workId: string; alreadyPlanned: boolean }> {
+  return post(
+    `/work/${encodeURIComponent(missionId)}/prepare`,
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
+}
