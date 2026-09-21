@@ -282,14 +282,14 @@ function normalizeTools(
  * is what keeps a deterministic-computation task from silently landing on
  * an agent that will just have the model guess instead of using the tool.
  */
-function hasTools(agent: Agent, requiredTools: string[]): boolean {
+export function hasTools(agent: Pick<Agent, "toolIds">, requiredTools: string[]): boolean {
   const agentToolIds = new Set(agent.toolIds);
 
   return requiredTools.every((tool) => agentToolIds.has(tool));
 }
 
-function isWorkspaceCompatible(
-  agent: Agent,
+export function isWorkspaceCompatible(
+  agent: Pick<Agent, "workspaceId">,
   workspaceId: DelegationContext["workspaceId"],
 ): boolean {
   return !workspaceId || !agent.workspaceId || agent.workspaceId === workspaceId;
