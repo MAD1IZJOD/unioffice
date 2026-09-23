@@ -2619,6 +2619,47 @@ export interface MissionIntelligence {
   brief: MissionBrief;
   preflight: MissionPreflight;
   plan: MissionPlanView | null;
+  /**
+   * What the company already knew, as it was handed to the planner.
+   *
+   * Absent from an API that predates it, which is not the same as the
+   * company having known nothing - so the page shows nothing at all rather
+   * than claiming either.
+   */
+  knowledge?: MissionKnowledgeContext;
+}
+
+/**
+ * One piece of company knowledge the plan was built on.
+ *
+ * Recorded when the plan was written, not searched for again now, so this is
+ * what actually shaped the work in front of you.
+ */
+export interface PlanKnowledge {
+  id: string;
+  title: string;
+  type: KnowledgeType;
+  status: KnowledgeStatus;
+  /** Why recall chose it, in the words it recorded at the time. */
+  reasons: string[];
+  sourceType: KnowledgeSourceType;
+  /** The mission that established it, when a mission did. */
+  sourceMissionId?: string;
+  establishedAt: string;
+  /** It sits in a disagreement nobody has settled. */
+  disputed: boolean;
+}
+
+export interface MissionKnowledgeContext {
+  used: PlanKnowledge[];
+  /** How many a company rule kept out of the planning. */
+  withheldCount: number;
+  /**
+   * Why the list is empty, when it is: the company was asked and had nothing
+   * (`available`), there is no plan to have asked for (`not_planned`), or the
+   * answer could not be read (`unavailable`).
+   */
+  state: "available" | "not_planned" | "unavailable";
 }
 
 export async function fetchMissionIntelligence(missionId: string): Promise<MissionIntelligence> {

@@ -397,6 +397,86 @@
 }
 
 /* --------------------------------------------------------------------------
+   What the company already knew
+
+   Each entry is a claim the plan leaned on, so it is laid out to be read as
+   one: what it says, then where it came from and how sure anyone is, then a
+   way to the source. The caveats sit above the reason on purpose - whether a
+   person should trust it matters more than why it turned up.
+   -------------------------------------------------------------------------- */
+
+.intel-knowledge {
+  margin: 0 0 var(--space-7);
+  padding: 0;
+  list-style: none;
+}
+
+.intel-knowledge-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 64ch;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.intel-knowledge-entry:last-child {
+  border-bottom: 0;
+}
+
+.intel-knowledge-title {
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+  text-decoration: none;
+}
+
+.intel-knowledge-title:hover {
+  color: var(--blue-ink);
+}
+
+.intel-knowledge-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.intel-knowledge-disputed {
+  color: var(--red-ink);
+}
+
+.intel-knowledge-caveat {
+  color: var(--warning-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.intel-knowledge-why {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.intel-knowledge-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.intel-knowledge-source:hover {
+  color: var(--blue-ink);
+}
+
+/* --------------------------------------------------------------------------
    Committing to it
    -------------------------------------------------------------------------- */
 

@@ -1,6 +1,11 @@
 import type {
   Agent,
   AgentId,
+  KnowledgeSourceType,
+  KnowledgeStatus,
+  Memory,
+  MemoryId,
+  MemoryType,
   Policy,
   Task,
   TaskStatus,
@@ -14,6 +19,8 @@ import type {
 
 import type {
   AgentRepository,
+  KnowledgeLinkRepository,
+  KnowledgeSearchRepository,
   PolicyRepository,
   TaskRepository,
   WorkspaceRepository,
@@ -25,7 +32,7 @@ import { hasTools, isWorkspaceCompatible } from "@unioffice/orchestrator";
 
 import type { ToolRegistry } from "@unioffice/tools";
 
-import { canActIn, type Access } from "./access/permissions.js";
+import { canActIn, reaches, type Access } from "./access/permissions.js";
 import { buildExecutionPlan, type ExecutionNode } from "./execution-plan.js";
 import { clip } from "./mission-reading.js";
 import { publicFailureReason } from "./public-failure.js";
@@ -214,6 +221,67 @@ export interface MissionPlanView {
 }
 
 /* --------------------------------------------------------------------------
+   What the company already knew
+   -------------------------------------------------------------------------- */
+
+/**
+ * One piece of company knowledge that planning was actually handed.
+ *
+ * Read from the recall records written when the plan was made, never from a
+ * search run again now. That distinction is the whole point: this says what
+ * shaped the plan in front of you, not what would be relevant if someone
+ * asked today. A mission planned before the company knew something shows
+ * that it did not know it.
+ */
+export interface PlanKnowledge {
+  id: MemoryId;
+
+  title: string;
+
+  type: MemoryType;
+
+  /** proposed knowledge was handed over as an unverified lead, and says so. */
+  status: KnowledgeStatus;
+
+  /** Why recall chose it, in the words recall recorded at the time. */
+  reasons: string[];
+
+  sourceType: KnowledgeSourceType;
+
+  /** The mission that established it, when a mission did. */
+  sourceMissionId?: WorkId;
+
+  establishedAt: Date;
+
+  /** It sits in a disagreement nobody has settled. */
+  disputed: boolean;
+}
+
+export interface MissionKnowledgeContext {
+  /**
+   * What planning was given. Bounded by recall itself, which hands over at
+   * most eight pieces including any brought in as the other side of a
+   * disagreement - so this is a short list by construction, not by truncation.
+   */
+  used: PlanKnowledge[];
+
+  /** How many a company rule kept out of planning, as the plan recorded it. */
+  withheldCount: number;
+
+  /**
+   * Which of three different things an empty list means.
+   *
+   * available   - the company was asked, and this is everything it gave.
+   * not_planned - there is no plan yet, so it has not been asked.
+   * unavailable - it was asked, but what it gave cannot be read right now.
+   *
+   * Collapsing these into a boolean would let a surface say "the company knew
+   * nothing about this" when the truth was that a query failed.
+   */
+  state: "available" | "not_planned" | "unavailable";
+}
+
+/* --------------------------------------------------------------------------
    The whole read
    -------------------------------------------------------------------------- */
 
@@ -238,6 +306,14 @@ export interface MissionIntelligence {
   preflight: MissionPreflight;
   /** Absent until the planner has written the steps. */
   plan: MissionPlanView | null;
+  /**
+   * What the company already knew, and was handed to the planner.
+   *
+   * Absent from an older API. A surface reads that as "not answered here"
+   * rather than as "the company knew nothing", because those are not at all
+   * the same thing to tell somebody.
+   */
+  knowledge: MissionKnowledgeContext;
 }
 
 export interface MissionIntelligenceDependencies {
@@ -246,6 +322,13 @@ export interface MissionIntelligenceDependencies {
   workspaces: Pick<WorkspaceRepository, "findByOrganization">;
   policies: Pick<PolicyRepository, "findEnforced">;
   tools: Pick<ToolRegistry, "get" | "list">;
+  /**
+   * The records of what planning was handed, and the knowledge itself.
+   * Optional: a server without them reports that the company was not asked
+   * rather than failing to read the mission at all.
+   */
+  recalls?: Pick<KnowledgeLinkRepository, "findRecallsByWork" | "findConflicts">;
+  memories?: Pick<KnowledgeSearchRepository, "findByIds">;
   now?: () => Date;
 }
 
@@ -268,6 +351,8 @@ export class MissionIntelligenceService {
       this.deps.policies.findEnforced(work.organizationId),
     ]);
 
+    const knowledge = await this.knowledgeOf(access, work, tasks.length > 0);
+
     const agents = new Map(
       allAgents
         .filter((agent) => agent.organizationId === work.organizationId)
@@ -288,7 +373,89 @@ export class MissionIntelligenceService {
       brief: this.briefOf(work, tasks, agents, workspace, read?.view ?? null),
       preflight: this.preflightOf(access, work, agents, enforced, stage, read),
       plan: read?.view ?? null,
+      knowledge,
     };
+  }
+
+  /* ------------------------------------------------------------------------
+     What the company already knew
+     ------------------------------------------------------------------------ */
+
+  /**
+   * The company knowledge this mission's plan was built on.
+   *
+   * Three bounded reads and no search. The recall records say what was handed
+   * over and why; the rows say what it was; the open conflicts say which of it
+   * the company is still arguing about. Nothing is retrieved again, so this
+   * can never quietly show a person knowledge the plan never saw and let them
+   * believe it shaped the work.
+   *
+   * Best-effort by contract. The mission is readable whether or not the
+   * knowledge store answers, and a store that does not answer reports that
+   * the company was not asked - never that it knew nothing.
+   */
+  private async knowledgeOf(
+    access: Access,
+    work: Work,
+    planned: boolean,
+  ): Promise<MissionKnowledgeContext> {
+    const withheldCount = withheldByPolicy(work);
+    const { recalls, memories } = this.deps;
+
+    if (!recalls || !memories || !planned) {
+      return { used: [], withheldCount, state: "not_planned" };
+    }
+
+    try {
+      const planning = (await recalls.findRecallsByWork(work.organizationId, work.id))
+        .filter((recall) => recall.stage === "planning")
+        .sort((left, right) => left.rank - right.rank);
+
+      if (planning.length === 0) {
+        return { used: [], withheldCount, state: "available" };
+      }
+
+      const ids = [...new Set(planning.map((recall) => recall.memoryId))];
+
+      const [rows, conflicts] = await Promise.all([
+        memories.findByIds(work.organizationId, ids),
+        recalls.findConflicts(work.organizationId, { status: "open", limit: OPEN_CONFLICTS_READ }),
+      ]);
+
+      // The tenant and the workspace boundary again, on rows that were read
+      // by id. Recall could only have handed over knowledge this mission's
+      // workspace reaches, so this should never remove anything - which is
+      // exactly why it is cheap to keep.
+      const byId = new Map(
+        rows
+          .filter((row) => row.organizationId === work.organizationId && reaches(access, row.workspaceId))
+          .map((row) => [row.id, row]),
+      );
+
+      const disputed = new Set(
+        conflicts
+          .filter((conflict) => conflict.organizationId === work.organizationId)
+          .flatMap((conflict) => [conflict.memoryId, conflict.conflictingMemoryId]),
+      );
+
+      const used: PlanKnowledge[] = [];
+      const seen = new Set<MemoryId>();
+
+      for (const recall of planning) {
+        const row = byId.get(recall.memoryId);
+        if (!row || seen.has(row.id)) continue;
+
+        seen.add(row.id);
+        used.push(recalledOf(row, recall.reasons, disputed.has(row.id)));
+      }
+
+      return { used, withheldCount, state: "available" };
+    } catch {
+      // An empty list here would read as "the company knew nothing about
+      // this", which is a claim about the company rather than about a query
+      // that did not answer. So it says which of the two happened.
+      return { used: [], withheldCount, state: "unavailable" };
+    }
   }
 
   /* ------------------------------------------------------------------------
@@ -880,6 +1047,42 @@ interface StepFinding {
   needsApproval: boolean;
   /** Something that limits the answer without stopping the work. */
   limitation?: string;
+}
+
+/**
+ * Open conflicts read in one query rather than one per recalled item.
+ *
+ * Generous next to the eight pieces recall can hand over, and a single
+ * bounded read either way. A company with more open disagreements than this
+ * has a larger problem than one mission's brief not marking every one.
+ */
+const OPEN_CONFLICTS_READ = 200;
+
+/** How many pieces of knowledge a rule kept out, as the plan recorded it. */
+function withheldByPolicy(work: Work): number {
+  const plan = work.metadata?.plan as { knowledge?: { withheldByPolicy?: unknown } } | undefined;
+  const withheld = plan?.knowledge?.withheldByPolicy;
+
+  return typeof withheld === "number" && Number.isFinite(withheld) && withheld > 0
+    ? Math.floor(withheld)
+    : 0;
+}
+
+function recalledOf(memory: Memory, reasons: string[], disputed: boolean): PlanKnowledge {
+  return {
+    id: memory.id,
+    title: clip(memory.title, 160),
+    type: memory.type,
+    status: memory.status,
+    // Recall's own words, bounded. Scores and identifiers never travel: the
+    // reasons say things like "matches the objective", which is what a person
+    // asked "why am I being shown this" actually wants.
+    reasons: reasons.slice(0, 4).map((reason) => clip(reason, 140)),
+    sourceType: memory.sourceType,
+    sourceMissionId: memory.workId,
+    establishedAt: memory.createdAt,
+    disputed,
+  };
 }
 
 const HEADLINE: Record<PreflightState, string> = {

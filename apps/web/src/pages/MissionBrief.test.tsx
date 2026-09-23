@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type {
   MissionIntelligence,
+  PlanKnowledge,
   PlanStep,
   PreflightCheck,
 } from "../lib/api";
@@ -92,6 +93,22 @@ function intelligence(overrides: Partial<MissionIntelligence> = {}): MissionInte
       expectedOutputs: ["Write the recommendation"],
       approvalCount: 0,
     },
+    knowledge: { used: [], withheldCount: 0, state: "available" },
+    ...overrides,
+  };
+}
+
+function knowledge(id: string, overrides: Partial<PlanKnowledge> = {}): PlanKnowledge {
+  return {
+    id,
+    title: "Engineering replaces laptops about every four years.",
+    type: "fact",
+    status: "active",
+    reasons: ["matches the objective"],
+    sourceType: "task",
+    sourceMissionId: "dddddddd-0000-4000-8000-000000000009",
+    establishedAt: new Date("2026-09-12T10:00:00.000Z").toISOString(),
+    disputed: false,
     ...overrides,
   };
 }
@@ -360,5 +377,78 @@ describe("the mission brief", () => {
     await screen.findByText("Ready to start.");
     expect(screen.queryByRole("button", { name: /Start mission/ })).toBeNull();
     expect(screen.getByRole("link", { name: /Watch it run/ }).getAttribute("href")).toBe(`/missions/${MISSION}`);
+  });
+  /* ------------------------------------------------------------------------
+     What the company already knew
+     ------------------------------------------------------------------------ */
+
+  it("shows the company knowledge the plan was built on, with a way to its source", async () => {
+    open(() => json(200, intelligence({
+      knowledge: { used: [knowledge("k1")], withheldCount: 0, state: "available" },
+    })));
+
+    await screen.findByText("Ready to start.");
+
+    expect(screen.getByText("What the company already knew")).toBeDefined();
+    expect(screen.getByText(/The planner was given 1 piece/)).toBeDefined();
+
+    const entry = screen.getByRole("link", { name: /Engineering replaces laptops/ });
+    expect(entry.getAttribute("href")).toBe("/brain/k1");
+    expect(screen.getByRole("link", { name: /View source mission/ }).getAttribute("href"))
+      .toBe("/missions/dddddddd-0000-4000-8000-000000000009");
+    expect(screen.getByText(/Recalled because it matches the objective/)).toBeDefined();
+  });
+
+  it("says plainly when knowledge was only proposed, rather than showing it as company fact", async () => {
+    open(() => json(200, intelligence({
+      knowledge: { used: [knowledge("k1", { status: "proposed" })], withheldCount: 0, state: "available" },
+    })));
+
+    await screen.findByText("Ready to start.");
+    expect(screen.getByText(/Nobody has vouched for this yet/)).toBeDefined();
+  });
+
+  it("marks knowledge the company is still arguing about", async () => {
+    open(() => json(200, intelligence({
+      knowledge: { used: [knowledge("k1", { disputed: true })], withheldCount: 0, state: "available" },
+    })));
+
+    await screen.findByText("Ready to start.");
+    expect(screen.getByText("disputed")).toBeDefined();
+    expect(screen.getByText(/Another piece of company knowledge disagrees/)).toBeDefined();
+  });
+
+  it("tells apart a company that knew nothing from a question that could not be asked", async () => {
+    open(() => json(200, intelligence({
+      knowledge: { used: [], withheldCount: 0, state: "available" },
+    })));
+
+    expect(await screen.findByText(/The company had nothing recorded about this/)).toBeDefined();
+  });
+
+  it("does not claim the company knew nothing when the knowledge store did not answer", async () => {
+    open(() => json(200, intelligence({
+      knowledge: { used: [], withheldCount: 0, state: "unavailable" },
+    })));
+
+    await screen.findByText("Ready to start.");
+    expect(screen.getByText(/could not be read just now/)).toBeDefined();
+    expect(screen.queryByText(/had nothing recorded/)).toBeNull();
+  });
+
+  it("reports knowledge a company rule kept out of the plan", async () => {
+    open(() => json(200, intelligence({
+      knowledge: { used: [knowledge("k1")], withheldCount: 2, state: "available" },
+    })));
+
+    await screen.findByText("Ready to start.");
+    expect(screen.getByText(/A company rule kept 2 pieces of company knowledge out of this plan/)).toBeDefined();
+  });
+
+  it("an API that does not answer this yet shows nothing rather than guessing", async () => {
+    open(() => json(200, intelligence({ knowledge: undefined })));
+
+    await screen.findByText("Ready to start.");
+    expect(screen.queryByText("What the company already knew")).toBeNull();
   });
 });

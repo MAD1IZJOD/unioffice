@@ -436,6 +436,10 @@ export function createExecutionRuntime(config: ApiConfig) {
     workspaces: workspaceRepository,
     policies: policyRepository,
     tools: toolRegistry,
+    // What the company already knew, read from the records planning wrote.
+    // No retrieval runs here; the same store is only asked what it handed over.
+    recalls: knowledgeLinkRepository,
+    memories: memoryRepository,
   });
 
   const governanceOverviewService = new GovernanceOverviewService(

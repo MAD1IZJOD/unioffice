@@ -4,7 +4,12 @@ import test from "node:test";
 import type {
   Agent,
   AgentId,
+  KnowledgeConflict,
+  KnowledgeConflictId,
+  KnowledgeRecall,
   MemberId,
+  Memory,
+  MemoryId,
   OrganizationId,
   OrganizationRole,
   Policy,
@@ -179,15 +184,74 @@ function service(options: {
   agents?: Agent[];
   workspaces?: Workspace[];
   policies?: Policy[];
+  /** The records planning wrote when it was handed company knowledge. */
+  recalls?: KnowledgeRecall[];
+  memories?: Memory[];
+  conflicts?: KnowledgeConflict[];
+  /** A knowledge store that will not answer. */
+  knowledgeFails?: boolean;
+  /** No knowledge store at all, as an older deployment has. */
+  withoutKnowledge?: boolean;
 } = {}) {
+  const knowledge = options.withoutKnowledge
+    ? {}
+    : {
+        recalls: {
+          async findRecallsByWork() {
+            if (options.knowledgeFails) throw new Error("The knowledge store did not answer.");
+            return options.recalls ?? [];
+          },
+          async findConflicts() { return options.conflicts ?? []; },
+        },
+        memories: {
+          async findByIds(_organizationId: OrganizationId, ids: MemoryId[]) {
+            return (options.memories ?? []).filter((row) => ids.includes(row.id));
+          },
+        },
+      };
+
   return new MissionIntelligenceService({
     tasks: { async findByWork() { return options.tasks ?? []; } },
     agents: { async findByOrganization() { return options.agents ?? [agent("Harvey")]; } },
     workspaces: { async findByOrganization() { return options.workspaces ?? []; } },
     policies: { async findEnforced() { return options.policies ?? []; } },
     tools: createDefaultToolRegistry(),
+    ...knowledge,
     now: () => epoch,
   });
+}
+
+function memory(id: string, overrides: Partial<Memory> = {}): Memory {
+  return {
+    id: id as MemoryId,
+    organizationId: orgA,
+    scope: "company",
+    type: "fact",
+    status: "active",
+    title: `Knowledge ${id}`,
+    content: `What the company knows, as ${id}.`,
+    sourceType: "task",
+    importance: 0.6,
+    createdAt: new Date("2026-09-12T10:00:00.000Z"),
+    updatedAt: new Date("2026-09-12T10:00:00.000Z"),
+    metadata: {},
+    ...overrides,
+  };
+}
+
+function recall(memoryId: string, rank: number, overrides: Partial<KnowledgeRecall> = {}): KnowledgeRecall {
+  return {
+    id: `recall-${memoryId}-${rank}` as KnowledgeRecall["id"],
+    organizationId: orgA,
+    memoryId: memoryId as MemoryId,
+    workId: missionId,
+    stage: "planning",
+    rank,
+    score: 1 - rank / 10,
+    reasons: ["matches the objective"],
+    recalledAt: epoch,
+    ...overrides,
+  };
 }
 
 const twoStepPlan = [
@@ -536,4 +600,166 @@ test("nothing a person is shown carries an id, a score or a secret", async () =>
   assert.equal(shown.includes("deterministic"), false);
   assert.equal(shown.includes("capability_ranked"), false);
   assert.equal(shown.includes(missionId), false);
+});
+
+/* --------------------------------------------------------------------------
+   What the company already knew
+   -------------------------------------------------------------------------- */
+
+test("the knowledge the plan was built on is shown with where it came from and why", async () => {
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1, { reasons: ["matches the objective", "established recently"] })],
+    memories: [memory("k1", {
+      title: "Enterprise contracts run for a minimum of 12 months.",
+      type: "fact",
+      workId: "dddddddd-0000-4000-8000-000000000009" as WorkId,
+      sourceType: "task",
+    })],
+  }).getIntelligence(access(), work());
+
+  assert.equal(result.knowledge.state, "available");
+  assert.equal(result.knowledge.used.length, 1);
+
+  const [used] = result.knowledge.used;
+  assert.equal(used!.title, "Enterprise contracts run for a minimum of 12 months.");
+  assert.equal(used!.type, "fact");
+  assert.equal(used!.status, "active");
+  assert.equal(used!.sourceMissionId, "dddddddd-0000-4000-8000-000000000009");
+  assert.deepEqual(used!.establishedAt, new Date("2026-09-12T10:00:00.000Z"));
+  assert.deepEqual(used!.reasons, ["matches the objective", "established recently"]);
+  assert.equal(used!.disputed, false);
+});
+
+test("what was recalled keeps the order the planner was given it in", async () => {
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k2", 2), recall("k1", 1), recall("k3", 3)],
+    memories: [memory("k1"), memory("k2"), memory("k3")],
+  }).getIntelligence(access(), work());
+
+  assert.deepEqual(result.knowledge.used.map((entry) => entry.id), ["k1", "k2", "k3"]);
+});
+
+test("knowledge recalled for a step, not for the plan, is not shown as having shaped the plan", async () => {
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1), recall("k2", 1, { stage: "execution" })],
+    memories: [memory("k1"), memory("k2")],
+  }).getIntelligence(access(), work());
+
+  assert.deepEqual(result.knowledge.used.map((entry) => entry.id), ["k1"]);
+});
+
+test("proposed knowledge is shown as proposed, not quietly as company fact", async () => {
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1)],
+    memories: [memory("k1", { status: "proposed" })],
+  }).getIntelligence(access(), work());
+
+  assert.equal(result.knowledge.used[0]?.status, "proposed");
+});
+
+test("knowledge the company is still arguing about is marked as disputed", async () => {
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1), recall("k2", 2)],
+    memories: [memory("k1"), memory("k2")],
+    conflicts: [{
+      id: "9f0c3a1e-0000-4000-8000-00000000000a" as KnowledgeConflictId,
+      organizationId: orgA,
+      memoryId: "k1" as MemoryId,
+      conflictingMemoryId: "k9" as MemoryId,
+      reason: "They state different amounts for the same subject.",
+      signals: {},
+      status: "open",
+      detectedAt: epoch,
+    }],
+  }).getIntelligence(access(), work());
+
+  assert.deepEqual(
+    result.knowledge.used.map((entry) => [entry.id, entry.disputed]),
+    [["k1", true], ["k2", false]],
+  );
+});
+
+test("a rule that kept knowledge out of planning is reported, from what the plan recorded", async () => {
+  const withheld = work({ metadata: { plan: { taskCount: 2, knowledge: { withheldByPolicy: 2 } } } });
+
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1)],
+    memories: [memory("k1")],
+  }).getIntelligence(access(), withheld);
+
+  assert.equal(result.knowledge.withheldCount, 2);
+});
+
+test("a mission with no plan yet says the company has not been asked, not that it knows nothing", async () => {
+  const result = await service({ recalls: [recall("k1", 1)], memories: [memory("k1")] })
+    .getIntelligence(access(), work());
+
+  assert.equal(result.knowledge.state, "not_planned");
+  assert.deepEqual(result.knowledge.used, []);
+});
+
+test("a planned mission the company had nothing for says so, and says it was asked", async () => {
+  const result = await service({ tasks: twoStepPlan }).getIntelligence(access(), work());
+
+  assert.equal(result.knowledge.state, "available");
+  assert.deepEqual(result.knowledge.used, []);
+});
+
+test("a knowledge store that will not answer is reported as unreadable, never as an empty company", async () => {
+  const result = await service({ tasks: twoStepPlan, knowledgeFails: true })
+    .getIntelligence(access(), work());
+
+  assert.equal(result.knowledge.state, "unavailable");
+  assert.deepEqual(result.knowledge.used, []);
+});
+
+test("a server with no knowledge store still reads the mission", async () => {
+  const result = await service({ tasks: twoStepPlan, withoutKnowledge: true })
+    .getIntelligence(access(), work());
+
+  assert.equal(result.knowledge.state, "not_planned");
+  assert.equal(result.plan?.steps.length, 2);
+});
+
+test("knowledge from another organization is never shown, however it was recalled", async () => {
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1), recall("intruder", 2)],
+    memories: [
+      memory("k1"),
+      memory("intruder", { organizationId: "bbbbbbbb-0000-4000-8000-000000000002" as OrganizationId }),
+    ],
+  }).getIntelligence(access(), work());
+
+  assert.deepEqual(result.knowledge.used.map((entry) => entry.id), ["k1"]);
+});
+
+test("knowledge in a workspace the caller was not given is not shown to them", async () => {
+  const options = {
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1), recall("k2", 2)],
+    memories: [memory("k1"), memory("k2", { workspaceId: legal })],
+  };
+
+  const narrowed = await service(options).getIntelligence(access("member", [[finance, "member"]]), work());
+  const full = await service(options).getIntelligence(access("owner"), work());
+
+  assert.deepEqual(narrowed.knowledge.used.map((entry) => entry.id), ["k1"]);
+  assert.deepEqual(full.knowledge.used.map((entry) => entry.id), ["k1", "k2"]);
+});
+
+test("the same knowledge recalled for several steps is listed once", async () => {
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1), recall("k1", 2)],
+    memories: [memory("k1")],
+  }).getIntelligence(access(), work());
+
+  assert.equal(result.knowledge.used.length, 1);
 });

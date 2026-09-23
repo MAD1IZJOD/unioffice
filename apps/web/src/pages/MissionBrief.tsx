@@ -7,14 +7,17 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   executeWork,
   fetchMissionIntelligence,
+  formatRelativeTime,
   prepareMission,
   type CheckState,
   type MissionIntelligence,
+  type MissionKnowledgeContext,
   type PlanStep,
   type PreflightCheck,
   type PreflightState,
 } from "../lib/api";
 
+import { kindLabel, knowledgeStatusLabel } from "../lib/knowledge";
 import { useResource } from "../lib/useResource";
 
 import {
@@ -280,6 +283,15 @@ export default function MissionBrief() {
                   </ul>
                 </div>
               )}
+
+              {/* Absent from an older API, where the heading alone would
+                  promise an answer the server never gave. */}
+              {data.knowledge && (
+                <>
+                  <Chapter index="04" title="What the company already knew" />
+                  <KnowledgeUsed knowledge={data.knowledge} />
+                </>
+              )}
             </>
           )}
         </>
@@ -324,6 +336,99 @@ export default function MissionBrief() {
         </Link>
       </div>
     </div>
+  );
+}
+
+/* --------------------------------------------------------------------------
+   What the company already knew
+   -------------------------------------------------------------------------- */
+
+/**
+ * The company knowledge this plan was built on.
+ *
+ * Everything here was handed to the planner when the plan was written, and
+ * says so - with what it is, when the company established it, whether anyone
+ * has vouched for it, and one click to the entry itself and the mission that
+ * produced it. That provenance is the point. Knowledge that arrives in a plan
+ * without a source is indistinguishable from something the model made up, and
+ * the moment a person cannot tell those apart, neither is worth anything.
+ *
+ * An empty list is four different sentences depending on why it is empty,
+ * because "the company knew nothing about this" is a real and useful thing to
+ * learn, and saying it when a query merely failed is a lie.
+ */
+function KnowledgeUsed({ knowledge }: { knowledge: MissionKnowledgeContext }) {
+  const withheld = knowledge.withheldCount > 0 && (
+    <p className="intel-note">
+      A company rule kept {knowledge.withheldCount}{" "}
+      {knowledge.withheldCount === 1 ? "piece" : "pieces"} of company knowledge out of this plan.
+    </p>
+  );
+
+  if (knowledge.used.length === 0) {
+    return (
+      <>
+        <p className="intel-note">
+          {knowledge.state === "available"
+            ? "The company had nothing recorded about this, so the plan starts from your request alone."
+            : knowledge.state === "unavailable"
+              ? "What the company knew could not be read just now. The plan itself is unaffected."
+              : "The company has not been asked yet. It is, once the plan is written."}
+        </p>
+        {withheld}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <p className="intel-note">
+        The planner was given {knowledge.used.length}{" "}
+        {knowledge.used.length === 1 ? "piece" : "pieces"} of what the company already knows.
+      </p>
+
+      <ul className="intel-knowledge">
+        {knowledge.used.map((entry) => (
+          <li key={entry.id} className="intel-knowledge-entry">
+            <Link to={`/brain/${entry.id}`} className="intel-knowledge-title">
+              {entry.title}
+            </Link>
+
+            <span className="intel-knowledge-meta">
+              <span>{kindLabel(entry.type)}</span>
+              <span>{knowledgeStatusLabel(entry.status)}</span>
+              <span>{formatRelativeTime(entry.establishedAt)}</span>
+              {entry.disputed && <span className="intel-knowledge-disputed">disputed</span>}
+            </span>
+
+            {entry.status === "proposed" && (
+              <span className="intel-knowledge-caveat">
+                Nobody has vouched for this yet; the planner was given it as an unverified lead.
+              </span>
+            )}
+
+            {entry.disputed && (
+              <span className="intel-knowledge-caveat">
+                Another piece of company knowledge disagrees with this, and nobody has settled it.
+              </span>
+            )}
+
+            {entry.reasons.length > 0 && (
+              <span className="intel-knowledge-why">Recalled because it {readable(entry.reasons)}.</span>
+            )}
+
+            {entry.sourceMissionId && (
+              <Link to={`/missions/${entry.sourceMissionId}`} className="intel-knowledge-source">
+                View source mission
+                <ArrowRight size={11} />
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {withheld}
+    </>
   );
 }
 
