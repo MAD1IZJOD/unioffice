@@ -15,7 +15,12 @@ import type {
 
 import type { WorkSummary } from "@unioffice/database";
 
-import { buildAttentionQueue, type AttentionInput } from "./attention-service.js";
+import {
+  ALLOWS_EVERYTHING,
+  buildAttentionQueue,
+  type AttentionAuthority,
+  type AttentionInput,
+} from "./attention-service.js";
 import { readMission } from "./mission-reading.js";
 
 /**
@@ -82,6 +87,7 @@ function queue(fixture: {
   denials?: AttentionInput["denials"];
   conflicts?: AttentionInput["conflicts"];
   lessons?: AttentionInput["lessons"];
+  authority?: AttentionAuthority;
 }, limit?: number) {
   const works = fixture.works ?? [];
 
@@ -97,13 +103,21 @@ function queue(fixture: {
     conflicts: fixture.conflicts ?? [],
     lessons: fixture.lessons ?? [],
     agentIds: new Set<AgentId>(),
+    authority: fixture.authority ?? ALLOWS_EVERYTHING,
   }, limit);
 }
 
 test("a company with nothing wrong has an empty queue, and says so cleanly", () => {
   const result = queue({ works: [summary("w1")] });
 
-  assert.deepEqual(result, { items: [], actionCount: 0, reviewCount: 0, watchCount: 0, total: 0 });
+  assert.deepEqual(result, {
+    items: [],
+    actionCount: 0,
+    waitingOnOthersCount: 0,
+    reviewCount: 0,
+    watchCount: 0,
+    total: 0,
+  });
 });
 
 test("a pending approval is an action, and names the mission it stopped", () => {
@@ -210,4 +224,152 @@ test("the returned list is capped but the counts are honest about the rest", () 
   assert.equal(result.items.length, 3);
   assert.equal(result.total, 8);
   assert.equal(result.actionCount, 8);
+});
+
+/* --------------------------------------------------------------------------
+   Who the queue is for
+   -------------------------------------------------------------------------- */
+
+/** An authority that refuses everything, the way a viewer's does. */
+const ALLOWS_NOTHING: AttentionAuthority = {
+  decide: () => ({ allowed: false, handoff: "Someone else needs to handle this." }),
+};
+
+/** Refuses one permission and allows the rest, the way a member's does. */
+function allowsAllBut(
+  permission: "missions.operate" | "knowledge.curate" | "agents.configure",
+): AttentionAuthority {
+  return {
+    decide: (need) =>
+      need.of === "permission" && need.permission === permission
+        ? { allowed: false, handoff: `Someone who can ${permission} handles this.` }
+        : { allowed: true },
+  };
+}
+
+test("an entry someone cannot act on keeps its place and says whose it is", () => {
+  const result = queue({
+    approvals: [approval("ap1", "w1")],
+    works: [summary("w1", { status: "waiting_approval" })],
+    authority: ALLOWS_NOTHING,
+  });
+
+  assert.equal(result.items.length, 1, "it is still shown - they can see what is holding the company up");
+  assert.equal(result.items[0]?.actionable, false);
+  assert.equal(result.items[0]?.handoff, "Someone else needs to handle this.");
+});
+
+test("what needs you counts only what you can actually do", () => {
+  const result = queue({
+    approvals: [approval("ap1", "w1")],
+    works: [summary("w1", { status: "waiting_approval" })],
+    authority: ALLOWS_NOTHING,
+  });
+
+  assert.equal(result.actionCount, 0, "a badge saying one thing needs them would not be true");
+  assert.equal(result.waitingOnOthersCount, 1);
+  assert.equal(result.total, 1);
+});
+
+test("the same queue read by someone who may act counts it as theirs", () => {
+  const result = queue({
+    approvals: [approval("ap1", "w1")],
+    works: [summary("w1", { status: "waiting_approval" })],
+  });
+
+  assert.equal(result.items[0]?.actionable, true);
+  assert.equal(result.items[0]?.handoff, undefined);
+  assert.equal(result.actionCount, 1);
+  assert.equal(result.waitingOnOthersCount, 0);
+});
+
+test("a step a policy stopped asks for approval, and says so as its own need", () => {
+  const needs: Array<Record<string, unknown>> = [];
+
+  queue({
+    approvals: [
+      approval("ap1", "w1", { metadata: { policyId: "p1" } }),
+      approval("ap2", "w1"),
+    ],
+    works: [summary("w1", { status: "waiting_approval" })],
+    authority: { decide: (need) => { needs.push(need); return { allowed: true }; } },
+  });
+
+  assert.deepEqual(
+    needs.map((need) => [need.of, need.governedByPolicy]),
+    [["approval", true], ["approval", false]],
+  );
+});
+
+test("a mission entry asks to operate missions, in the mission's own workspace", () => {
+  const needs: Array<Record<string, unknown>> = [];
+  const finance = "f0000000-0000-4000-8000-00000000000f";
+
+  queue({
+    works: [summary("w1", { status: "failed", workspaceId: finance as never })],
+    authority: { decide: (need) => { needs.push(need); return { allowed: true }; } },
+  });
+
+  assert.deepEqual(needs, [{ of: "permission", permission: "missions.operate", workspaceId: finance }]);
+});
+
+test("settling what the company knows is asked of knowledge, not of missions", () => {
+  const needs: Array<Record<string, unknown>> = [];
+
+  queue({
+    conflicts: [{
+      conflict: {
+        id: "c1" as KnowledgeConflictId,
+        organizationId,
+        memoryId: "m1" as MemoryId,
+        conflictingMemoryId: "m2" as MemoryId,
+        reason: "They state different amounts for the same subject.",
+        signals: {},
+        status: "open",
+        detectedAt: minutesAgo(5),
+      },
+      left: { id: "m1" as MemoryId, title: "Enterprise pricing is 100000" },
+      right: { id: "m2" as MemoryId, title: "Enterprise pricing is 120000" },
+    }],
+    authority: { decide: (need) => { needs.push(need); return { allowed: true }; } },
+  });
+
+  assert.deepEqual(needs, [{ of: "permission", permission: "knowledge.curate", workspaceId: undefined }]);
+});
+
+test("someone who may run missions but not curate knowledge is told which is theirs", () => {
+  const result = queue({
+    works: [summary("w1", { status: "failed" })],
+    lessons: [{ workId: "w1" as WorkId, count: 2, at: minutesAgo(4) }],
+    authority: allowsAllBut("knowledge.curate"),
+  });
+
+  const byKind = new Map(result.items.map((item) => [item.kind, item]));
+
+  assert.equal(byKind.get("failure")?.actionable, true);
+  assert.equal(byKind.get("lessons")?.actionable, false);
+  assert.match(byKind.get("lessons")?.handoff ?? "", /knowledge\.curate/);
+});
+
+test("marking a mission as seen is withheld from someone who may not operate it", () => {
+  const result = queue({
+    works: [summary("w1", { status: "failed" })],
+    authority: allowsAllBut("missions.operate"),
+  });
+
+  assert.equal(result.items[0]?.kind, "failure");
+  assert.equal(result.items[0]?.actionable, false);
+  assert.equal(result.items[0]?.acknowledgeable, false, "setting it aside is an operator's act too");
+});
+
+test("a job the system is retrying asks nothing of anybody, whoever is reading", () => {
+  const result = queue({
+    works: [summary("w1", { status: "executing" })],
+    jobs: [job("j1", "w1", { attempts: 1 })],
+    authority: ALLOWS_NOTHING,
+  });
+
+  assert.equal(result.items[0]?.kind, "recovering");
+  assert.equal(result.items[0]?.actionable, true);
+  assert.equal(result.items[0]?.handoff, undefined, "nothing is waiting on a person, so nobody is named");
 });

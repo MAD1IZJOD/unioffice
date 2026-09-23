@@ -435,14 +435,57 @@ function NeedsYou({
     }
   }
 
-  const groups: Array<{ severity: AttentionItem["severity"]; title: string; className: string }> = [
-    { severity: "action", title: "Needs you", className: "attention-band-group" },
-    { severity: "review", title: "Worth a look — nothing is blocked", className: "attention-band-group attention-band-review" },
-    { severity: "watch", title: "Handling itself — nothing for you to do", className: "attention-band-group attention-band-watching" },
+  /*
+   * Four bands, not three.
+   *
+   * Something stopped until a person acts is split by whether that person is
+   * you. Both are worth seeing - knowing the company is waiting on an owner
+   * is real information - but putting them under one "Needs you" heading
+   * would tell a member that settling a knowledge conflict is their job.
+   */
+  const mine = (item: AttentionItem) => item.actionable !== false;
+
+  const groups: Array<{
+    id: string;
+    title: string;
+    className: string;
+    holds: (item: AttentionItem) => boolean;
+    count: number;
+  }> = [
+    {
+      id: "action",
+      title: "Needs you",
+      className: "attention-band-group",
+      holds: (item) => item.severity === "action" && mine(item),
+      count: queue.actionCount,
+    },
+    {
+      id: "others",
+      title: "Stopped — waiting on someone else",
+      className: "attention-band-group attention-band-review",
+      holds: (item) => item.severity === "action" && !mine(item),
+      count: queue.waitingOnOthersCount ?? queue.items.filter((item) => item.severity === "action" && !mine(item)).length,
+    },
+    {
+      id: "review",
+      title: "Worth a look — nothing is blocked",
+      className: "attention-band-group attention-band-review",
+      holds: (item) => item.severity === "review",
+      count: queue.reviewCount,
+    },
+    {
+      id: "watch",
+      title: "Handling itself — nothing for you to do",
+      className: "attention-band-group attention-band-watching",
+      holds: (item) => item.severity === "watch",
+      count: queue.watchCount,
+    },
   ];
 
-  const hidden = queue.items.filter((item, _index, all) =>
-    !expanded && all.filter((other) => other.severity === item.severity).indexOf(item) >= COLLAPSED[item.severity]).length;
+  const hidden = groups.reduce((total, group) => {
+    const items = queue.items.filter(group.holds);
+    return total + (expanded ? 0 : Math.max(0, items.length - COLLAPSED[items[0]?.severity ?? "watch"]));
+  }, 0);
   const beyond = queue.total - queue.items.length;
 
   return (
@@ -450,18 +493,16 @@ function NeedsYou({
       <h3 id="needs-title" className="sr-only">Needs you</h3>
 
       {groups.map((group) => {
-        const items = queue.items.filter((item) => item.severity === group.severity);
+        const items = queue.items.filter(group.holds);
         if (items.length === 0) return null;
 
-        const visible = expanded ? items : items.slice(0, COLLAPSED[group.severity]);
+        const visible = expanded ? items : items.slice(0, COLLAPSED[items[0]!.severity]);
 
         return (
-          <div key={group.severity} className={group.className} role="group" aria-label={group.title}>
+          <div key={group.id} className={group.className} role="group" aria-label={group.title}>
             <div className="attention-band-head">
               <span className="attention-band-eyebrow">{group.title}</span>
-              <span className="t-machine">
-                {group.severity === "action" ? queue.actionCount : group.severity === "review" ? queue.reviewCount : queue.watchCount}
-              </span>
+              <span className="t-machine">{group.count}</span>
             </div>
 
             {visible.map((item) => (
@@ -504,6 +545,9 @@ function AttentionEntry({
 }) {
   const Icon = ATTENTION_ICON[item.kind];
   const canOperate = useCan("missions.operate");
+  // The server answered this for this person. An older API that did not send
+  // an answer is read as yes, which is how the page behaved before it asked.
+  const mine = item.actionable !== false;
 
   return (
     <div className={`attention-row needs-row ${toneClass[attentionTone(item)]}`} role="article" aria-label={item.label}>
@@ -521,14 +565,27 @@ function AttentionEntry({
           {item.level === "critical" && <span className="needs-tag-critical">critical</span>}
           <span>{attentionTime(item)}</span>
         </span>
+        {!mine && item.handoff && <span className="needs-handoff">{item.handoff}</span>}
         {failure && <span className="needs-error" role="alert">{failure}</span>}
       </span>
 
       <span className="needs-actions">
-        <Link to={item.action.path} className={item.severity === "action" ? "button-ghost" : "button-quiet"}>
-          {item.action.label}
-          <ArrowRight size={11} />
-        </Link>
+        {mine ? (
+          <Link to={item.action.path} className={item.severity === "action" ? "button-ghost" : "button-quiet"}>
+            {item.action.label}
+            <ArrowRight size={11} />
+          </Link>
+        ) : (
+          // Not a disabled button: offering a control and then refusing it
+          // reads as a fault in the product rather than as someone else's
+          // job. The mission itself stays open to read.
+          item.workId && (
+            <Link to={item.action.path} className="button-quiet">
+              Look at it
+              <ArrowRight size={11} />
+            </Link>
+          )
+        )}
 
         {canOperate && item.acknowledgeable && item.workId && (
           <button type="button" className="button-quiet" disabled={Boolean(busy)} onClick={onMarkSeen}>

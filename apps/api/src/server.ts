@@ -74,6 +74,7 @@ import type {
 } from "./mission-control-service.js";
 
 import {
+  attentionAuthorityFor,
   MissionNotFoundError,
   MissionStateError,
 } from "./mission-control-service.js";
@@ -703,9 +704,15 @@ export function buildApiServer(
     instance.get("/attention", async (request) => {
       const query = objectBody(request.query);
 
+      const access = accessOf(request);
+
       return services.missionControlService.getAttention(
         organizationOf(request),
-        { limit: parseOptionalLimit(query.limit), reach: reachOf(accessOf(request)) },
+        {
+          limit: parseOptionalLimit(query.limit),
+          reach: reachOf(access),
+          authority: attentionAuthorityFor(access),
+        },
       );
     });
 
@@ -714,9 +721,11 @@ export function buildApiServer(
     // company recently decided and learned. Built from the same state the
     // attention queue is, so the two cannot disagree.
     instance.get("/mission-control", async (request) => {
+      const access = accessOf(request);
+
       return services.missionControlService.getMissionControl(
         organizationOf(request),
-        { reach: reachOf(accessOf(request)) },
+        { reach: reachOf(access), authority: attentionAuthorityFor(access) },
       );
     });
 

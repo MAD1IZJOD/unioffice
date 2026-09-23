@@ -29,11 +29,16 @@ import type {
 } from "@unioffice/database";
 
 import {
+  ALLOWS_EVERYTHING,
   buildAttentionQueue,
   DEFAULT_ATTENTION_LIMIT,
+  type AttentionAuthority,
   type AttentionInput,
+  type AttentionNeed,
   type AttentionQueue,
 } from "./attention-service.js";
+
+import { canActIn, canDecideApproval, type Access } from "./access/permissions.js";
 
 import type { EventRecorder } from "./event-recorder.js";
 
@@ -245,6 +250,50 @@ interface OperationalState {
 /** Which workspaces a caller sees. Absent: all of them. */
 export type Reach = (workspaceId: WorkspaceId | undefined) => boolean;
 
+/**
+ * The attention queue, answered for one person.
+ *
+ * Built from the same two functions the routes authorize with, so what the
+ * queue offers and what the server will accept cannot drift apart. The
+ * handoff sentence names what someone needs to be able to do rather than the
+ * role that happens to grant it today - "an owner or an admin" is true of
+ * settling knowledge now, and stays true of the sentence if the grants move.
+ */
+export function attentionAuthorityFor(access: Access): AttentionAuthority {
+  return {
+    decide(need: AttentionNeed) {
+      if (need.of === "approval") {
+        return canDecideApproval(access, {
+          workspaceId: need.workspaceId,
+          governedByPolicy: need.governedByPolicy,
+        })
+          ? { allowed: true }
+          : {
+              allowed: false,
+              handoff: need.governedByPolicy
+                ? "A policy stopped this step, so an owner or an admin decides it."
+                : "Someone who can decide approvals here needs to take this.",
+            };
+      }
+
+      if (canActIn(access, need.permission, need.workspaceId)) {
+        return { allowed: true };
+      }
+
+      return { allowed: false, handoff: HANDOFF[need.permission] };
+    },
+  };
+}
+
+const HANDOFF: Record<
+  Extract<AttentionNeed, { of: "permission" }>["permission"],
+  string
+> = {
+  "missions.operate": "Someone who runs missions here needs to pick this up.",
+  "knowledge.curate": "An owner or an admin settles what the company knows.",
+  "agents.configure": "An owner or an admin changes how the workforce is set up.",
+};
+
 export class MissionControlService {
   private readonly stalledAfterMs: number;
   private readonly now: () => Date;
@@ -257,23 +306,29 @@ export class MissionControlService {
     this.now = options.now ?? (() => new Date());
   }
 
-  /** What needs a person, ranked. The shell's badge and drawer read this. */
+  /**
+   * What needs a person, ranked. The shell's badge and drawer read this.
+   *
+   * The authority is required rather than defaulted: a queue built without
+   * one would offer every control to everybody, and that is exactly the
+   * mistake a default would make silently.
+   */
   async getAttention(
     organizationId: OrganizationId,
-    options: { limit?: number; reach?: Reach } = {},
+    options: { limit?: number; reach?: Reach; authority: AttentionAuthority },
   ): Promise<AttentionQueue> {
-    const state = await this.load(organizationId, options.reach);
+    const state = await this.load(organizationId, options.reach, options.authority);
 
     return buildAttentionQueue(state.attentionInput, Math.min(options.limit ?? DEFAULT_ATTENTION_LIMIT, 100));
   }
 
   async getMissionControl(
     organizationId: OrganizationId,
-    options: { reach?: Reach } = {},
+    options: { reach?: Reach; authority: AttentionAuthority },
   ): Promise<MissionControlView> {
     const { reach } = options;
     const [state, allDecisions, allLessons, allOutcomeEvents] = await Promise.all([
-      this.load(organizationId, reach),
+      this.load(organizationId, reach, options.authority),
       this.deps.memories.query({ organizationId, types: ["decision"], statuses: ["active"], limit: reach ? 40 : 4 }),
       this.deps.memories.query({ organizationId, types: ["lesson"], statuses: ["active", "proposed"], limit: reach ? 40 : 4 }),
       this.deps.reads.findEventsByTypes(organizationId, { types: OUTCOME_EVENT_TYPES, limit: OUTCOME_EVENTS_READ }),
@@ -425,7 +480,11 @@ export class MissionControlService {
      One consistent read of the company
      ---------------------------------------------------------------------- */
 
-  private async load(organizationId: OrganizationId, reach?: Reach): Promise<OperationalState> {
+  private async load(
+    organizationId: OrganizationId,
+    reach: Reach | undefined,
+    authority: AttentionAuthority,
+  ): Promise<OperationalState> {
     const now = this.now();
 
     const [works, approvals, jobs, agents, openConflicts, proposed] = await Promise.all([
@@ -555,6 +614,20 @@ export class MissionControlService {
       memory.type !== "experience" &&
       (!reach || reach(memory.workspaceId)));
 
+    /*
+     * The same conflicts, with the workspace each side lives in.
+     *
+     * Settling a disagreement is authorized in a workspace, so the attention
+     * queue needs to know which one. It is not added to `conflicts` itself
+     * because that is a read model people see, and a workspace id is not
+     * something a page has any use for.
+     */
+    const attentionConflicts = conflicts.map((entry) => ({
+      conflict: entry.conflict,
+      left: withWorkspace(entry.left, sideById.get(entry.conflict.memoryId)),
+      right: withWorkspace(entry.right, sideById.get(entry.conflict.conflictingMemoryId)),
+    }));
+
     return {
       organizationId,
       now,
@@ -576,9 +649,10 @@ export class MissionControlService {
         missions: [...openReadings, ...failedReadings],
         jobs: ownJobs,
         denials,
-        conflicts,
+        conflicts: attentionConflicts,
         lessons: lessonsByWork(ownProposed, worksById),
         agentIds: new Set(agentsById.keys()),
+        authority,
       },
     };
   }
@@ -659,6 +733,14 @@ function acknowledged(work: WorkSummary, at: Date): boolean {
 
 function sideOf(memory: Memory | undefined): { id: MemoryId; title: string } | undefined {
   return memory ? { id: memory.id, title: clip(memory.title, 160) } : undefined;
+}
+
+function withWorkspace(
+  side: { id: MemoryId; title: string } | undefined,
+  memory: Memory | undefined,
+): { id: MemoryId; title: string; workspaceId?: WorkspaceId } | undefined {
+  if (!side) return undefined;
+  return memory?.workspaceId ? { ...side, workspaceId: memory.workspaceId } : side;
 }
 
 function signalOf(memory: Memory): KnowledgeSignal {

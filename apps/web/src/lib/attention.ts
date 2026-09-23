@@ -46,6 +46,11 @@ export function attentionTime(item: AttentionItem): string {
 export function summarizeAttention(items: AttentionItem[]): string {
   if (items.length === 0) return "Nothing needs your decision.";
 
+  // Entries stopped on somebody else are summarised as that rather than
+  // counted into the reader's own decisions and retries.
+  const others = items.filter((item) => item.actionable === false).length;
+  items = items.filter((item) => item.actionable !== false);
+
   const count = (...kinds: AttentionItem["kind"][]) =>
     items.filter((item) => kinds.includes(item.kind)).length;
 
@@ -66,6 +71,7 @@ export function summarizeAttention(items: AttentionItem[]): string {
   if (interrupted) parts.push(`${interrupted} to resume`);
   if (review) parts.push(`${review} to review`);
   if (recovering) parts.push(`${recovering} recovering`);
+  if (others) parts.push(`${others} on someone else`);
 
-  return parts.join(" · ");
+  return parts.length === 0 ? "Nothing needs your decision." : parts.join(" · ");
 }

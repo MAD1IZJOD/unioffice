@@ -444,4 +444,85 @@ describe("the Command Center", () => {
     expect(within(rows[2]!).getByText("Available")).toBeDefined();
     expect(within(rows[3]!).getByText("Paused")).toBeDefined();
   });
+  /* ------------------------------------------------------------------------
+     Entries that are not yours
+     ------------------------------------------------------------------------ */
+
+  it("shows an entry someone cannot act on as somebody else's, with no control offered", async () => {
+    renderPage(() => json(200, view({
+      summary: { running: 0, blocked: 1, needsYou: 0, finishedToday: 0, failedToday: 0, setAside: 0, total: 1 },
+      attention: {
+        items: [
+          item("approval:1", {
+            actionable: false,
+            handoff: "A policy stopped this step, so an owner or an admin decides it.",
+          }),
+        ],
+        actionCount: 0,
+        waitingOnOthersCount: 1,
+        reviewCount: 0,
+        watchCount: 0,
+        total: 1,
+      },
+    })));
+
+    const entry = await screen.findByRole("article", { name: "Send the announcement" });
+
+    expect(within(entry).getByText(/an owner or an admin decides it/)).toBeDefined();
+    expect(within(entry).queryByRole("link", { name: /Review/ })).toBeNull();
+    expect(within(entry).getByRole("link", { name: /Look at it/ })).toBeDefined();
+    expect(screen.getByRole("group", { name: "Stopped — waiting on someone else" })).toBeDefined();
+    expect(screen.queryByRole("group", { name: "Needs you" })).toBeNull();
+  });
+
+  it("keeps what is yours and what is somebody else's in separate bands", async () => {
+    renderPage(() => json(200, view({
+      summary: { running: 0, blocked: 2, needsYou: 1, finishedToday: 0, failedToday: 0, setAside: 0, total: 2 },
+      attention: {
+        items: [
+          item("approval:mine"),
+          item("conflict:theirs", {
+            kind: "conflict",
+            severity: "action",
+            source: "knowledge",
+            label: "Company knowledge disagrees",
+            action: { label: "Settle it", path: "/brain/k1" },
+            actionable: false,
+            handoff: "An owner or an admin settles what the company knows.",
+            workId: undefined,
+          }),
+        ],
+        actionCount: 1,
+        waitingOnOthersCount: 1,
+        reviewCount: 0,
+        watchCount: 0,
+        total: 2,
+      },
+    })));
+
+    const mine = await screen.findByRole("group", { name: "Needs you" });
+    const theirs = screen.getByRole("group", { name: "Stopped — waiting on someone else" });
+
+    expect(within(mine).getByRole("link", { name: /Review/ })).toBeDefined();
+    expect(within(theirs).queryByRole("link", { name: /Settle it/ })).toBeNull();
+    // Nothing to open either: this entry names no mission to look at.
+    expect(within(theirs).getByText(/An owner or an admin settles/)).toBeDefined();
+  });
+
+  it("an API that has not been told about this yet still offers every action", async () => {
+    renderPage(() => json(200, view({
+      summary: { running: 0, blocked: 1, needsYou: 1, finishedToday: 0, failedToday: 0, setAside: 0, total: 1 },
+      attention: {
+        items: [item("approval:1")],
+        actionCount: 1,
+        reviewCount: 0,
+        watchCount: 0,
+        total: 1,
+      },
+    })));
+
+    const entry = await screen.findByRole("article", { name: "Send the announcement" });
+
+    expect(within(entry).getByRole("link", { name: /Review/ })).toBeDefined();
+  });
 });

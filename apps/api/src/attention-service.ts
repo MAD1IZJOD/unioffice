@@ -5,6 +5,7 @@ import type {
   KnowledgeConflict,
   MemoryId,
   WorkId,
+  WorkspaceId,
 } from "@unioffice/core";
 
 import type { WorkSummary } from "@unioffice/database";
@@ -32,7 +33,48 @@ import { publicFailureReason } from "./public-failure.js";
  * queue until something about the mission changes, which is what lets the
  * queue genuinely empty - an attention list that can never be cleared becomes
  * a list nobody reads.
+ *
+ * And every entry is answered for the person reading it. Whether they may
+ * actually carry out the one thing the entry asks for is decided here, by the
+ * same permission rules the routes enforce, because a queue that offers a
+ * viewer an Approve button is not telling them what they need to do - it is
+ * telling them something untrue. An entry they cannot act on keeps its place
+ * and its explanation, and says plainly whose it is instead.
  */
+
+/**
+ * What acting on an entry asks of a person.
+ *
+ * An approval is its own kind because deciding one depends on more than a
+ * permission: a step a governance policy stopped is an owner's or an admin's
+ * to decide even when a member may decide ordinary steps.
+ */
+export type AttentionNeed =
+  | { of: "approval"; workspaceId?: WorkspaceId; governedByPolicy: boolean }
+  | {
+      of: "permission";
+      permission: "missions.operate" | "knowledge.curate" | "agents.configure";
+      workspaceId?: WorkspaceId;
+    };
+
+/** Allowed, or not and whose it is. One sentence, never a role name alone. */
+export type AttentionVerdict =
+  | { allowed: true }
+  | { allowed: false; handoff: string };
+
+/**
+ * Who the queue is being built for.
+ *
+ * The queue knows what each entry asks for; it does not know the caller. This
+ * is the one seam between them, so the shaping rules stay testable without a
+ * membership and the permission rules stay in one place.
+ */
+export interface AttentionAuthority {
+  decide(need: AttentionNeed): AttentionVerdict;
+}
+
+/** An authority that allows everything. Only ever correct for a test. */
+export const ALLOWS_EVERYTHING: AttentionAuthority = { decide: () => ({ allowed: true }) };
 
 export type AttentionKind =
   | "decision"
@@ -74,6 +116,14 @@ export interface AttentionItem {
   consequence: string;
   /** The one thing to do about it, and where that is done. */
   action: { label: string; path: string };
+  /**
+   * Whether this person may carry out that action. When false the action is
+   * still where it always was - a page they can read - but nothing on any
+   * surface may offer it to them as a control.
+   */
+  actionable: boolean;
+  /** When they may not act: whose this is. Absent when it is theirs. */
+  handoff?: string;
   /** Whether a person can mark it as seen. */
   acknowledgeable: boolean;
 
@@ -87,8 +137,14 @@ export interface AttentionItem {
 
 export interface AttentionQueue {
   items: AttentionItem[];
-  /** How many are stopped until a person acts. */
+  /**
+   * How many are stopped until this person acts. Entries stopped until
+   * somebody else acts are counted separately: a badge that told a viewer
+   * four things needed them would be counting other people's work.
+   */
   actionCount: number;
+  /** How many are stopped, but on somebody else. */
+  waitingOnOthersCount: number;
   /** How many a person should look at, with nothing blocked. */
   reviewCount: number;
   /** How many are the system telling you what it is doing. */
@@ -107,13 +163,15 @@ export interface AttentionInput {
   denials: Map<WorkId, { policyName?: string; summary?: string }>;
   conflicts: Array<{
     conflict: KnowledgeConflict;
-    left?: { id: MemoryId; title: string };
-    right?: { id: MemoryId; title: string };
+    left?: { id: MemoryId; title: string; workspaceId?: WorkspaceId };
+    right?: { id: MemoryId; title: string; workspaceId?: WorkspaceId };
   }>;
   /** Lessons each mission proposed that nobody has kept or discarded. */
   lessons: Array<{ workId: WorkId; count: number; at: Date }>;
   /** Agent ids that exist in the organization, for linking to them. */
   agentIds: Set<AgentId>;
+  /** Who this queue is for. Every entry's action is answered against it. */
+  authority: AttentionAuthority;
 }
 
 export const DEFAULT_ATTENTION_LIMIT = 25;
@@ -138,6 +196,14 @@ const KIND_RANK: Record<AttentionKind, number> = {
   recovering: 8,
 };
 
+/**
+ * An entry before it has been answered for anyone. `need` says what carrying
+ * out its action asks of a person; absent means the action is only navigation
+ * and asks nothing, which is why a retrying job never tells anybody that
+ * somebody else must handle it.
+ */
+type AttentionDraft = Omit<AttentionItem, "actionable" | "handoff"> & { need?: AttentionNeed };
+
 export function buildAttentionQueue(
   input: AttentionInput,
   limit = DEFAULT_ATTENTION_LIMIT,
@@ -148,14 +214,48 @@ export function buildAttentionQueue(
     ...input.jobs.flatMap((job) => recoveringItem(job, input.worksById.get(job.workId))),
     ...input.conflicts.flatMap(conflictItem),
     ...input.lessons.flatMap((entry) => lessonsItem(entry, input.worksById.get(entry.workId))),
-  ].sort(order);
+  ]
+    .map((draft) => answer(draft, input.authority))
+    .sort(order);
+
+  const stopped = items.filter((item) => item.severity === "action");
 
   return {
     items: items.slice(0, Math.max(0, limit)),
-    actionCount: items.filter((item) => item.severity === "action").length,
+    actionCount: stopped.filter((item) => item.actionable).length,
+    waitingOnOthersCount: stopped.filter((item) => !item.actionable).length,
     reviewCount: items.filter((item) => item.severity === "review").length,
     watchCount: items.filter((item) => item.severity === "watch").length,
     total: items.length,
+  };
+}
+
+/**
+ * One entry, answered for the person reading the queue.
+ *
+ * Marking a mission as seen is an operator's act as much as retrying it is,
+ * so it is withheld from anyone who may not operate missions there rather
+ * than offered and then refused by the route.
+ */
+function answer(draft: AttentionDraft, authority: AttentionAuthority): AttentionItem {
+  const { need, ...item } = draft;
+  const verdict = need ? authority.decide(need) : ({ allowed: true } as const);
+
+  if (verdict.allowed) {
+    return { ...item, actionable: true };
+  }
+
+  const operable = authority.decide({
+    of: "permission",
+    permission: "missions.operate",
+    workspaceId: need?.workspaceId,
+  });
+
+  return {
+    ...item,
+    actionable: false,
+    handoff: verdict.handoff,
+    acknowledgeable: item.acknowledgeable && operable.allowed,
   };
 }
 
@@ -183,8 +283,33 @@ function seen(work: WorkSummary, at: Date): boolean {
   return Boolean(work.acknowledgedAt && work.acknowledgedAt.getTime() >= at.getTime());
 }
 
-function decisionItem(approval: ApprovalRequest, work: WorkSummary | undefined): AttentionItem {
+/**
+ * Whether a governance policy is what stopped this step.
+ *
+ * Read from the approval alone. The task can also carry the policy that asked
+ * for it, and the task's own metadata is not loaded here - so a step governed
+ * only at the task level reads as an ordinary one, and a member is offered
+ * the review rather than told it is an owner's. The approval surface makes
+ * the real decision with the task in hand and refuses it there; nothing here
+ * ever grants anything.
+ */
+function governedByPolicy(approval: ApprovalRequest): boolean {
+  const metadata = approval.metadata;
+
+  return (
+    typeof metadata.policyId === "string" ||
+    typeof metadata.skill === "string" ||
+    Array.isArray(metadata.externalWrites)
+  );
+}
+
+function decisionItem(approval: ApprovalRequest, work: WorkSummary | undefined): AttentionDraft {
   return {
+    need: {
+      of: "approval",
+      workspaceId: work?.workspaceId,
+      governedByPolicy: governedByPolicy(approval),
+    },
     id: `approval:${approval.id}`,
     kind: "decision",
     severity: "action",
@@ -208,8 +333,15 @@ function missionItems(
   work: WorkSummary,
   reading: MissionReading,
   input: AttentionInput,
-): AttentionItem[] {
+): AttentionDraft[] {
+  // Every mission entry asks the same thing of a person: run, retry, resume
+  // or set aside the mission. That is one permission, in its workspace.
   const shared = {
+    need: {
+      of: "permission",
+      permission: "missions.operate",
+      workspaceId: work.workspaceId,
+    } as const satisfies AttentionNeed,
     workId: work.id,
     objective: clip(work.objective, 200),
   };
@@ -319,7 +451,7 @@ function missionItems(
  * A queued job that has already used an attempt is the queue picking a mission
  * back up - the one recovery the system performs by itself. It needs nobody.
  */
-function recoveringItem(job: ExecutionJob, work: WorkSummary | undefined): AttentionItem[] {
+function recoveringItem(job: ExecutionJob, work: WorkSummary | undefined): AttentionDraft[] {
   if (job.status !== "queued") return [];
   if (job.attempts === 0 && !job.lastError) return [];
 
@@ -346,12 +478,19 @@ function recoveringItem(job: ExecutionJob, work: WorkSummary | undefined): Atten
   }];
 }
 
-function conflictItem(entry: AttentionInput["conflicts"][number]): AttentionItem[] {
+function conflictItem(entry: AttentionInput["conflicts"][number]): AttentionDraft[] {
   // Both sides are read inside the organization; a side that could not be
   // read is not described with a guess.
   if (!entry.left || !entry.right) return [];
 
   return [{
+    need: {
+      of: "permission",
+      permission: "knowledge.curate",
+      // Both sides were already checked to be within reach; either names the
+      // workspace the settling would happen in.
+      workspaceId: entry.left.workspaceId ?? entry.right.workspaceId,
+    },
     id: `conflict:${entry.conflict.id}`,
     kind: "conflict",
     severity: "review",
@@ -369,10 +508,15 @@ function conflictItem(entry: AttentionInput["conflicts"][number]): AttentionItem
 function lessonsItem(
   entry: AttentionInput["lessons"][number],
   work: WorkSummary | undefined,
-): AttentionItem[] {
+): AttentionDraft[] {
   if (!work || entry.count === 0) return [];
 
   return [{
+    need: {
+      of: "permission",
+      permission: "knowledge.curate",
+      workspaceId: work.workspaceId,
+    },
     id: `lessons:${work.id}`,
     kind: "lessons",
     severity: "review",

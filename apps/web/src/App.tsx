@@ -283,7 +283,7 @@ export default function App() {
     );
 
     const decisions = attentionItems
-      .filter((item) => item.severity === "action")
+      .filter((item) => item.severity === "action" && item.actionable !== false)
       .map((item) => ({
         key: `attention:${item.id}`,
         label: item.label,
@@ -638,7 +638,10 @@ function AttentionPanel({
                     {item.severity === "review" && (
                       <span className="attention-item-tag">worth a look</span>
                     )}
-                    {item.consequence}
+                    {item.actionable === false && (
+                      <span className="attention-item-tag">not yours</span>
+                    )}
+                    {item.actionable === false ? item.handoff ?? item.consequence : item.consequence}
                   </span>
                 </span>
 

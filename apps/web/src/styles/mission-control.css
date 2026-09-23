@@ -109,6 +109,21 @@
   color: var(--red-ink);
 }
 
+/*
+ * Whose an entry is, when it is not yours.
+ *
+ * Quiet on purpose. It is not a warning - nothing is wrong - it is the queue
+ * being honest that this one is waiting on somebody with standing you do not
+ * have, so you can stop looking for a button that was never going to be there.
+ */
+.needs-handoff {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-style: italic;
+}
+
 .needs-error {
   display: block;
   margin-top: 6px;

@@ -4,7 +4,7 @@ import test from "node:test";
 import type { KnowledgeConflictId } from "@unioffice/core";
 
 import { MissionNotFoundError, MissionStateError } from "./mission-control-service.js";
-import { missionControlFixture, orgA, orgB } from "./mission-control.fixture.js";
+import { asOwner, missionControlFixture, orgA, orgB } from "./mission-control.fixture.js";
 import { MODEL_UNAVAILABLE_REASON } from "./public-failure.js";
 
 /**
@@ -16,7 +16,7 @@ import { MODEL_UNAVAILABLE_REASON } from "./public-failure.js";
 test("an empty company reads as empty, not as broken", async () => {
   const { service } = missionControlFixture();
 
-  const view = await service.getMissionControl(orgA);
+  const view = await service.getMissionControl(orgA, asOwner);
 
   assert.deepEqual(view.running, []);
   assert.deepEqual(view.blocked, []);
@@ -38,7 +38,7 @@ test("a running mission shows its current step, its team, its progress and its l
   f.event({ type: "agent.assigned", workId: mission.id, timestamp: f.ago(0.5) });
   f.event({ type: "task.started", workId: mission.id, taskId: draft.id, agentId: harvey.id, payload: { title: "Draft the review" }, timestamp: f.ago(1) });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
 
   assert.equal(view.running.length, 1);
   const [card] = view.running;
@@ -65,7 +65,7 @@ test("a queued mission a worker has not reached yet is waiting, and one no worke
   f.task(forgotten, "Step", { updatedAt: f.ago(120) });
   f.job(forgotten, { updatedAt: f.ago(120) });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
 
   assert.deepEqual(view.running.map((card) => [card.objective, card.phase, card.stage]), [["Fresh on the queue", "queued", "Waiting for a worker"]]);
   assert.deepEqual(view.blocked.map((card) => [card.objective, card.phase, card.blocked?.reason]), [
@@ -91,7 +91,7 @@ test("every way a mission can stop moving without telling anyone is named for wh
   const retrying = f.work("Retrying", { status: "executing", updatedAt: f.ago(50) });
   f.job(retrying, { attempts: 1, lastError: "Ollama request failed (500): {\"error\":\"llama-server\"}", updatedAt: f.ago(50) });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
   const reasons = Object.fromEntries(view.blocked.map((card) => [card.objective, card.blocked?.reason]));
 
   assert.deepEqual(reasons, {
@@ -116,7 +116,7 @@ test("a mission waiting for a decision is blocked on that decision, and the deci
   f.approval(mission, step, { reason: "This contacts every customer." });
   f.work("Stopped earlier", { status: "failed", completedAt: f.ago(5), updatedAt: f.ago(5), metadata: { executionError: "Task failed: Draft" } });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
 
   assert.deepEqual(view.blocked.map((card) => [card.phase, card.stage, card.blocked]), [
     ["waiting_approval", "Waiting for a decision on “Send the announcement”", { kind: "approval", reason: "This contacts every customer." }],
@@ -153,7 +153,7 @@ test("a failure is shown with a reason a person can read, and a policy stop name
     timestamp: f.ago(2),
   });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
   const items = new Map(view.attention.items.map((item) => [item.workId, item]));
 
   assert.equal(items.get(crashed.id)!.detail, MODEL_UNAVAILABLE_REASON);
@@ -176,7 +176,7 @@ test("a step assigned to an agent who cannot work is the obstacle named, with th
   f.task(mission, "Interview customers", { status: "ready", assignedAgentId: rhea.id, updatedAt: f.ago(2) });
   f.job(mission, { status: "queued", updatedAt: f.ago(2) });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
 
   assert.equal(view.blocked[0]!.blocked?.kind, "agent_unavailable");
   assert.equal(view.blocked[0]!.blocked?.reason, "“Interview customers” is assigned to Rhea, who is paused.");
@@ -193,13 +193,13 @@ test("marking a stalled mission as seen clears it from the queue until something
   const f = missionControlFixture();
   const stale = f.work("A test left behind", { status: "queued", updatedAt: f.ago(600) });
 
-  const before = await f.service.getMissionControl(orgA);
+  const before = await f.service.getMissionControl(orgA, asOwner);
   assert.equal(before.summary.blocked, 1);
 
   const result = await f.service.acknowledge(orgA, stale.id, "user:1db667b1-3bd4-4d64-a7e4-dd5a5f2f4b09");
   assert.deepEqual(result.acknowledgedAt, f.now);
 
-  const after = await f.service.getMissionControl(orgA);
+  const after = await f.service.getMissionControl(orgA, asOwner);
   assert.equal(after.attention.total, 0);
   assert.equal(after.summary.blocked, 0);
   assert.equal(after.summary.setAside, 1);
@@ -215,7 +215,7 @@ test("marking a stalled mission as seen clears it from the queue until something
 
   // The mission moves and then stops again: that is new, so it is raised again.
   row.updatedAt = new Date(f.now.getTime() + 60_000);
-  const later = await f.service.getAttention(orgA);
+  const later = await f.service.getAttention(orgA, asOwner);
   assert.equal(later.total, 0, "not yet stalled again");
 });
 
@@ -224,12 +224,12 @@ test("a failure marked as seen comes back if the mission fails again after it", 
   const mission = f.work("Flaky", { status: "failed", completedAt: f.ago(30), updatedAt: f.ago(30), metadata: { executionError: "Task failed: Step" } });
 
   await f.service.acknowledge(orgA, mission.id, "user:x");
-  assert.equal((await f.service.getAttention(orgA)).total, 0);
+  assert.equal((await f.service.getAttention(orgA, asOwner)).total, 0);
 
   const row = f.works.find((entry) => entry.id === mission.id)!;
   row.completedAt = new Date(f.now.getTime() + 5 * 60_000);
 
-  assert.equal((await f.service.getAttention(orgA)).items[0]?.kind, "failure");
+  assert.equal((await f.service.getAttention(orgA, asOwner)).items[0]?.kind, "failure");
 });
 
 test("only a mission that is genuinely not moving can be marked as seen, and never another organization's", async () => {
@@ -268,7 +268,7 @@ test("recent outcomes are business outcomes: completions carry their artifacts, 
   f.event({ type: "knowledge.approved", payload: { title: "Launches need legal sign-off", knowledgeId }, timestamp: f.ago(1) });
   f.event({ type: "tool.completed", workId: busy.id, payload: { toolId: "calculator", input: "SECRET-INPUT", output: "SECRET-OUTPUT" }, timestamp: f.ago(0.5) });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
 
   assert.deepEqual(
     view.outcomes.map((outcome) => [outcome.kind, outcome.text, outcome.note ?? null, outcome.path ?? null]),
@@ -301,7 +301,7 @@ test("company signals are short: recent decisions and lessons, what awaits a dec
     detectedAt: f.ago(2),
   });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
 
   assert.deepEqual(view.signals.decisions.map((signal) => signal.title), ["Starter stays at 99"]);
   assert.deepEqual(view.signals.lessons.map((signal) => [signal.title, signal.status]), [["Churn peaks in month two", "proposed"]]);
@@ -326,7 +326,7 @@ test("a problem on a critical mission is a critical problem, and ranks first", a
   f.work("Ordinary failure", { status: "failed", completedAt: f.ago(1), updatedAt: f.ago(1), metadata: { executionError: "Task failed: A" } });
   f.work("Critical stall", { status: "queued", priority: "critical", updatedAt: f.ago(300) });
 
-  const { items } = await f.service.getAttention(orgA);
+  const { items } = await f.service.getAttention(orgA, asOwner);
 
   assert.deepEqual(items.map((item) => [item.objective, item.level]), [["Critical stall", "critical"], ["Ordinary failure", "high"]]);
 });
@@ -343,7 +343,7 @@ test("nothing from another organization appears anywhere, however it is related"
   await f.memory({ organizationId: orgB, type: "decision", title: "THEIR-DECISION" });
   await f.memory({ organizationId: orgB, status: "proposed", title: "THEIR-LESSON", workId: theirs.id });
 
-  const view = await f.service.getMissionControl(orgA);
+  const view = await f.service.getMissionControl(orgA, asOwner);
 
   assert.doesNotMatch(JSON.stringify(view), /THEIR-|Outsider/);
   assert.equal(view.attention.total, 0);

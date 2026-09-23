@@ -9,11 +9,16 @@ import type {
   ExecutionJobId,
   Memory,
   MemoryId,
+  MemberId,
   OrganizationId,
+  OrganizationRole,
   Task,
   TaskId,
+  UserId,
   Work,
   WorkId,
+  WorkspaceAccessLevel,
+  WorkspaceId,
 } from "@unioffice/core";
 
 import {
@@ -21,8 +26,9 @@ import {
   InMemoryOperationalReadRepository,
 } from "@unioffice/database";
 
+import type { Access } from "./access/permissions.js";
 import { EventRecorder } from "./event-recorder.js";
-import { MissionControlService } from "./mission-control-service.js";
+import { attentionAuthorityFor, MissionControlService } from "./mission-control-service.js";
 
 /**
  * A company, in memory, for Mission Control tests.
@@ -36,6 +42,33 @@ export const orgA = "2f6b579a-f0f8-45a5-868a-21c08bde1314" as OrganizationId;
 export const orgB = "bbbbbbbb-0000-4000-8000-000000000002" as OrganizationId;
 
 export const STALLED_AFTER_MS = 15 * 60_000;
+
+/**
+ * Who is asking.
+ *
+ * Mission Control answers every entry's action for one person, so a test has
+ * to say who that is. The attention authority is the production one, built
+ * from a membership exactly as the routes build it, so a test that says
+ * "a viewer" is exercising the rules a viewer really meets.
+ */
+export function asRole(
+  role: OrganizationRole,
+  workspaces: ReadonlyMap<WorkspaceId, WorkspaceAccessLevel> = new Map(),
+): { authority: ReturnType<typeof attentionAuthorityFor> } {
+  const access: Access = {
+    userId: "11111111-0000-4000-8000-000000000001" as UserId,
+    email: "someone@example.com",
+    organizationId: orgA,
+    memberId: "22222222-0000-4000-8000-000000000002" as MemberId,
+    role,
+    workspaces,
+  };
+
+  return { authority: attentionAuthorityFor(access) };
+}
+
+/** The common case: someone who may do everything these surfaces offer. */
+export const asOwner = asRole("owner");
 
 export function missionControlFixture() {
   const now = new Date();

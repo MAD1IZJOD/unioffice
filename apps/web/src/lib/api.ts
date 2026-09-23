@@ -909,6 +909,16 @@ export interface AttentionItem {
   consequence: string;
   /** The one thing to do about it, and where it is done. */
   action: { label: string; path: string };
+  /**
+   * Whether this person may carry that out. The server decides it from their
+   * membership; no surface offers the control when it is false.
+   *
+   * Absent from an API that predates it, which is read as yes so the page
+   * behaves exactly as it did before rather than going inert.
+   */
+  actionable?: boolean;
+  /** When they may not act: whose it is. One sentence, in plain words. */
+  handoff?: string;
   /** Whether a person can mark it as seen. */
   acknowledgeable: boolean;
   workId?: string;
@@ -920,8 +930,10 @@ export interface AttentionItem {
 
 export interface AttentionQueue {
   items: AttentionItem[];
-  /** Stopped until a person acts. */
+  /** Stopped until this person acts. */
   actionCount: number;
+  /** Stopped, but on somebody else. */
+  waitingOnOthersCount?: number;
   /** Worth a person's look; nothing is blocked. */
   reviewCount: number;
   /** The system saying what it is handling itself. */
