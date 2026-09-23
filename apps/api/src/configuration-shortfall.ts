@@ -31,7 +31,16 @@ const MAX_TOOLS = 6;
 const NO_TOOL_AUTHORIZATION =
   /^No eligible agent is authorized for the required tool\(s\):\s*(.+?)\.?$/i;
 
-const NO_AGENT_AVAILABLE = /^No active agent is available\b/i;
+/*
+ * Two spellings, because a mission that stopped is kept forever and the
+ * sentence that stopped it was written by whichever build was running that
+ * day. "No eligible agents available" is what an earlier delegator wrote and
+ * no current code produces; missions carrying it are still in the store, and
+ * dropping it would leave those pointing a person at the mission room for
+ * good. Both are exact - neither is a loose match on the words "agent" and
+ * "available".
+ */
+const NO_AGENT_AVAILABLE = /^No (?:active agent is|eligible agents) available\b/i;
 
 /**
  * The shortfall a stop reason describes, or null when it describes anything

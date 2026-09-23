@@ -32,12 +32,22 @@ test("a company with nobody in it reads as having no workforce, not as a tool pr
   assert.deepEqual(configurationShortfall(reason), { kind: "workforce" });
 });
 
+test("the sentence an earlier delegator wrote is still recognized", () => {
+  // Missions that stopped 18 days ago are still in the store carrying it.
+  const reason = publicFailureReason("No eligible agents available for task: 7d82be15-57a5-4588-8608-76b7caf6190f");
+
+  assert.equal(reason, "No eligible agents available.");
+  assert.deepEqual(configurationShortfall(reason), { kind: "workforce" });
+});
+
 test("an ordinary failure is not a setup problem", () => {
   for (const reason of [
     "The local model was unavailable when this ran.",
     "The company's records could not be read or written at that moment.",
     "The step returned nothing usable.",
     "A rule refused the step.",
+    "No agents were available to review the figures.",
+    "The eligible agents available to this workspace all declined.",
     undefined,
     "",
   ]) {
