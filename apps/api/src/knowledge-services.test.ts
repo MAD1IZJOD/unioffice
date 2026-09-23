@@ -665,3 +665,82 @@ test("derived knowledge keeps the artifact it came from", async () => {
   assert.equal(detail.provenance.artifact?.name, "Pricing analysis");
   assert.equal(detail.provenance.mission?.id, "w-art");
 });
+
+/* --------------------------------------------------------------------------
+   Contested knowledge in search results
+   -------------------------------------------------------------------------- */
+
+test("knowledge the company is still arguing about is marked in search results", async () => {
+  const { brain, store } = setup();
+  const older = await write(brain, orgA, {
+    title: "Enterprise pricing is $100,000 a year",
+    content: "The pricing review set enterprise pricing at $100,000 a year.",
+  });
+  const newer = await write(brain, orgA, {
+    title: "Enterprise pricing is $120,000 a year",
+    content: "The sales analysis found enterprise pricing at $120,000 a year.",
+  });
+  const settled = await write(brain, orgA, {
+    title: "Enterprise contracts run for a minimum of 12 months",
+    content: "Enterprise contracts have a twelve month minimum term.",
+  });
+
+  // Detected on the way in: two different amounts for the same subject.
+  const open = await store.findConflicts(orgA, { status: "open" });
+  assert.equal(open.length, 1);
+
+  const recent = await brain.search(orgA, {});
+  const disputed = new Map(recent.items.map((item) => [item.knowledge.id, item.disputed]));
+
+  assert.equal(disputed.get(older.id), true, "both sides are contested, not only the older one");
+  assert.equal(disputed.get(newer.id), true);
+  assert.equal(disputed.get(settled.id), false);
+});
+
+test("a disagreement that has been settled stops marking either side", async () => {
+  const { brain, store } = setup();
+  const left = await write(brain, orgA, {
+    title: "Enterprise pricing is $100,000 a year",
+    content: "The pricing review set enterprise pricing at $100,000 a year.",
+  });
+  const right = await write(brain, orgA, {
+    title: "Enterprise pricing is $120,000 a year",
+    content: "The sales analysis found enterprise pricing at $120,000 a year.",
+  });
+
+  // Writing the second one detects the disagreement by itself, which is
+  // also why creating it here by hand would come back as a duplicate.
+  const [conflict] = await store.findConflicts(orgA, { status: "open" });
+  assert.ok(conflict, "writing two different amounts for one subject raises a disagreement");
+  assert.deepEqual([conflict.memoryId, conflict.conflictingMemoryId].sort(), [left.id, right.id].sort());
+
+  await brain.resolveConflict(orgA, conflict.id, { kind: "keep", keepId: right.id }, "user:test");
+
+  const recent = await brain.search(orgA, {});
+
+  assert.deepEqual(recent.items.map((item) => item.disputed).filter(Boolean), []);
+});
+
+test("another organization's disagreement never marks this one's knowledge", async () => {
+  const { brain, store } = setup();
+  const ours = await write(brain, orgA);
+  const theirs = await write(brain, orgB, {
+    title: "Starter pricing is $129 per month",
+    content: "Org B charges $129 per month for Starter pricing.",
+  });
+
+  await store.createConflict({
+    id: crypto.randomUUID() as KnowledgeConflictId,
+    organizationId: orgB,
+    memoryId: theirs.id,
+    conflictingMemoryId: theirs.id,
+    reason: "Manufactured, to prove it never crosses the boundary.",
+    signals: {},
+    status: "open",
+    detectedAt: new Date(),
+  });
+
+  const recent = await brain.search(orgA, {});
+
+  assert.equal(recent.items.find((item) => item.knowledge.id === ours.id)?.disputed, false);
+});

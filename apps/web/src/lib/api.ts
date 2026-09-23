@@ -114,6 +114,12 @@ export interface KnowledgeSearchResult {
   ageDays: number;
   /** The text is phrased as instructions to an AI. */
   flagged: boolean;
+  /**
+   * Another piece of company knowledge disagrees with this one and nobody
+   * has settled it. Absent from an older API, which is read as not disputed
+   * rather than as unknown.
+   */
+  disputed?: boolean;
 }
 
 export interface KnowledgeSearchResponse {

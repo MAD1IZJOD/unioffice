@@ -441,6 +441,13 @@
   color: var(--red-ink);
 }
 
+/* Contested, not wrong. Amber rather than red: the company holds this and
+   also holds something that disagrees with it, which is a thing to know
+   before acting on it, not a fault in the entry. */
+.knowledge-marker-disputed {
+  color: var(--warning-muted);
+}
+
 .knowledge-row-actions {
   display: flex;
   gap: 6px;

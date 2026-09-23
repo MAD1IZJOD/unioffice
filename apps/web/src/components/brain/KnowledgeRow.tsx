@@ -36,7 +36,7 @@ export function KnowledgeRow({
   actions,
 }: {
   item: KnowledgeItem;
-  result?: Pick<KnowledgeSearchResult, "relevance" | "reasons" | "stale" | "flagged">;
+  result?: Pick<KnowledgeSearchResult, "relevance" | "reasons" | "stale" | "flagged" | "disputed">;
   index?: number;
   animate?: boolean;
   workspaceName?: string;
@@ -109,6 +109,13 @@ export function KnowledgeRow({
 
           {result?.flagged && (
             <span className="knowledge-marker knowledge-marker-flag">instruction-shaped text</span>
+          )}
+
+          {/* A contested entry looks exactly like a settled one otherwise,
+              and somebody reading a search result rarely goes on to check
+              the Brain's list of disagreements before acting on it. */}
+          {result?.disputed && (
+            <span className="knowledge-marker knowledge-marker-disputed">disputed</span>
           )}
 
           {actions && <span className="knowledge-row-actions">{actions}</span>}

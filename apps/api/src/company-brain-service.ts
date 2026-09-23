@@ -96,6 +96,17 @@ export interface KnowledgeSearchResult {
   stale: boolean;
   ageDays: number;
   flagged: boolean;
+  /**
+   * Another piece of company knowledge disagrees with this one, and nobody
+   * has settled it.
+   *
+   * Worth saying on the row itself rather than only on the entry. The Brain
+   * already lists open disagreements, but somebody searching for what the
+   * company thinks about pricing reads the result, acts on it, and never
+   * visits that list. A current fact and a contested one look identical
+   * until this says otherwise.
+   */
+  disputed: boolean;
 }
 
 export interface CreateKnowledgeInput {
@@ -138,6 +149,9 @@ const MAX_CONTENT_CHARS = 4_000;
 const MAX_PAGE = 50;
 const MAX_OFFSET = 1_000;
 
+/** Open disagreements read in one query, to mark the rows a page shows. */
+const OPEN_CONFLICTS_READ = 200;
+
 export class CompanyBrainService {
   constructor(
     private readonly memories: MemoryRepository & KnowledgeSearchRepository,
@@ -165,6 +179,11 @@ export class CompanyBrainService {
     if (input.workspaceId) {
       await this.requireWorkspace(organizationId, input.workspaceId);
     }
+
+    // One bounded read for the whole page rather than one per result. A
+    // failure here costs the disputed marks and nothing else: a search that
+    // cannot be run at all is worse than one that cannot mark a row.
+    const disputed = await this.disputedIds(organizationId);
 
     const limit = Math.min(Math.max(input.limit ?? 20, 1), MAX_PAGE);
     const offset = Math.min(Math.max(input.offset ?? 0, 0), MAX_OFFSET);
@@ -197,6 +216,7 @@ export class CompanyBrainService {
             stale: freshness.stale,
             ageDays: freshness.ageDays,
             flagged: detectInstructionSignals(`${knowledge.title}\n${knowledge.content}`).length > 0,
+            disputed: disputed.has(knowledge.id),
           };
         }),
       };
@@ -233,8 +253,35 @@ export class CompanyBrainService {
         stale: entry.stale,
         ageDays: entry.ageDays,
         flagged: detectInstructionSignals(`${entry.memory.title}\n${entry.memory.content}`).length > 0,
+        disputed: disputed.has(entry.memory.id),
       })),
     };
+  }
+
+  /**
+   * Every piece of knowledge that is on one side of an unsettled
+   * disagreement.
+   *
+   * One read, bounded. A company with more open disagreements than this has a
+   * problem a search result's marking will not solve, and the ones it does
+   * mark are still correctly marked.
+   */
+  private async disputedIds(organizationId: OrganizationId): Promise<Set<MemoryId>> {
+    try {
+      const open = await this.links.findConflicts(organizationId, {
+        status: "open",
+        limit: OPEN_CONFLICTS_READ,
+      });
+
+      return new Set(
+        open
+          .filter((conflict) => conflict.organizationId === organizationId)
+          .flatMap((conflict) => [conflict.memoryId, conflict.conflictingMemoryId]),
+      );
+    } catch {
+      // Searching still works; the rows simply go unmarked.
+      return new Set();
+    }
   }
 
   /** The Brain's opening: what the company knows, learned, uses and disputes. */
