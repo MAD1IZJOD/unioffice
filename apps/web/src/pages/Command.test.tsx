@@ -525,4 +525,37 @@ describe("the Command Center", () => {
 
     expect(within(entry).getByRole("link", { name: /Review/ })).toBeDefined();
   });
+  it("names a setup problem as one, and sends the person where the fix is", async () => {
+    renderPage(() => json(200, view({
+      summary: { running: 0, blocked: 1, needsYou: 1, finishedToday: 0, failedToday: 1, setAside: 0, total: 1 },
+      attention: {
+        items: [
+          item("configuration:w1", {
+            kind: "configuration",
+            source: "workforce",
+            label: "Nobody is set up to use the calculator",
+            detail: "No eligible agent is authorized for the required tool(s): calculator.",
+            consequence: "Every mission needing this stops the same way. Grant it to an agent, then retry the mission.",
+            action: { label: "Set up the workforce", path: "/workforce" },
+            acknowledgeable: true,
+            workId: "w1",
+            objective: "Work out the quarterly burn",
+          }),
+        ],
+        actionCount: 1,
+        waitingOnOthersCount: 0,
+        reviewCount: 0,
+        watchCount: 0,
+        total: 1,
+      },
+    })));
+
+    const entry = await screen.findByRole("article", { name: "Nobody is set up to use the calculator" });
+
+    expect(within(entry).getByRole("link", { name: /Set up the workforce/ })).toHaveProperty(
+      "pathname",
+      "/workforce",
+    );
+    expect(within(entry).getByText(/Grant it to an agent, then retry/)).toBeDefined();
+  });
 });

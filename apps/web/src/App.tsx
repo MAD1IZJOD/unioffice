@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   UserX,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
 
@@ -54,6 +55,7 @@ import { profileOf } from "./lib/workforce";
 const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   decision: ShieldAlert,
   governance: Scale,
+  configuration: Wrench,
   failure: CircleAlert,
   stalled: Clock,
   agent_unavailable: UserX,

@@ -8,6 +8,7 @@ import {
   Scale,
   ShieldAlert,
   UserX,
+  Wrench,
   Zap,
 } from "lucide-react";
 
@@ -76,6 +77,7 @@ import { SignalField } from "../components/SignalField";
 const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   decision: ShieldAlert,
   governance: Scale,
+  configuration: Wrench,
   failure: CircleAlert,
   stalled: Clock,
   agent_unavailable: UserX,

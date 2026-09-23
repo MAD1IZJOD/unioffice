@@ -19,6 +19,7 @@ export function attentionTone(item: AttentionItem): Tone {
       return "warning";
     case "failure":
     case "governance":
+    case "configuration":
     case "stalled":
     case "agent_unavailable":
       // Red is for things that will not resolve themselves.
@@ -59,6 +60,7 @@ export function summarizeAttention(items: AttentionItem[]): string {
   const decisions = count("decision");
   const stopped = count("failure", "governance");
   const stalled = count("stalled");
+  const setup = count("configuration");
   const agents = count("agent_unavailable");
   const interrupted = count("interrupted");
   const review = count("conflict", "lessons");
@@ -67,6 +69,7 @@ export function summarizeAttention(items: AttentionItem[]): string {
   if (decisions) parts.push(`${decisions} ${decisions === 1 ? "decision" : "decisions"}`);
   if (stopped) parts.push(`${stopped} stopped`);
   if (stalled) parts.push(`${stalled} stalled`);
+  if (setup) parts.push(`${setup} not set up`);
   if (agents) parts.push(`${agents} blocked on an agent`);
   if (interrupted) parts.push(`${interrupted} to resume`);
   if (review) parts.push(`${review} to review`);

@@ -310,7 +310,8 @@ test("a mission entry asks to operate missions, in the mission's own workspace",
     authority: { decide: (need) => { needs.push(need); return { allowed: true }; } },
   });
 
-  assert.deepEqual(needs, [{ of: "permission", permission: "missions.operate", workspaceId: finance }]);
+  // The second is the queue asking whether they may also set it aside.
+  assert.deepEqual(needs[0], { of: "permission", permission: "missions.operate", workspaceId: finance });
 });
 
 test("settling what the company knows is asked of knowledge, not of missions", () => {
@@ -334,7 +335,7 @@ test("settling what the company knows is asked of knowledge, not of missions", (
     authority: { decide: (need) => { needs.push(need); return { allowed: true }; } },
   });
 
-  assert.deepEqual(needs, [{ of: "permission", permission: "knowledge.curate", workspaceId: undefined }]);
+  assert.deepEqual(needs[0], { of: "permission", permission: "knowledge.curate", workspaceId: undefined });
 });
 
 test("someone who may run missions but not curate knowledge is told which is theirs", () => {
@@ -372,4 +373,109 @@ test("a job the system is retrying asks nothing of anybody, whoever is reading",
   assert.equal(result.items[0]?.kind, "recovering");
   assert.equal(result.items[0]?.actionable, true);
   assert.equal(result.items[0]?.handoff, undefined, "nothing is waiting on a person, so nobody is named");
+});
+
+/* --------------------------------------------------------------------------
+   The company not being set up
+   -------------------------------------------------------------------------- */
+
+test("a mission nobody is authorized to do is a setup problem, not a mission problem", () => {
+  const result = queue({
+    works: [summary("w1", {
+      status: "failed",
+      completedAt: minutesAgo(5),
+      executionError: "No eligible agent is authorized for the required tool(s): calculator (task: 7f9c2b10-0000-4000-8000-00000000000a)",
+    })],
+  });
+
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0]?.kind, "configuration");
+  assert.equal(result.items[0]?.source, "workforce");
+  assert.equal(result.items[0]?.label, "Nobody is set up to use the calculator");
+  assert.deepEqual(result.items[0]?.action, { label: "Set up the workforce", path: "/workforce" });
+  assert.match(result.items[0]?.consequence ?? "", /Every mission needing this stops the same way/);
+});
+
+test("a company with nobody in it is told that, rather than shown a tool it lacks", () => {
+  const result = queue({
+    works: [summary("w1", {
+      status: "failed",
+      completedAt: minutesAgo(5),
+      executionError: "No active agent is available for task: 7f9c2b10-0000-4000-8000-00000000000a",
+    })],
+  });
+
+  assert.equal(result.items[0]?.kind, "configuration");
+  assert.equal(result.items[0]?.label, "Nobody is set up to do this work");
+  assert.match(result.items[0]?.consequence ?? "", /until somebody works here/);
+});
+
+test("an ordinary stop is still an ordinary stop, pointing at the mission", () => {
+  const result = queue({
+    works: [summary("w1", {
+      status: "failed",
+      completedAt: minutesAgo(5),
+      executionError: "llama-server process has terminated: exit status 1",
+    })],
+  });
+
+  assert.equal(result.items[0]?.kind, "failure");
+  assert.deepEqual(result.items[0]?.action, { label: "Inspect", path: "/missions/w1" });
+});
+
+test("a step a policy stopped stays a governance problem even when a tool is named", () => {
+  const result = queue({
+    works: [summary("w1", {
+      status: "failed",
+      completedAt: minutesAgo(5),
+      executionError: "No eligible agent is authorized for the required tool(s): calculator",
+    })],
+    denials: new Map([["w1" as WorkId, { policyName: "Spending rule", summary: "Payments need a person." }]]),
+  });
+
+  assert.equal(result.items[0]?.kind, "governance");
+});
+
+test("a setup problem asks to configure agents, not to run missions", () => {
+  const needs: Array<Record<string, unknown>> = [];
+
+  queue({
+    works: [summary("w1", {
+      status: "failed",
+      completedAt: minutesAgo(5),
+      executionError: "No eligible agent is authorized for the required tool(s): calculator",
+    })],
+    authority: { decide: (need) => { needs.push(need); return { allowed: true }; } },
+  });
+
+  assert.ok(needs.some((need) => need.permission === "agents.configure"));
+});
+
+test("a setup problem outranks an ordinary failure, because fixing it clears more than one", () => {
+  const result = queue({
+    works: [
+      summary("plain", { status: "failed", completedAt: minutesAgo(1), executionError: "It threw." }),
+      summary("setup", {
+        status: "failed",
+        completedAt: minutesAgo(90),
+        executionError: "No eligible agent is authorized for the required tool(s): calculator",
+      }),
+    ],
+  });
+
+  assert.deepEqual(result.items.map((item) => item.kind), ["configuration", "failure"]);
+});
+
+test("someone who may run missions but not configure agents is told whose setup problem it is", () => {
+  const result = queue({
+    works: [summary("w1", {
+      status: "failed",
+      completedAt: minutesAgo(5),
+      executionError: "No eligible agent is authorized for the required tool(s): calculator",
+    })],
+    authority: allowsAllBut("agents.configure"),
+  });
+
+  assert.equal(result.items[0]?.actionable, false);
+  assert.equal(result.items[0]?.acknowledgeable, true, "they may still set the mission aside");
 });

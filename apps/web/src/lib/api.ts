@@ -721,6 +721,8 @@ export interface AgentPresenceSummary extends AgentSummary {
 export type AttentionKind =
   | "decision"
   | "governance"
+  /** The company is not set up to do the work, not the mission's own fault. */
+  | "configuration"
   | "failure"
   | "stalled"
   | "agent_unavailable"

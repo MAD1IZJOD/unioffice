@@ -157,8 +157,13 @@ test("a failure is shown with a reason a person can read, and a policy stop name
   const items = new Map(view.attention.items.map((item) => [item.workId, item]));
 
   assert.equal(items.get(crashed.id)!.detail, MODEL_UNAVAILABLE_REASON);
-  assert.equal(items.get(unroutable.id)!.label, "Planning failed");
-  assert.equal(items.get(unroutable.id)!.source, "planning");
+  // A step nobody may run is the company not being set up, so it is filed
+  // against the workforce and points at where that is changed - not at the
+  // mission, where retrying would stop in exactly the same place.
+  assert.equal(items.get(unroutable.id)!.kind, "configuration");
+  assert.equal(items.get(unroutable.id)!.label, "Nobody is set up to use the calculator");
+  assert.equal(items.get(unroutable.id)!.source, "workforce");
+  assert.equal(items.get(unroutable.id)!.action.path, "/workforce");
   assert.equal(items.get(unroutable.id)!.detail, "No eligible agent is authorized for the required tool(s): calculator.");
   assert.equal(items.get(denied.id)!.kind, "governance");
   assert.equal(items.get(denied.id)!.label, "Stopped by No external spend");

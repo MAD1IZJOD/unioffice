@@ -10,6 +10,7 @@ import type {
 
 import type { WorkSummary } from "@unioffice/database";
 
+import { configurationShortfall } from "./configuration-shortfall.js";
 import { clip, plural, type MissionReading } from "./mission-reading.js";
 import { publicFailureReason } from "./public-failure.js";
 
@@ -79,6 +80,7 @@ export const ALLOWS_EVERYTHING: AttentionAuthority = { decide: () => ({ allowed:
 export type AttentionKind =
   | "decision"
   | "governance"
+  | "configuration"
   | "failure"
   | "stalled"
   | "agent_unavailable"
@@ -188,12 +190,15 @@ const KIND_RANK: Record<AttentionKind, number> = {
   decision: 0,
   agent_unavailable: 1,
   governance: 2,
-  failure: 3,
-  stalled: 4,
-  interrupted: 5,
-  conflict: 6,
-  lessons: 7,
-  recovering: 8,
+  // Above an ordinary failure: it is the one stop that will happen again to
+  // every mission needing the same thing, so fixing it clears more than one.
+  configuration: 3,
+  failure: 4,
+  stalled: 5,
+  interrupted: 6,
+  conflict: 7,
+  lessons: 8,
+  recovering: 9,
 };
 
 /**
@@ -241,22 +246,19 @@ function answer(draft: AttentionDraft, authority: AttentionAuthority): Attention
   const { need, ...item } = draft;
   const verdict = need ? authority.decide(need) : ({ allowed: true } as const);
 
-  if (verdict.allowed) {
-    return { ...item, actionable: true };
-  }
+  // Setting an entry aside is an operator's act whatever the entry itself
+  // asks for: someone who may grant an agent a tool is not thereby someone
+  // who may declare a mission's problem seen.
+  const acknowledgeable = item.acknowledgeable &&
+    authority.decide({
+      of: "permission",
+      permission: "missions.operate",
+      workspaceId: need?.workspaceId,
+    }).allowed;
 
-  const operable = authority.decide({
-    of: "permission",
-    permission: "missions.operate",
-    workspaceId: need?.workspaceId,
-  });
-
-  return {
-    ...item,
-    actionable: false,
-    handoff: verdict.handoff,
-    acknowledgeable: item.acknowledgeable && operable.allowed,
-  };
+  return verdict.allowed
+    ? { ...item, acknowledgeable, actionable: true }
+    : { ...item, acknowledgeable, actionable: false, handoff: verdict.handoff };
 }
 
 function order(left: AttentionItem, right: AttentionItem): number {
@@ -272,6 +274,16 @@ function order(left: AttentionItem, right: AttentionItem): number {
 /** A problem on a critical mission is a critical problem. */
 function levelFor(base: AttentionLevel, work: WorkSummary | undefined): AttentionLevel {
   return work?.priority === "critical" && LEVEL_RANK[base] > LEVEL_RANK.critical ? "critical" : base;
+}
+
+/** "the calculator", "the calculator and web search", "the a, b and c". */
+function readableList(values: string[]): string {
+  const names = values.map((value) => clip(value.replace(/[_-]+/g, " "), 60));
+
+  if (names.length === 0) return "that tool";
+  if (names.length === 1) return `the ${names[0]}`;
+
+  return `the ${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
 function missionPath(workId: WorkId): string {
@@ -382,6 +394,32 @@ function missionItems(
         consequence:
           "A policy refused a step, so nothing after it ran. Change the policy or the plan before retrying.",
         action: { label: "Inspect", path: missionPath(work.id) },
+        acknowledgeable: true,
+        at,
+      }];
+    }
+
+    const shortfall = configurationShortfall(reading.failure);
+
+    if (shortfall) {
+      return [{
+        ...shared,
+        // Changing the workforce is what clears this, not running the mission
+        // again, so this entry asks for that rather than for an operator.
+        need: { of: "permission", permission: "agents.configure", workspaceId: work.workspaceId },
+        id: `configuration:${work.id}`,
+        kind: "configuration",
+        severity: "action",
+        level: levelFor("high", work),
+        source: "workforce",
+        label: shortfall.kind === "workforce"
+          ? "Nobody is set up to do this work"
+          : `Nobody is set up to use ${readableList(shortfall.tools)}`,
+        detail: reading.failure ?? shared.objective,
+        consequence: shortfall.kind === "workforce"
+          ? "Every mission stops here until somebody works here. Retrying changes nothing on its own."
+          : "Every mission needing this stops the same way. Grant it to an agent, then retry the mission.",
+        action: { label: "Set up the workforce", path: "/workforce" },
         acknowledgeable: true,
         at,
       }];
