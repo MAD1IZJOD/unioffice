@@ -33,6 +33,7 @@ import { hasTools, isWorkspaceCompatible } from "@unioffice/orchestrator";
 import type { ToolRegistry } from "@unioffice/tools";
 
 import { canActIn, reaches, type Access } from "./access/permissions.js";
+import { readableRecallReasons } from "./knowledge-reasons.js";
 import { buildExecutionPlan, type ExecutionNode } from "./execution-plan.js";
 import { clip } from "./mission-reading.js";
 import { publicFailureReason } from "./public-failure.js";
@@ -1074,10 +1075,11 @@ function recalledOf(memory: Memory, reasons: string[], disputed: boolean): PlanK
     title: clip(memory.title, 160),
     type: memory.type,
     status: memory.status,
-    // Recall's own words, bounded. Scores and identifiers never travel: the
-    // reasons say things like "matches the objective", which is what a person
-    // asked "why am I being shown this" actually wants.
-    reasons: reasons.slice(0, 4).map((reason) => clip(reason, 140)),
+    // Recall's own words, bounded, with the ranker's measurements taken off.
+    // Scores and identifiers never travel: the reasons say things like
+    // "matched the topic of the work", which is what a person asking "why am
+    // I being shown this" actually wants.
+    reasons: readableRecallReasons(reasons.slice(0, 4)).map((reason) => clip(reason, 140)),
     sourceType: memory.sourceType,
     sourceMissionId: memory.workId,
     establishedAt: memory.createdAt,

@@ -36,6 +36,7 @@ import {
 } from "@unioffice/memory";
 
 import type { EventRecorder } from "./event-recorder.js";
+import { readableRecallReasons } from "./knowledge-reasons.js";
 import type { CaptureReport, KnowledgeCaptureService } from "./knowledge-capture-service.js";
 import type { KnowledgeRecallService, RecallResult } from "./knowledge-recall-service.js";
 
@@ -550,7 +551,9 @@ export class CompanyBrainService {
           stages: [...entry.stages],
           taskIds: [...entry.taskIds],
           agentIds: [...entry.agentIds],
-          reasons: entry.reasons,
+          // The ranker's measurements are stripped on the way to a page; the
+          // recall rows keep them, and so do the prompts agents are given.
+          reasons: readableRecallReasons(entry.reasons),
           // Knowledge from this same mission is "used" only if a later step
           // recalled what an earlier step learned - worth telling apart.
           fromThisMission: entry.knowledge.workId === workId,

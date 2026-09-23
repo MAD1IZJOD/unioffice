@@ -763,3 +763,19 @@ test("the same knowledge recalled for several steps is listed once", async () =>
 
   assert.equal(result.knowledge.used.length, 1);
 });
+
+test("the ranker's similarity figure does not reach the page, but its reason does", async () => {
+  const result = await service({
+    tasks: twoStepPlan,
+    recalls: [recall("k1", 1, {
+      reasons: ["Matched the topic of the work (similarity 0.71)", "Shares the terms “laptop”"],
+    })],
+    memories: [memory("k1")],
+  }).getIntelligence(access(), work());
+
+  assert.deepEqual(result.knowledge.used[0]?.reasons, [
+    "Matched the topic of the work",
+    "Shares the terms “laptop”",
+  ]);
+  assert.doesNotMatch(JSON.stringify(result.knowledge), /similarity|0\.71/);
+});
