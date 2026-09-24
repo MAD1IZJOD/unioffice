@@ -1,12 +1,15 @@
 import {
   createEntityId,
   highestRisk,
+  hasPolicyConditions,
   isKnowledgeSubject,
   KNOWLEDGE_TYPES,
+  missionStarterOf,
   type Agent,
   type AgentId,
   type OrganizationId,
   type Policy,
+  type PolicyConditions,
   type PolicyId,
   type PolicyStatus,
   type Task,
@@ -72,6 +75,8 @@ export interface CreatePolicyInput {
   risk: Policy["risk"];
   status?: PolicyStatus;
   scope?: Partial<Policy["scope"]>;
+  /** When the rule applies, beyond its scope. Absent is always. */
+  conditions?: PolicyConditions;
   approvalPrompt?: string;
   createdBy?: string;
 }
@@ -85,8 +90,12 @@ export interface UpdatePolicyInput {
   risk?: Policy["risk"];
   status?: PolicyStatus;
   scope?: Partial<Policy["scope"]>;
+  /** Replaces the conditions; an empty object clears them. Undefined leaves them. */
+  conditions?: PolicyConditions;
   /** null clears the prompt; undefined leaves it alone. */
   approvalPrompt?: string | null;
+  /** Who is making the change, for the rule and its audit line. */
+  updatedBy?: string;
 }
 
 /** What the decision was about, for the audit line. */
@@ -136,6 +145,7 @@ export class GovernanceService {
         kind: "task",
         title: task.title,
         requiredTools: requiredToolsOf(task),
+        externalWrites: this.externalWritesFor(task),
       },
       {
         organizationId: work.organizationId,
@@ -145,6 +155,7 @@ export class GovernanceService {
         workspaceId: work.workspaceId,
         workId: work.id,
         taskId: task.id,
+        startedBy: missionStarterOf(work),
       },
       policies,
     );
@@ -256,6 +267,8 @@ export class GovernanceService {
     workspaceId?: Work["workspaceId"];
     workId?: Work["id"];
     taskId?: Task["id"];
+    /** Who started the mission the call belongs to. Absent is a person. */
+    startedBy?: "schedule" | "person";
   }): Promise<GovernanceDecision> {
     const policies = await this.policyRepository.findEnforced(
       input.organizationId,
@@ -265,6 +278,7 @@ export class GovernanceService {
       kind: "tool",
       toolId: input.toolId,
       toolRisk: this.toolRegistry.get(input.toolId)?.risk ?? "low",
+      writesExternally: this.toolRegistry.get(input.toolId)?.external?.access === "write",
     };
 
     const context: GovernanceContext = {
@@ -275,6 +289,7 @@ export class GovernanceService {
       workspaceId: input.workspaceId,
       workId: input.workId,
       taskId: input.taskId,
+      startedBy: input.startedBy,
     };
 
     return this.engine.evaluate(action, context, policies);
@@ -360,12 +375,14 @@ export class GovernanceService {
   async createPolicy(input: CreatePolicyInput): Promise<Policy> {
     const name = requiredText(input.name, "name");
     const scope = normalizeScope(input.scope);
+    const conditions = normalizeConditions(input.conditions);
 
     this.validate({
       name,
       subject: input.subject,
       effect: input.effect,
       scope,
+      conditions,
     });
 
     const now = new Date();
@@ -376,6 +393,7 @@ export class GovernanceService {
       description: input.description?.trim() ?? "",
       subject: input.subject,
       scope,
+      conditions,
       effect: input.effect,
       risk: input.risk,
       // New rules start as drafts. A policy that began enforcing the moment
@@ -401,6 +419,7 @@ export class GovernanceService {
         effect: policy.effect,
         risk: policy.risk,
         status: policy.status,
+        ...(hasPolicyConditions(policy.conditions) ? { conditions: policy.conditions } : {}),
       },
     });
 
@@ -426,7 +445,12 @@ export class GovernanceService {
 
     const effect = input.effect ?? current.effect;
 
-    this.validate({ name, subject: current.subject, effect, scope });
+    const conditions =
+      input.conditions === undefined
+        ? normalizeConditions(current.conditions)
+        : normalizeConditions(input.conditions);
+
+    this.validate({ name, subject: current.subject, effect, scope, conditions });
 
     const status = input.status ?? current.status;
 
@@ -441,11 +465,13 @@ export class GovernanceService {
       risk: input.risk ?? current.risk,
       status,
       scope,
+      conditions,
       approvalPrompt:
         input.approvalPrompt === undefined
           ? current.approvalPrompt
           : (input.approvalPrompt?.trim() || undefined),
       updatedAt: new Date(),
+      updatedBy: input.updatedBy ?? current.updatedBy,
     });
 
     // A lifecycle move is the consequential edit - it is the moment a rule
@@ -456,6 +482,10 @@ export class GovernanceService {
     await this.eventRecorder.record({
       organizationId: updated.organizationId,
       actorType: "user",
+      // Who changed a rule is half of what an audit line is for. It used to
+      // be left off every update, so the trail said a rule changed and not
+      // who changed it.
+      actorId: input.updatedBy,
       type: lifecycle ?? "policy.updated",
       payload: {
         policyId: updated.id,
@@ -464,6 +494,10 @@ export class GovernanceService {
         risk: updated.risk,
         status: updated.status,
         previousStatus: current.status,
+        ...(hasPolicyConditions(updated.conditions) ? { conditions: updated.conditions } : {}),
+        ...(sameConditions(current.conditions, updated.conditions)
+          ? {}
+          : { previousConditions: normalizeConditions(current.conditions) }),
       },
     });
 
@@ -481,6 +515,7 @@ export class GovernanceService {
     subject: Policy["subject"];
     effect: Policy["effect"];
     scope: Policy["scope"];
+    conditions: PolicyConditions;
   }): void {
     if (policy.name.length > 120) {
       throw new PolicyValidationError("name must be 120 characters or fewer.");
@@ -533,6 +568,15 @@ export class GovernanceService {
       );
     }
 
+    // Knowledge is recalled and captured outside any one step's tools, and
+    // the engine never lets a condition reach it. A conditioned knowledge
+    // rule would look enforced and never apply.
+    if (isKnowledgeSubject(policy.subject) && hasPolicyConditions(policy.conditions)) {
+      throw new PolicyValidationError(
+        "A knowledge policy cannot be narrowed to who started the mission or to outside changes. Narrow it by agent, capability, workspace or kind of knowledge instead.",
+      );
+    }
+
     if (policy.subject === "knowledge_recall" && policy.effect === "require_approval") {
       throw new PolicyValidationError(
         "A recall policy can only allow or deny - knowledge is recalled as a step starts, with nobody there to ask. To have a person look at knowledge before agents rely on it, write a capture policy that requires approval.",
@@ -563,6 +607,31 @@ function normalizeScope(
     capabilities: unique(scope?.capabilities),
     knowledgeTypes: unique(scope?.knowledgeTypes),
   };
+}
+
+/**
+ * Only the conditions the engine understands, with anything else dropped, so
+ * a stored rule never carries a field that looks like a condition and is not.
+ */
+function normalizeConditions(conditions: PolicyConditions | undefined): PolicyConditions {
+  const normalized: PolicyConditions = {};
+
+  if (conditions?.startedBy === "schedule" || conditions?.startedBy === "person") {
+    normalized.startedBy = conditions.startedBy;
+  }
+
+  if (typeof conditions?.writesExternally === "boolean") {
+    normalized.writesExternally = conditions.writesExternally;
+  }
+
+  return normalized;
+}
+
+function sameConditions(left: PolicyConditions | undefined, right: PolicyConditions | undefined): boolean {
+  const a = normalizeConditions(left);
+  const b = normalizeConditions(right);
+
+  return a.startedBy === b.startedBy && a.writesExternally === b.writesExternally;
 }
 
 function unique<T>(values: T[] | undefined): T[] {

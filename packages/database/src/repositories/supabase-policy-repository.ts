@@ -2,6 +2,7 @@ import type {
   AgentId,
   OrganizationId,
   Policy,
+  PolicyConditions,
   PolicyId,
   WorkspaceId,
 } from "@unioffice/core";
@@ -153,6 +154,7 @@ export class SupabasePolicyRepository
         capabilities: (row.capabilities ?? []) as string[],
         knowledgeTypes: (row.knowledge_types ?? []) as string[],
       },
+      conditions: conditionsOf(row.conditions),
       effect: row.effect,
       risk: row.risk,
       status: row.status,
@@ -160,9 +162,28 @@ export class SupabasePolicyRepository
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
       createdBy: row.created_by ?? undefined,
+      updatedBy: row.updated_by ?? undefined,
       metadata: row.metadata ?? {},
     };
   }
+}
+
+/** Only what the schema allows a condition to be; anything else reads as absent. */
+function conditionsOf(value: unknown): PolicyConditions {
+  if (typeof value !== "object" || value === null) return {};
+
+  const row = value as Record<string, unknown>;
+  const conditions: PolicyConditions = {};
+
+  if (row.startedBy === "schedule" || row.startedBy === "person") {
+    conditions.startedBy = row.startedBy;
+  }
+
+  if (typeof row.writesExternally === "boolean") {
+    conditions.writesExternally = row.writesExternally;
+  }
+
+  return conditions;
 }
 
 function toRow(policy: Policy): Record<string, unknown> {
@@ -180,10 +201,12 @@ function toRow(policy: Policy): Record<string, unknown> {
     workspace_ids: policy.scope.workspaceIds,
     capabilities: policy.scope.capabilities,
     knowledge_types: policy.scope.knowledgeTypes ?? [],
+    conditions: policy.conditions ?? {},
     approval_prompt: policy.approvalPrompt ?? null,
     created_at: policy.createdAt.toISOString(),
     updated_at: policy.updatedAt.toISOString(),
     created_by: policy.createdBy ?? null,
+    updated_by: policy.updatedBy ?? null,
     metadata: policy.metadata,
   };
 }

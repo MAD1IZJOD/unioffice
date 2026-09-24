@@ -96,3 +96,43 @@ test("a workspace the caller was not given reads as not found", async () => {
   assert.equal((await app.inject({ method: "GET", url: `/workspaces/${finance}`, headers })).statusCode, 200);
   assert.equal((await app.inject({ method: "GET", url: `/workspaces/${legal}`, headers })).statusCode, 404);
 });
+
+test("a rule's conditions are read, and whoever changes a rule is the signed-in caller", async () => {
+  const { post, calls } = server("admin");
+
+  await post("/policies", { ...policy, subject: "task", conditions: { startedBy: "schedule", writesExternally: true } });
+  await post(`/policies/${policyId}`, { conditions: { startedBy: "person" }, updatedBy: "user:someone-else" });
+  await post(`/policies/${policyId}`, { status: "paused" });
+
+  assert.deepEqual((calls[0]!.input as { conditions: unknown }).conditions, { startedBy: "schedule", writesExternally: true });
+  assert.deepEqual((calls[1]!.input as { conditions: unknown }).conditions, { startedBy: "person" });
+  assert.equal((calls[1]!.input as { updatedBy: string }).updatedBy, `user:${userId}`);
+  // Leaving conditions out leaves them alone rather than clearing them.
+  assert.equal((calls[2]!.input as { conditions?: unknown }).conditions, undefined);
+});
+
+test("a condition the engine does not understand is refused, not stored", async () => {
+  const { post, calls } = server("owner");
+
+  for (const conditions of [
+    { startedBy: "robot" },
+    { writesExternally: "yes" },
+    { amountAbove: 50000 },
+    ["schedule"],
+  ]) {
+    const response = await post("/policies", { ...policy, subject: "task", conditions });
+    assert.equal(response.statusCode, 400, JSON.stringify(conditions));
+  }
+
+  assert.deepEqual(calls, []);
+});
+
+test("members and viewers cannot change a rule's conditions", async () => {
+  for (const role of ["member", "viewer"] as const) {
+    const { post, calls } = server(role);
+    const response = await post(`/policies/${policyId}`, { conditions: {} });
+
+    assert.equal(response.statusCode, 403, role);
+    assert.deepEqual(calls, [], role);
+  }
+});

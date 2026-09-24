@@ -45,3 +45,14 @@ export interface Work {
 
   metadata: Record<string, unknown>;
 }
+
+/**
+ * Who started a mission, as the mission row says.
+ *
+ * Only a schedule writes the mark, and nothing a caller sends can set it - a
+ * mission's metadata is written by the system alone - so a mission without
+ * one was started by a person.
+ */
+export function missionStarterOf(work: Pick<Work, "metadata">): "schedule" | "person" {
+  return work.metadata?.startedBy === "schedule" ? "schedule" : "person";
+}

@@ -244,6 +244,9 @@ export class DefaultAgentRuntime
           metadata: {
             agentCapabilities: definition.capabilities,
             workspaceId: context.work.workspaceId,
+            // Who started the mission, for rules narrowed to unattended work.
+            // Forwarded as the mission row has it; only a schedule writes it.
+            startedBy: context.work.metadata?.startedBy,
           },
         };
 

@@ -45,6 +45,7 @@ export class GovernanceToolGuard implements ToolGuard {
         | undefined,
       workId: context.workId as WorkId | undefined,
       taskId: context.taskId as TaskId | undefined,
+      startedBy: context.metadata.startedBy === "schedule" ? "schedule" : "person",
     });
 
     // A tool rule can only allow or deny - the service refuses to save one

@@ -22,6 +22,7 @@ import type {
   MemoryId,
   MemoryType,
   OrganizationId,
+  PolicyConditions,
   PolicyEffect,
   PolicyId,
   PolicyStatus,
@@ -1076,6 +1077,7 @@ export function buildApiServer(
         risk: parseRiskLevel(body.risk),
         status: parsePolicyStatus(body.status),
         scope: parsePolicyScope(body.scope),
+        conditions: parsePolicyConditions(body.conditions),
         approvalPrompt: optionalText(body.approvalPrompt),
         // The author is the signed-in caller. A createdBy in the body used to
         // be recorded as the author of a governance rule.
@@ -1103,6 +1105,10 @@ export function buildApiServer(
         status: parsePolicyStatus(body.status),
         scope:
           body.scope === undefined ? undefined : parsePolicyScope(body.scope),
+        conditions:
+          body.conditions === undefined ? undefined : parsePolicyConditions(body.conditions),
+        // Whoever is changing the rule is the signed-in caller.
+        updatedBy: actorOf(request),
         // null clears the prompt; undefined leaves it as it was.
         approvalPrompt:
           body.approvalPrompt === undefined
@@ -2226,6 +2232,46 @@ function parsePolicyScope(value: unknown): {
     capabilities: optionalStringArray(scope.capabilities, "scope.capabilities"),
     knowledgeTypes: optionalStringArray(scope.knowledgeTypes, "scope.knowledgeTypes"),
   };
+}
+
+/**
+ * When a rule applies. Omitted or null is "always"; each field is refused
+ * unless it is one the engine understands with a value it understands, so a
+ * typo is a 400 rather than a condition that silently never holds.
+ */
+function parsePolicyConditions(value: unknown): PolicyConditions {
+  if (value === undefined || value === null) return {};
+
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new ApiError(400, "conditions must be an object.");
+  }
+
+  const conditions = value as Record<string, unknown>;
+  const unknown = Object.keys(conditions).filter((key) => key !== "startedBy" && key !== "writesExternally");
+
+  if (unknown.length > 0) {
+    throw new ApiError(400, `conditions can only be startedBy and writesExternally, not ${unknown.join(", ")}.`);
+  }
+
+  const parsed: PolicyConditions = {};
+
+  if (conditions.startedBy !== undefined && conditions.startedBy !== null) {
+    if (conditions.startedBy !== "schedule" && conditions.startedBy !== "person") {
+      throw new ApiError(400, "conditions.startedBy must be schedule or person.");
+    }
+
+    parsed.startedBy = conditions.startedBy;
+  }
+
+  if (conditions.writesExternally !== undefined && conditions.writesExternally !== null) {
+    if (typeof conditions.writesExternally !== "boolean") {
+      throw new ApiError(400, "conditions.writesExternally must be true or false.");
+    }
+
+    parsed.writesExternally = conditions.writesExternally;
+  }
+
+  return parsed;
 }
 
 function optionalStringArray(value: unknown, field: string): string[] {
