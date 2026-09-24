@@ -76,6 +76,17 @@ export class WorkService {
        */
       pin?(organizationId: OrganizationId, skill: Skill): Promise<Skill>;
     },
+
+    /**
+     * Which of the registered tools this organization can actually use right
+     * now. A tool that reaches another system - Google Drive, GitHub - only
+     * works through a connection the organization has made, and one it has
+     * not made cannot run for anyone, whoever is granted it. Absent, every
+     * registered tool is offered, as before.
+     */
+    private readonly toolReach?: {
+      usableToolIds(organizationId: OrganizationId): Promise<ReadonlySet<string>>;
+    },
   ) {}
 
   /**
@@ -193,6 +204,20 @@ export class WorkService {
         : undefined;
       const knownTools = new Set(this.availableTools.map((tool) => tool.id));
 
+      // Offering the planner a tool that cannot run here only invites it to
+      // plan around one. On a live run the model asked for Google Drive search
+      // with no Drive connection in the organization, and the whole mission
+      // failed at planning - then told a person to grant the tool to an agent,
+      // which could not have helped. Built-in tools are always offered, so a
+      // mission that genuinely needs one nobody holds is still reported as a
+      // setup problem.
+      const usableTools = this.toolReach
+        ? await this.toolReach.usableToolIds(updatedWork.organizationId)
+        : undefined;
+      const offeredTools = usableTools
+        ? this.availableTools.filter((tool) => usableTools.has(tool.id))
+        : this.availableTools;
+
       // Objective, then recall, then plan. The orchestrator is the actor the
       // recall is governed and recorded for - it is the one reading it.
       const recalled = await this.recallForPlanning(
@@ -214,7 +239,7 @@ export class WorkService {
               (agent) => agent.id,
             ),
 
-          availableTools: this.availableTools,
+          availableTools: offeredTools,
 
           availableCapabilities,
 

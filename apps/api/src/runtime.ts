@@ -282,6 +282,23 @@ export function createExecutionRuntime(config: ApiConfig) {
     })),
     knowledgeRecallService,
     skillService,
+    {
+      // A tool is usable when it needs nothing outside the company, or when
+      // the organization has a live connection to the system it reaches.
+      async usableToolIds(organizationId) {
+        const connected = new Set<string>(
+          (await connectionRepository.list(organizationId))
+            .filter((connection) => connection.status === "active")
+            .map((connection) => connection.provider),
+        );
+
+        return new Set(
+          toolRegistry.list()
+            .filter((tool) => !tool.external || connected.has(tool.external.provider))
+            .map((tool) => tool.id),
+        );
+      },
+    },
   );
 
   const taskExecutionService = new TaskExecutionService(
