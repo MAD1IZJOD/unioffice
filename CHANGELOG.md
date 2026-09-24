@@ -1,5 +1,59 @@
 # Changelog
 
+## Organizational control
+
+Company work that keeps running on its own, under the company's rules, with
+people deciding what is consequential.
+
+### Continuous missions
+
+- A continuous mission is a standing instruction - what to do, how often,
+  whose it is - that starts an ordinary mission each time it comes due
+  (`continuous_missions`, `continuous_mission_runs`). Each run is planned,
+  delegated, governed, approved, executed and learned from by the existing
+  pipeline and keeps its own plan, steps, approvals, results and failure.
+- Schedules are hourly, daily, weekdays or weekly, in the company's own
+  timezone. The next occurrence is a pure function of the schedule and an
+  instant, and holds across daylight saving.
+- The worker starts due runs on its own loop. One occurrence, one run: a
+  unique key on (mission, occurrence) and a single transactional function
+  that locks the instruction, checks the occurrence is still due, and writes
+  the run's mission, the link and the next occurrence together. Repeated
+  ticks, racing workers and restarts cannot start a second run or lose one.
+- A scheduled job carries its own reason, so the runner plans the run before
+  executing it. A run found half-planned after a crash is stopped rather than
+  planned twice; one started but never queued is queued on a later tick.
+- One run at a time: an occurrence that falls due while the last run is still
+  going or waiting on a person is skipped and recorded. After three failed
+  runs in a row a mission pauses itself; it also pauses itself when its owner
+  can no longer start missions there, so it never outlives that permission.
+- Create, pause, resume, cancel and run now, each checked against the same
+  permissions missions use. Run history reads in the structured outcome's
+  words: running, waiting for approval, completed (with limitations),
+  blocked by a rule, failed, cancelled.
+
+### Rules
+
+- A rule can say when it applies, not only to whom: only for work a schedule
+  started, or a person started; only when a step changes something outside
+  the company, or only when it does not. Both are facts the server
+  establishes itself - the mission row and the tool registry - so a plan can
+  neither satisfy a condition nor talk its way out of one. Conditions are
+  checked by the schema as well as the service, and never reach knowledge.
+- Changing a rule records who changed it.
+
+### Needs You
+
+- Entries about a run say which continuous mission and which run they belong
+  to. A continuous mission that stopped itself is its own entry, ranked with
+  setup problems and answered for the reader like every other.
+
+### Surfaces
+
+- Schedules, under Work: what runs on its own, when it runs next, how its
+  runs went, and the controls a person may use. Each run's mission page
+  links back to its schedule. The rule composer asks when a rule applies.
+
 ## 2.1 - The intelligence layer
 
 Skills stop being something a model may or may not remember to use, and become

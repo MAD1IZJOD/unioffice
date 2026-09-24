@@ -30,6 +30,11 @@ pnpm dev      # starts the API, the worker and the web app together
 started alongside the API. Without a worker, missions are planned and put on
 the queue but never executed - Mission Control reports them as stalled.
 
+The worker also starts continuous missions' runs as they come due. What is
+due is read from the database, never a timer in a browser, so schedules run
+with every tab closed; an occurrence that fell due while no worker was
+running starts once when one next comes up.
+
 To run one process on its own, in its own terminal:
 
 ```
