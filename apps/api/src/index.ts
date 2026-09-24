@@ -109,6 +109,7 @@ export async function createApiServer() {
     companyOverviewService: runtime.companyOverviewService,
     companyReadinessService: runtime.companyReadinessService,
     missionIntelligenceService: runtime.missionIntelligenceService,
+    continuousMissionService: runtime.continuousMissionService,
     governanceService: runtime.governanceService,
     governanceOverviewService: runtime.governanceOverviewService,
     workspaceService: runtime.workspaceService,

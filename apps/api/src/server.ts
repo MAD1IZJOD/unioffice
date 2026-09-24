@@ -27,6 +27,8 @@ import type {
   PolicyId,
   PolicyStatus,
   PolicySubject,
+  ContinuousMissionId,
+  MissionSchedule,
   RiskLevel,
   ApprovalId,
   UserId,
@@ -83,6 +85,13 @@ import {
 import type {
   ExecutionQueueService,
 } from "./execution-queue-service.js";
+
+import {
+  ContinuousMissionNotFoundError,
+  ContinuousMissionStateError,
+  ContinuousMissionValidationError,
+  type ContinuousMissionService,
+} from "./continuous-mission-service.js";
 
 import type {
   GovernanceService,
@@ -250,6 +259,14 @@ export interface ApiServices {
    * so the many route tests that never read one need not build it.
    */
   missionIntelligenceService?: Pick<MissionIntelligenceService, "getIntelligence">;
+  /**
+   * Missions that run on a schedule. Optional so the route tests that never
+   * touch one need not build it.
+   */
+  continuousMissionService?: Pick<
+    ContinuousMissionService,
+    "list" | "get" | "find" | "create" | "pause" | "resume" | "cancel" | "runNow"
+  >;
   governanceService: GovernanceService;
   governanceOverviewService: GovernanceOverviewService;
   workspaceService: WorkspaceService;
@@ -1024,6 +1041,96 @@ export function buildApiServer(
       );
       return { approval };
     });
+
+    // ---------------------------------------------------------------------
+    // Continuous missions.
+    //
+    // A standing instruction that starts an ordinary mission each time it
+    // comes due. Reading one follows the workspace it is filed under, like a
+    // mission. Creating one is starting missions, in the caller's name, in
+    // that workspace; pausing, resuming, cancelling and running one now are
+    // operating missions there. Each is checked here against a membership
+    // read fresh, and the scheduler checks the owner again before every run.
+    // ---------------------------------------------------------------------
+
+    instance.get("/continuous-missions", async (request) => {
+      const access = accessOf(request);
+
+      const missions = await continuousMissions(services).list(organizationOf(request), {
+        userId: access.userId,
+        reach: reachOf(access),
+      });
+
+      return { missions };
+    });
+
+    instance.get("/continuous-missions/:id", async (request) => {
+      const access = accessOf(request);
+      const id = parameterUuid(request.params) as ContinuousMissionId;
+      const service = continuousMissions(services);
+      const mission = await service.find(access.organizationId, id);
+
+      authorizeRead(access, mission.workspaceId, () => new ContinuousMissionNotFoundError(id));
+
+      return { mission: await service.get(access.organizationId, id, { userId: access.userId }) };
+    });
+
+    instance.post("/continuous-missions", async (request, reply) => {
+      const body = objectBody(request.body);
+      const organizationId = organizationOf(request);
+      const workspaceId = optionalUuid(body.workspaceId, "workspaceId") as WorkspaceId | undefined;
+
+      // As for a mission: a workspace id from the caller is only a claim
+      // until it is found inside their organization.
+      if (workspaceId) {
+        await services.workspaceService.getWorkspace(organizationId, workspaceId);
+      }
+
+      const access = await confirmAllowed(services, request, "missions.create", workspaceId);
+
+      const mission = await continuousMissions(services).create({
+        organizationId,
+        workspaceId,
+        // Every run is requested in the caller's name, never someone the
+        // body names.
+        ownerId: access.userId,
+        name: requiredText(body.name, "name", 120),
+        objective: requiredText(body.objective, "objective", 4_000),
+        briefing: parseBriefing(body.briefing),
+        priority: parsePriority(body.priority),
+        schedule: parseSchedule(body.schedule),
+        createdBy: actorOf(request),
+      });
+
+      return reply.status(201).send({ mission });
+    });
+
+    for (const action of ["pause", "resume", "cancel", "run"] as const) {
+      instance.post("/continuous-missions/:id/" + action, async (request, reply) => {
+        const id = parameterUuid(request.params) as ContinuousMissionId;
+        const service = continuousMissions(services);
+        const current = accessOf(request);
+        const mission = await service.find(current.organizationId, id);
+
+        authorizeRead(current, mission.workspaceId, () => new ContinuousMissionNotFoundError(id));
+        await confirmAllowed(services, request, "missions.operate", mission.workspaceId);
+
+        const actor = actorOf(request);
+
+        if (action === "run") {
+          const run = await service.runNow(current.organizationId, id, actor);
+          return reply.status(201).send({ run: { sequence: run.sequence, workId: run.workId } });
+        }
+
+        const changed = action === "pause"
+          ? await service.pause(current.organizationId, id, actor)
+          : action === "resume"
+            ? await service.resume(current.organizationId, id, actor)
+            : await service.cancel(current.organizationId, id, actor);
+
+        return { mission: await service.get(changed.organizationId, changed.id, { userId: current.userId }) };
+      });
+    }
 
     // ---------------------------------------------------------------------
     // Governance.
@@ -2234,6 +2341,61 @@ function parsePolicyScope(value: unknown): {
   };
 }
 
+function continuousMissions(services: ApiServices): NonNullable<ApiServices["continuousMissionService"]> {
+  if (!services.continuousMissionService) {
+    throw new ApiError(503, "Continuous missions are not available on this server.");
+  }
+
+  return services.continuousMissionService;
+}
+
+/**
+ * A schedule, field by field. Its meaning - whether the hour belongs, whether
+ * the timezone exists - is the service's to judge; this only refuses what is
+ * not even the right shape.
+ */
+function parseSchedule(value: unknown): MissionSchedule {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ApiError(400, "schedule must be an object.");
+  }
+
+  const schedule = value as Record<string, unknown>;
+  const cadence = schedule.cadence;
+
+  if (cadence !== "hourly" && cadence !== "daily" && cadence !== "weekdays" && cadence !== "weekly") {
+    throw new ApiError(400, "schedule.cadence must be hourly, daily, weekdays or weekly.");
+  }
+
+  const whole = (field: string, required: boolean): number | undefined => {
+    const raw = schedule[field];
+
+    if (raw === undefined || raw === null) {
+      if (required) throw new ApiError(400, "schedule." + field + " is required.");
+      return undefined;
+    }
+
+    if (typeof raw !== "number" || !Number.isInteger(raw)) {
+      throw new ApiError(400, "schedule." + field + " must be a whole number.");
+    }
+
+    return raw;
+  };
+
+  const timezone = schedule.timezone;
+
+  if (typeof timezone !== "string" || !timezone.trim() || timezone.length > 64) {
+    throw new ApiError(400, "schedule.timezone must be a timezone name, such as Asia/Kolkata.");
+  }
+
+  return {
+    cadence,
+    dayOfWeek: whole("dayOfWeek", false),
+    hour: whole("hour", false),
+    minute: whole("minute", true)!,
+    timezone: timezone.trim(),
+  };
+}
+
 /**
  * When a rule applies. Omitted or null is "always"; each field is refused
  * unless it is one the engine understands with a value it understands, so a
@@ -2702,6 +2864,10 @@ function statusForError(error: Error): number {
   if (error instanceof ApprovalConflictError) {
     return 409;
   }
+
+  if (error instanceof ContinuousMissionNotFoundError) return 404;
+  if (error instanceof ContinuousMissionValidationError) return 400;
+  if (error instanceof ContinuousMissionStateError) return 409;
 
   if (
     error instanceof WorkspaceNotFoundError ||
