@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Ban,
+  CalendarClock,
   LoaderCircle,
   Play,
   RefreshCw,
@@ -28,6 +29,7 @@ import {
 } from "../lib/api";
 
 import { kindLabel, knowledgeStatusLabel } from "../lib/knowledge";
+import { runLinkOf } from "../lib/schedules";
 import { MissionDebrief } from "../components/room/MissionDebrief";
 import { useLiveResource } from "../lib/live";
 import { useCan } from "../lib/access";
@@ -232,6 +234,8 @@ export default function Room() {
   const chapter = (name: string) => String(chapters.indexOf(name) + 1).padStart(2, "0");
   const failure = messageOf(work);
   const briefing = briefingOf(work);
+  // When a schedule started this mission: which one, and which run it is.
+  const scheduledRun = runLinkOf(work.metadata);
   const planner = data.orchestrator?.name;
 
   const agentName = (id?: string) =>
@@ -276,6 +280,13 @@ export default function Room() {
               <Link to={`/workspaces/${workspace.id}`} className="operation-place">
                 <WorkspaceMark slug={workspace.slug} size={12} />
                 {workspace.name}
+              </Link>
+            )}
+
+            {scheduledRun && (
+              <Link to={`/schedules/${scheduledRun.continuousMissionId}`} className="operation-place">
+                <CalendarClock size={12} />
+                Run {scheduledRun.sequence} of {scheduledRun.name}
               </Link>
             )}
           </div>

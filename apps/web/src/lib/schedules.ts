@@ -1,5 +1,6 @@
 import type {
   ContinuousMissionItem,
+  MissionRunLink,
   ContinuousMissionRunSummary,
   MissionScheduleSpec,
   RunState,
@@ -153,4 +154,22 @@ export function scheduleFrom(form: {
     minute: Number.isInteger(minute) ? minute : 0,
     timezone: form.timezone,
   };
+}
+
+/**
+ * The run a mission is, from the link the scheduler wrote on it. Anything
+ * short of the whole shape reads as no run, the same rule the server uses.
+ */
+export function runLinkOf(metadata: Record<string, unknown> | undefined): MissionRunLink | undefined {
+  const link = metadata?.continuousMission;
+  if (typeof link !== "object" || link === null) return undefined;
+
+  const { id, name, sequence } = link as Record<string, unknown>;
+  const number = typeof sequence === "number" ? sequence : Number(sequence);
+
+  if (typeof id !== "string" || typeof name !== "string" || !name.trim() || !Number.isInteger(number) || number < 1) {
+    return undefined;
+  }
+
+  return { continuousMissionId: id, name: name.trim(), sequence: number };
 }

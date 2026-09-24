@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatWhen, runTone, scheduleFrom, scheduleStanding } from "./schedules";
+import { formatWhen, runLinkOf, runTone, scheduleFrom, scheduleStanding } from "./schedules";
 
 describe("reading continuous missions", () => {
   const now = Date.parse("2026-09-24T12:00:00.000Z");
@@ -34,5 +34,16 @@ describe("reading continuous missions", () => {
     expect(scheduleFrom({ ...form, cadence: "weekly" })).toEqual({ cadence: "weekly", dayOfWeek: 1, hour: 9, minute: 30, timezone: "Asia/Kolkata" });
     expect(scheduleFrom({ ...form, cadence: "daily" })).toEqual({ cadence: "daily", hour: 9, minute: 30, timezone: "Asia/Kolkata" });
     expect(scheduleFrom({ ...form, cadence: "hourly" })).toEqual({ cadence: "hourly", minute: 15, timezone: "Asia/Kolkata" });
+  });
+
+  it("reads the run a mission is only from the whole link", () => {
+    expect(runLinkOf({ continuousMission: { id: "cm-1", name: "Pricing watch", sequence: 3 } })).toEqual({
+      continuousMissionId: "cm-1",
+      name: "Pricing watch",
+      sequence: 3,
+    });
+    expect(runLinkOf({})).toBeUndefined();
+    expect(runLinkOf({ continuousMission: { id: "cm-1", sequence: 3 } })).toBeUndefined();
+    expect(runLinkOf({ continuousMission: { id: "cm-1", name: "x", sequence: 0 } })).toBeUndefined();
   });
 });

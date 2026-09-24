@@ -509,7 +509,7 @@ export type ExecutionJobStatus =
 export interface ExecutionJobSummary {
   id: string;
   status: ExecutionJobStatus;
-  reason: "requested" | "approval_resumed" | "retry" | "recovered";
+  reason: "requested" | "approval_resumed" | "retry" | "recovered" | "scheduled";
   attempts: number;
   maxAttempts: number;
   claimedBy?: string;
