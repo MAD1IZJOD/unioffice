@@ -58,10 +58,16 @@ export interface MissionSchedule {
 export type ContinuousMissionStatus = "active" | "paused" | "cancelled";
 
 /**
- * Why a paused mission is paused: a person paused it, or it stopped itself
- * because its runs kept failing and starting more would only fail again.
+ * Why a paused mission is paused:
+ *
+ *   person             someone paused it
+ *   repeated_failures  it stopped itself, because its runs kept failing and
+ *                      starting more would only fail again
+ *   owner_access       it stopped itself, because the person it runs for can
+ *                      no longer start missions there - a schedule never
+ *                      outlives the permission it was created under
  */
-export type ContinuousMissionPauseReason = "person" | "repeated_failures";
+export type ContinuousMissionPauseReason = "person" | "repeated_failures" | "owner_access";
 
 export interface ContinuousMission {
   id: ContinuousMissionId;

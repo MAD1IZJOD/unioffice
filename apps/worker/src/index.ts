@@ -26,6 +26,9 @@ export async function startWorker(): Promise<ExecutionWorker> {
       pollIntervalMs: config.workerPollIntervalMs,
       leaseMs: config.workerLeaseMs,
       concurrency: config.workerConcurrency,
+      // Continuous missions come due here, on the worker, so they run with
+      // no browser open and resume after any restart.
+      scheduler: runtime.continuousMissionScheduler,
     },
   );
 

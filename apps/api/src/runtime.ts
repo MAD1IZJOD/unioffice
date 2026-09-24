@@ -9,6 +9,7 @@ import {
   SupabaseApprovalRepository,
   SupabaseArtifactRepository,
   SupabaseConnectionRepository,
+  SupabaseContinuousMissionRepository,
   SupabaseActionProposalRepository,
   SupabaseSkillRepository,
   SupabaseSkillVersionRepository,
@@ -58,6 +59,8 @@ import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
 import { CompanyReadinessService } from "./company-readiness-service.js";
+import { ContinuousMissionScheduler } from "./continuous-mission-scheduler.js";
+import { ContinuousMissionService } from "./continuous-mission-service.js";
 import { MissionIntelligenceService } from "./mission-intelligence-service.js";
 import { EventRecorder } from "./event-recorder.js";
 import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
@@ -109,6 +112,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const actionProposalRepository = new SupabaseActionProposalRepository(supabase);
   const skillRepository = new SupabaseSkillRepository(supabase);
   const skillVersionRepository = new SupabaseSkillVersionRepository(supabase);
+  const continuousMissionRepository = new SupabaseContinuousMissionRepository(supabase);
 
   // Tokens are checked with the auth server; what a verified person may do
   // comes from their membership, which only the API reads and writes.
@@ -345,12 +349,15 @@ export function createExecutionRuntime(config: ApiConfig) {
     log: (message) => console.warn(message),
   });
 
+  // A scheduled run arrives unplanned, so the runner plans it first with the
+  // same service a launch uses. Nothing else about execution changes.
   const executionJobRunner = new ExecutionJobRunner(
     workExecutionService,
     executionJobRepository,
     workRepository,
     taskRepository,
     eventRecorder,
+    { planner: workService },
   );
 
   // One read for one operation. Everything the execution room renders comes
@@ -481,6 +488,28 @@ export function createExecutionRuntime(config: ApiConfig) {
     skills: skillService,
   });
 
+  // Standing instructions and their runs. A run is an ordinary mission on the
+  // ordinary queue; this owns only the instruction and reads runs back.
+  const continuousMissionService = new ContinuousMissionService({
+    missions: continuousMissionRepository,
+    queue: executionQueueService,
+    reads: operationalReads,
+    eventRecorder,
+    // A finished run's structured outcome, read exactly as its mission page
+    // reads it.
+    outcomeOf: async (workId) => (await executionRoomService.getRoom(workId)).narrative.outcome.status,
+  });
+
+  // Started on the worker's loop, never on a timer of its own and never in
+  // a browser. See the class for what it checks before starting anything.
+  const continuousMissionScheduler = new ContinuousMissionScheduler({
+    missions: continuousMissionRepository,
+    jobs: executionJobRepository,
+    queue: executionQueueService,
+    members: membershipRepository,
+    eventRecorder,
+  });
+
   const staleRunReconciler = new StaleRunReconciler(
     workRepository,
     taskRepository,
@@ -543,6 +572,9 @@ export function createExecutionRuntime(config: ApiConfig) {
     agentDirectoryService,
     workforceService,
     staleRunReconciler,
+    continuousMissionRepository,
+    continuousMissionService,
+    continuousMissionScheduler,
   };
 }
 

@@ -72,6 +72,14 @@ export type EventType =
   // A person said they have seen a stopped or stalled mission, so it stops
   // asking for attention until something about it changes.
   | "work.acknowledged"
+  // Continuous missions. The instruction's own lifecycle; each run's story is
+  // told by its mission's events, like any other mission's.
+  | "continuous_mission.created"
+  | "continuous_mission.paused"
+  | "continuous_mission.resumed"
+  | "continuous_mission.cancelled"
+  | "continuous_mission.run_started"
+  | "continuous_mission.run_skipped"
   // Membership. Who was let in, at what role, and by whom - kept beside the
   // work those people went on to do rather than in a log of its own.
   | "member.invited"

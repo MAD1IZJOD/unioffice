@@ -19,8 +19,21 @@ export interface ExecutionWorkerOptions {
   /** Identifies this worker on the rows it claims. */
   workerId?: string;
 
+  /**
+   * Starts continuous missions' runs as they come due. Asked on this loop,
+   * at most once per `schedulerIntervalMs`; what is due is always read from
+   * the database, so the interval is only how promptly a due run is noticed.
+   */
+  scheduler?: { tick(): Promise<unknown> };
+
+  /** How often to ask the scheduler. Defaults to 30 seconds. */
+  schedulerIntervalMs?: number;
+
   /** Injected in tests so a run can be observed without real timers. */
   sleep?: (ms: number) => Promise<void>;
+
+  /** Injected in tests so the scheduler's pacing can be observed. */
+  clock?: () => number;
 
   log?: (message: string) => void;
 }
@@ -56,6 +69,11 @@ export class ExecutionWorker {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly log: (message: string) => void;
 
+  private readonly scheduler?: { tick(): Promise<unknown> };
+  private readonly schedulerIntervalMs: number;
+  private readonly clock: () => number;
+  private lastScheduled = Number.NEGATIVE_INFINITY;
+
   private running = false;
   private stopped?: () => void;
   private readonly inFlight = new Set<Promise<void>>();
@@ -81,6 +99,29 @@ export class ExecutionWorker {
     this.concurrency = options.concurrency;
     this.sleep = options.sleep ?? defaultSleep;
     this.log = options.log ?? ((message) => console.log(message));
+    this.scheduler = options.scheduler;
+    this.schedulerIntervalMs = options.schedulerIntervalMs ?? 30_000;
+    this.clock = options.clock ?? (() => Date.now());
+  }
+
+  /**
+   * Lets the scheduler start any runs that have come due, if it is time to
+   * ask. A scheduler failure is logged and never stops the worker: the runs
+   * are still due next time, because the database still says so.
+   */
+  async schedule(): Promise<void> {
+    if (!this.scheduler) return;
+
+    const now = this.clock();
+    if (now - this.lastScheduled < this.schedulerIntervalMs) return;
+
+    this.lastScheduled = now;
+
+    try {
+      await this.scheduler.tick();
+    } catch (error) {
+      this.log(`Scheduler error: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
@@ -197,6 +238,10 @@ export class ExecutionWorker {
 
     while (this.running) {
       try {
+        // Before claiming, so a run that has just come due is on the queue
+        // for this same pass.
+        await this.schedule();
+
         const result = await this.tick();
 
         if (result.claimed === 0) {

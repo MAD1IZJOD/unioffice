@@ -231,6 +231,7 @@ export class SupabaseContinuousMissionRepository implements ContinuousMissionRep
         next_run_at: to.status === "active" ? (to.nextRunAt?.toISOString() ?? null) : null,
         updated_at: to.now.toISOString(),
         ...(to.updatedBy ? { updated_by: to.updatedBy } : {}),
+        ...(to.metadata ? { metadata: to.metadata } : {}),
       })
       .eq("id", id)
       .in("status", from)

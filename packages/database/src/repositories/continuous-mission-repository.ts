@@ -43,6 +43,8 @@ export interface ContinuousMissionTransition {
   pauseReason?: ContinuousMissionPauseReason;
   nextRunAt?: Date;
   updatedBy?: string;
+  /** Replaces the mission's metadata when given. */
+  metadata?: Record<string, unknown>;
   now: Date;
 }
 

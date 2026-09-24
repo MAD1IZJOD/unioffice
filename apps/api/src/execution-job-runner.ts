@@ -19,6 +19,17 @@ export interface RunJobOutcome {
 export interface ExecutionJobRunnerOptions {
   /** Delay before a requeued job becomes eligible again. */
   retryBackoffMs?: number;
+
+  /**
+   * Plans a mission. A scheduled run arrives unplanned - nobody held a
+   * request open to plan it - so the worker plans it with the same service a
+   * launch uses before executing it. Absent, a scheduled job is executed as
+   * it stands.
+   */
+  planner?: {
+    beginPlanning(workId: ExecutionJob["workId"]): Promise<boolean>;
+    planWork(workId: ExecutionJob["workId"]): Promise<{ work: { status: string } }>;
+  };
 }
 
 const DEFAULT_RETRY_BACKOFF_MS = 15_000;
@@ -34,6 +45,7 @@ const DEFAULT_RETRY_BACKOFF_MS = 15_000;
  */
 export class ExecutionJobRunner {
   private readonly retryBackoffMs: number;
+  private readonly planner?: ExecutionJobRunnerOptions["planner"];
 
   constructor(
     private readonly workExecutionService: WorkExecutionService,
@@ -44,9 +56,15 @@ export class ExecutionJobRunner {
     options: ExecutionJobRunnerOptions = {},
   ) {
     this.retryBackoffMs = options.retryBackoffMs ?? DEFAULT_RETRY_BACKOFF_MS;
+    this.planner = options.planner;
   }
 
   async run(job: ExecutionJob): Promise<RunJobOutcome> {
+    if (job.reason === "scheduled" && this.planner) {
+      const planned = await this.planScheduledRun(job);
+      if (planned) return planned;
+    }
+
     try {
       await this.reclaimOrphanedTasks(job);
       await this.workExecutionService.executeWork(job.workId);
@@ -56,6 +74,64 @@ export class ExecutionJobRunner {
       return { job: completed ?? job, outcome: "completed" };
     } catch (error) {
       return this.handleFailure(job, errorMessage(error));
+    }
+  }
+
+  /**
+   * Plans a scheduled run that has not been planned yet.
+   *
+   * Returns an outcome when the job ends here - planning failed, or the run
+   * was cancelled while it was being planned - and undefined when the run is
+   * planned and should go on to execute in this same job.
+   *
+   * A run that was already planned (an approval put it back on the queue, or
+   * this is a later attempt after planning finished) goes straight on.
+   * Planning is not retried by the queue: a failed plan is recorded on the
+   * run itself, the run ends as failed, and the schedule's next occurrence
+   * tries afresh. A run found half-planned - a worker died while writing its
+   * steps - is ended the same way rather than planned a second time on top of
+   * the steps it already has.
+   */
+  private async planScheduledRun(job: ExecutionJob): Promise<RunJobOutcome | undefined> {
+    const planner = this.planner!;
+    const work = await this.workRepository.findById(job.workId);
+
+    if (!work) {
+      const failed = await this.executionJobRepository.fail(job.id, "The run's mission no longer exists.");
+      return { job: failed ?? job, outcome: "failed", error: "The run's mission no longer exists." };
+    }
+
+    if (work.status !== "queued" && work.status !== "planning") return undefined;
+
+    const tasks = await this.taskRepository.findByWork(job.workId);
+
+    if (tasks.length > 0) {
+      if (work.status === "queued") return undefined;
+
+      const reason = "Planning this run was interrupted part-way, so it was stopped rather than planned twice.";
+      await this.recordWorkFailure(job, reason, "planning");
+      const failed = await this.executionJobRepository.fail(job.id, reason);
+      return { job: failed ?? job, outcome: "failed", error: reason };
+    }
+
+    try {
+      if (work.status === "queued") await planner.beginPlanning(job.workId);
+      const planned = await planner.planWork(job.workId);
+
+      // Cancelled while the plan was being written: the cancellation stands
+      // and nothing runs.
+      if (planned.work.status !== "queued") {
+        const completed = await this.executionJobRepository.complete(job.id);
+        return { job: completed ?? job, outcome: "completed" };
+      }
+
+      return undefined;
+    } catch (error) {
+      // Planning records its own failure on the mission, where the run's
+      // page and the schedule read it from.
+      const message = errorMessage(error);
+      const failed = await this.executionJobRepository.fail(job.id, message);
+      return { job: failed ?? job, outcome: "failed", error: message };
     }
   }
 
@@ -149,6 +225,7 @@ export class ExecutionJobRunner {
   private async recordWorkFailure(
     job: ExecutionJob,
     error: string,
+    stage: "execution" | "planning" = "execution",
   ): Promise<void> {
     try {
       const work = await this.workRepository.findById(job.workId);
@@ -165,7 +242,7 @@ export class ExecutionJobRunner {
         completedAt: failedAt,
         metadata: {
           ...work.metadata,
-          executionError: error,
+          ...(stage === "planning" ? { planningError: error } : { executionError: error }),
         },
       });
 
@@ -174,7 +251,7 @@ export class ExecutionJobRunner {
         workId: failedWork.id,
         type: "work.failed",
         payload: {
-          stage: "execution",
+          stage,
           reason: error,
           jobId: job.id,
           attempts: job.attempts,

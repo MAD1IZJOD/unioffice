@@ -89,6 +89,7 @@ export class InMemoryContinuousMissionRepository implements ContinuousMissionRep
       nextRunAt: to.status === "active" ? to.nextRunAt : undefined,
       updatedAt: to.now,
       updatedBy: to.updatedBy ?? current.updatedBy,
+      metadata: to.metadata ?? current.metadata,
     };
 
     this.assertShape(next);

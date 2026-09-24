@@ -253,7 +253,11 @@ export function describeEvent(event: Event, agents: Map<AgentId, Agent>): string
     // named and this one could not, which left any record built from the log
     // starting partway through its own story.
     case "work.created":
-      return "The mission was opened";
+      return typeof payload.continuousMissionId === "string" && typeof payload.sequence === "number"
+        ? payload.trigger === "manual"
+          ? `Run ${payload.sequence} was started by hand`
+          : `Run ${payload.sequence} was started by its schedule`
+        : "The mission was opened";
     case "work.planning_started":
       return "Working out the steps";
     case "work.planning_completed": {
@@ -263,7 +267,9 @@ export function describeEvent(event: Event, agents: Map<AgentId, Agent>): string
     case "work.queued":
       return payload.reason === "approval_resumed"
         ? "Back on the queue after a decision"
-        : payload.reason === "retry" ? "Back on the queue for a retry" : "Put on the queue";
+        : payload.reason === "retry"
+          ? "Back on the queue for a retry"
+          : payload.reason === "scheduled" ? "Put on the queue to be planned and run" : "Put on the queue";
     case "work.started":
       return "A worker picked it up";
     case "work.retried":
