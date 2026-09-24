@@ -54,6 +54,7 @@ export interface FeatureView extends FeatureDefinition {
 export const FEATURES: readonly FeatureDefinition[] = [
   { id: "command-center", name: "Command Center", description: "What the company is doing, what needs you, and what changed.", area: "command", path: "/command", permission: "organization.read", dependsOn: ["missions", "approvals"] },
   { id: "missions", name: "Missions", description: "Work the company is doing, from objective to outcome.", area: "work", path: "/missions", permission: "organization.read", dependsOn: [] },
+  { id: "schedules", name: "Schedules", description: "Work the company does on its own, again and again, under its rules.", area: "work", path: "/schedules", permission: "organization.read", dependsOn: ["missions", "governance"] },
   { id: "approvals", name: "Approvals", description: "Decisions the work is waiting on.", area: "work", path: "/approvals", permission: "organization.read", dependsOn: ["missions", "governance"] },
   { id: "artifacts", name: "Artifacts", description: "What the work produced.", area: "work", path: "/artifacts", permission: "organization.read", dependsOn: ["missions"] },
   { id: "readiness", name: "Readiness", description: "What the workforce can be asked for, and what needs setting up first.", area: "workforce", path: "/readiness", permission: "organization.read", dependsOn: ["workforce", "skills"] },

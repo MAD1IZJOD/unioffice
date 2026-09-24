@@ -3,6 +3,7 @@ import {
   Blocks,
   Boxes,
   Brain,
+  CalendarClock,
   Command as CommandIcon,
   FileOutput,
   Gauge,
@@ -67,6 +68,7 @@ const PRESENTATION: Record<string, Pick<NavigationEntry, "icon" | "badge">> = {
     badge: ({ missionControl }) =>
       (missionControl?.summary.running ?? 0) + (missionControl?.summary.blocked ?? 0),
   },
+  schedules: { icon: CalendarClock },
   approvals: {
     icon: ShieldAlert,
     // The same number the attention queue and the Command Center show.
@@ -94,6 +96,7 @@ const PRESENTATION: Record<string, Pick<NavigationEntry, "icon" | "badge">> = {
 export const FALLBACK_FEATURES: FeatureItem[] = [
   ["command-center", "Command Center", "command", "/command"],
   ["missions", "Missions", "work", "/missions"],
+  ["schedules", "Schedules", "work", "/schedules"],
   ["approvals", "Approvals", "work", "/approvals"],
   ["artifacts", "Artifacts", "work", "/artifacts"],
   ["readiness", "Readiness", "workforce", "/readiness"],

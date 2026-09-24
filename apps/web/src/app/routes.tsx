@@ -42,6 +42,8 @@ export const router = createBrowserRouter([
       { path: "missions/new/:templateId", ...page(() => import("../pages/TemplateMission")) },
       { path: "missions/:missionId/brief", ...page(() => import("../pages/MissionBrief")) },
       { path: "missions/:missionId", ...page(() => import("../pages/Room")) },
+      { path: "schedules", ...page(() => import("../pages/Schedules")) },
+      { path: "schedules/:scheduleId", ...page(() => import("../pages/Schedule")) },
       { path: "work", loader: () => redirect("/missions") },
       {
         path: "work/:workId",

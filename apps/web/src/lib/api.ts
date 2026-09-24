@@ -2699,3 +2699,128 @@ export async function prepareMission(
     READ_TIMEOUT_MS,
   );
 }
+
+/* --------------------------------------------------------------------------
+   Continuous missions
+   -------------------------------------------------------------------------- */
+
+export type ScheduleCadence = "hourly" | "daily" | "weekdays" | "weekly";
+
+type WorkPriority = WorkItem["priority"];
+
+export interface MissionScheduleSpec {
+  cadence: ScheduleCadence;
+  /** 0 is Sunday. Only for weekly. */
+  dayOfWeek?: number;
+  /** Not for hourly. */
+  hour?: number;
+  minute: number;
+  /** An IANA timezone, such as "Asia/Kolkata". */
+  timezone: string;
+}
+
+/**
+ * Where one run stands, in the structured outcome's words. Decided by the
+ * server from the run's mission, never inferred here.
+ */
+export type RunState =
+  | "running"
+  | "waiting_for_approval"
+  | "completed"
+  | "completed_with_limitations"
+  | "blocked"
+  | "failed"
+  | "cancelled";
+
+export interface ContinuousMissionRunSummary {
+  sequence: number;
+  workId: string;
+  trigger: "schedule" | "manual";
+  scheduledFor: string;
+  startedAt: string;
+  finishedAt?: string;
+  state: RunState;
+  note?: string;
+}
+
+export interface ContinuousMissionItem {
+  id: string;
+  name: string;
+  objective: string;
+  briefing?: string;
+  priority: WorkPriority;
+  workspaceId?: string;
+  schedule: MissionScheduleSpec;
+  /** The schedule as a person reads it. */
+  cadence: string;
+  status: "active" | "paused" | "cancelled";
+  pauseReason?: "person" | "repeated_failures" | "owner_access";
+  /** Why it paused itself, when it did. */
+  pauseNote?: string;
+  nextRunAt?: string;
+  lastRunAt?: string;
+  runCount: number;
+  /** Runs are requested in the caller's name. */
+  ownedByYou: boolean;
+  createdAt: string;
+  updatedAt: string;
+  latestRun?: ContinuousMissionRunSummary;
+}
+
+export interface ContinuousMissionDetail extends ContinuousMissionItem {
+  runs: ContinuousMissionRunSummary[];
+  /** Occurrences passed over because the run before was still going. */
+  skipped: number;
+}
+
+export interface NewContinuousMission {
+  name: string;
+  objective: string;
+  briefing?: string;
+  priority?: WorkPriority;
+  workspaceId?: string;
+  schedule: MissionScheduleSpec;
+}
+
+export async function fetchContinuousMissions(): Promise<ContinuousMissionItem[]> {
+  const { missions } = await get<{ missions: ContinuousMissionItem[] }>(scoped("/continuous-missions"));
+  return missions;
+}
+
+export async function fetchContinuousMission(id: string): Promise<ContinuousMissionDetail> {
+  const { mission } = await get<{ mission: ContinuousMissionDetail }>(
+    scoped(`/continuous-missions/${encodeURIComponent(id)}`),
+  );
+  return mission;
+}
+
+export async function createContinuousMission(draft: NewContinuousMission): Promise<ContinuousMissionItem> {
+  const { mission } = await post<{ mission: ContinuousMissionItem }>(
+    "/continuous-missions",
+    { organizationId: organizationId(), ...draft },
+    READ_TIMEOUT_MS,
+  );
+  return mission;
+}
+
+export async function changeContinuousMission(
+  id: string,
+  action: "pause" | "resume" | "cancel",
+): Promise<ContinuousMissionDetail> {
+  const { mission } = await post<{ mission: ContinuousMissionDetail }>(
+    `/continuous-missions/${encodeURIComponent(id)}/${action}`,
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
+  return mission;
+}
+
+/** Starts a run now, outside the schedule. Returns the run's mission. */
+export async function runContinuousMissionNow(id: string): Promise<{ sequence: number; workId: string }> {
+  const { run } = await post<{ run: { sequence: number; workId: string } }>(
+    `/continuous-missions/${encodeURIComponent(id)}/run`,
+    { organizationId: organizationId() },
+    READ_TIMEOUT_MS,
+  );
+  return run;
+}
