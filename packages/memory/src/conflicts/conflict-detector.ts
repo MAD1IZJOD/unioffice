@@ -113,9 +113,19 @@ export function detectConflict(
   const leftNegated = negates(leftText);
   const rightNegated = negates(rightText);
 
+  // Two entries that state the same figure for the same subject agree on the
+  // thing they are about; a "not" elsewhere in one of them is about something
+  // else. Seen live: "The total cost is Rs 450,000" and "The total cost is Rs
+  // 450,000 ... The calculation does not include tax" were raised as a
+  // conflict, and a person was asked to settle two entries that agreed.
+  const agreeOnFigures =
+    (leftAmounts.length > 0 && leftAmounts.some((value) => rightAmounts.includes(value))) ||
+    (leftPercents.length > 0 && leftPercents.some((value) => rightPercents.includes(value)));
+
   // Polarity alone is weaker evidence than a differing figure, so it needs the
   // stronger form of the same-subject test as well.
   if (
+    !agreeOnFigures &&
     leftNegated !== rightNegated &&
     (overlap >= SAME_SUBJECT_OVERLAP ||
       (semanticSimilarity !== undefined && semanticSimilarity >= 0.88))
@@ -162,13 +172,15 @@ function negates(text: string): boolean {
 
 const CURRENCY_SYMBOL = /[$€£₹]\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m)?\b/gi;
 const CURRENCY_WORD = /\b(\d[\d,]*(?:\.\d+)?)\s?(k|m)?\s?(usd|eur|gbp|inr|dollars?|euros?|rupees?)\b/gi;
+/** "Rs 4,50,000", "Rs. 450000", "INR 5,000" - how rupee amounts are usually written. */
+const CURRENCY_PREFIX_WORD = /\b(?:rs\.?|inr)\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m)?\b/gi;
 const PERCENT = /(\d+(?:\.\d+)?)\s?%/g;
 
 /** Every monetary amount in the text, normalized to a plain number. */
 export function amounts(text: string): number[] {
   const found = new Set<number>();
 
-  for (const pattern of [CURRENCY_SYMBOL, CURRENCY_WORD]) {
+  for (const pattern of [CURRENCY_SYMBOL, CURRENCY_WORD, CURRENCY_PREFIX_WORD]) {
     for (const match of text.matchAll(pattern)) {
       const value = Number(match[1]!.replace(/,/g, ""));
       const scale = match[2]?.toLowerCase() === "k" ? 1_000 : match[2]?.toLowerCase() === "m" ? 1_000_000 : 1;
