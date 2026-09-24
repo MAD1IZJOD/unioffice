@@ -77,3 +77,11 @@ export type ConnectionId = string & {
 export type SkillId = string & {
   readonly __brand: "SkillId";
 };
+
+export type ContinuousMissionId = string & {
+  readonly __brand: "ContinuousMissionId";
+};
+
+export type ContinuousMissionRunId = string & {
+  readonly __brand: "ContinuousMissionRunId";
+};
