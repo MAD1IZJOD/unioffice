@@ -558,4 +558,94 @@ describe("the Command Center", () => {
     );
     expect(within(entry).getByText(/Grant it to an agent, then retry/)).toBeDefined();
   });
+
+  /* ------------------------------------------------------------------------
+     Continuous missions
+     ------------------------------------------------------------------------ */
+
+  it("says which continuous mission and run an entry belongs to, and links to it", async () => {
+    renderPage(() => json(200, view({
+      summary: { running: 0, blocked: 1, needsYou: 1, finishedToday: 0, failedToday: 0, setAside: 0, total: 1 },
+      attention: {
+        items: [
+          item("approval:run", {
+            label: "Send the pricing report outside the company",
+            run: { continuousMissionId: "cm-1", name: "Competitor pricing watch", sequence: 3 },
+            continuousMissionId: "cm-1",
+          }),
+        ],
+        actionCount: 1,
+        reviewCount: 0,
+        watchCount: 0,
+        total: 1,
+      },
+    })));
+
+    const entry = await screen.findByRole("article", { name: "Send the pricing report outside the company" });
+
+    expect(within(entry).getByRole("link", { name: "Run 3 of Competitor pricing watch" }).getAttribute("href")).toBe("/schedules/cm-1");
+    expect(within(entry).getByRole("link", { name: /Review/ })).toBeDefined();
+  });
+
+  it("shows a schedule that stopped itself, with its reason and the way to it", async () => {
+    renderPage(() => json(200, view({
+      attention: {
+        items: [
+          item("schedule:cm-1", {
+            kind: "schedule",
+            source: "schedule",
+            label: "“Competitor pricing watch” stopped running",
+            detail: "Its last runs failed one after another, so it paused itself rather than keep failing on schedule.",
+            consequence: "No more runs start until someone looks at why they failed and resumes it.",
+            action: { label: "Review schedule", path: "/schedules/cm-1" },
+            workId: undefined,
+            objective: undefined,
+            continuousMissionId: "cm-1",
+          }),
+        ],
+        actionCount: 1,
+        reviewCount: 0,
+        watchCount: 0,
+        total: 1,
+      },
+    })));
+
+    const entry = await screen.findByRole("article", { name: "“Competitor pricing watch” stopped running" });
+
+    expect(within(entry).getByText(/failed one after another/)).toBeDefined();
+    expect(within(entry).getByText(/No more runs start/)).toBeDefined();
+    expect(within(entry).getByRole("link", { name: /Review schedule/ }).getAttribute("href")).toBe("/schedules/cm-1");
+    expect(within(entry).queryByRole("button", { name: /Mark as seen/ })).toBeNull();
+  });
+
+  it("offers a viewer a stopped schedule to read, never to resume", async () => {
+    renderPage(() => json(200, view({
+      attention: {
+        items: [
+          item("schedule:cm-1", {
+            kind: "schedule",
+            source: "schedule",
+            label: "“Competitor pricing watch” stopped running",
+            action: { label: "Review schedule", path: "/schedules/cm-1" },
+            actionable: false,
+            handoff: "Someone who can run missions in this workspace resumes it.",
+            workId: undefined,
+            objective: undefined,
+            continuousMissionId: "cm-1",
+          }),
+        ],
+        actionCount: 0,
+        waitingOnOthersCount: 1,
+        reviewCount: 0,
+        watchCount: 0,
+        total: 1,
+      },
+    })));
+
+    const entry = await screen.findByRole("article", { name: "“Competitor pricing watch” stopped running" });
+
+    expect(within(entry).queryByRole("link", { name: /Review schedule/ })).toBeNull();
+    expect(within(entry).getByRole("link", { name: /Look at it/ }).getAttribute("href")).toBe("/schedules/cm-1");
+    expect(within(entry).getByText(/resumes it/)).toBeDefined();
+  });
 });

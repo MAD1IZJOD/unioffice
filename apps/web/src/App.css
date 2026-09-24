@@ -461,6 +461,18 @@
   line-height: 1.4;
 }
 
+/* Which continuous mission and run an entry belongs to. One line, clipped,
+   so a long name never widens the drawer. */
+.attention-item-run {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .attention-item-detail {
   display: -webkit-box;
   margin-top: 3px;

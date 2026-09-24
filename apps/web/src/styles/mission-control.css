@@ -93,6 +93,23 @@
   white-space: nowrap;
 }
 
+/* The continuous mission and run an entry belongs to, linked to it. */
+.needs-run {
+  display: block;
+  max-width: 100%;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.needs-run:hover,
+.needs-run:focus-visible {
+  text-decoration: underline;
+}
+
 .needs-tags {
   display: flex;
   flex-wrap: wrap;

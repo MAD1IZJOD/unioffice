@@ -134,6 +134,7 @@ const SOURCE_LABEL: Record<AttentionSource, string> = {
   queue: "queue",
   workforce: "workforce",
   knowledge: "company brain",
+  schedule: "schedule",
 };
 
 export function sourceLabel(source: AttentionSource): string {

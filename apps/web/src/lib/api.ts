@@ -735,7 +735,9 @@ export type AttentionKind =
   | "interrupted"
   | "conflict"
   | "lessons"
-  | "recovering";
+  | "recovering"
+  /** A continuous mission that stopped itself and starts nothing until someone looks. */
+  | "schedule";
 
 /**
  * `action` is stopped until a person does something. `review` blocks nothing
@@ -903,7 +905,15 @@ export type AttentionSource =
   | "planning"
   | "queue"
   | "workforce"
-  | "knowledge";
+  | "knowledge"
+  | "schedule";
+
+/** Which continuous mission a mission belongs to, and which of its runs it is. */
+export interface MissionRunLink {
+  continuousMissionId: string;
+  name: string;
+  sequence: number;
+}
 
 export interface AttentionItem {
   id: string;
@@ -933,6 +943,10 @@ export interface AttentionItem {
   objective?: string;
   taskId?: string;
   agentId?: string;
+  /** When the entry is about a continuous mission's run: which one. */
+  run?: MissionRunLink;
+  /** The continuous mission the entry is about, when it is about one. */
+  continuousMissionId?: string;
   at: string;
 }
 

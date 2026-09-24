@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Brain,
+  CalendarX2,
   CircleAlert,
   CircleDot,
   Clock,
@@ -30,7 +31,7 @@ import {
 
 import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
-import { attentionTime, attentionTone } from "../lib/attention";
+import { attentionRun, attentionTime, attentionTone } from "../lib/attention";
 
 import {
   elapsedLabel,
@@ -85,6 +86,7 @@ const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   conflict: Brain,
   lessons: Brain,
   recovering: RotateCcw,
+  schedule: CalendarX2,
 };
 
 export default function Command() {
@@ -557,6 +559,11 @@ function AttentionEntry({
 
       <span className="min-w-0 flex-1">
         <span className="attention-row-label">{item.label}</span>
+        {item.run && (
+          <Link to={`/schedules/${item.run.continuousMissionId}`} className="needs-run">
+            {attentionRun(item)}
+          </Link>
+        )}
         {item.objective && item.objective !== item.detail && (
           <span className="needs-objective">{item.objective}</span>
         )}
@@ -580,8 +587,8 @@ function AttentionEntry({
         ) : (
           // Not a disabled button: offering a control and then refusing it
           // reads as a fault in the product rather than as someone else's
-          // job. The mission itself stays open to read.
-          item.workId && (
+          // job. The mission, or the schedule, stays open to read.
+          (item.workId || item.continuousMissionId) && (
             <Link to={item.action.path} className="button-quiet">
               Look at it
               <ArrowRight size={11} />

@@ -2,6 +2,7 @@ import {
   ArrowRight,
   Boxes,
   Brain,
+  CalendarX2,
   ChevronRight,
   CircleAlert,
   Clock,
@@ -42,6 +43,7 @@ import {
 
 import {
   attentionPath,
+  attentionRun,
   attentionTime,
   attentionTone,
   summarizeAttention,
@@ -63,6 +65,7 @@ const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   conflict: Brain,
   lessons: Brain,
   recovering: RotateCcw,
+  schedule: CalendarX2,
 };
 
 function Navigation({
@@ -632,6 +635,7 @@ function AttentionPanel({
 
                 <span className="min-w-0 flex-1">
                   <span className="attention-item-label">{item.label}</span>
+                  {item.run && <span className="attention-item-run">{attentionRun(item)}</span>}
                   <span className="attention-item-detail">{item.detail}</span>
                   <span className="attention-item-consequence">
                     {item.severity === "watch" && (

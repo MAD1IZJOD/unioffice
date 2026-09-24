@@ -22,6 +22,7 @@ export function attentionTone(item: AttentionItem): Tone {
     case "configuration":
     case "stalled":
     case "agent_unavailable":
+    case "schedule":
       // Red is for things that will not resolve themselves.
       return "error";
     case "conflict":
@@ -32,6 +33,11 @@ export function attentionTone(item: AttentionItem): Tone {
       // holding the thread.
       return "active";
   }
+}
+
+/** "Run 3 of Competitor pricing watch", when the entry is about a run. */
+export function attentionRun(item: AttentionItem): string | undefined {
+  return item.run ? `Run ${item.run.sequence} of ${item.run.name}` : undefined;
 }
 
 /** Where acting on the entry happens, as the backend decided. */
@@ -65,11 +71,13 @@ export function summarizeAttention(items: AttentionItem[]): string {
   const interrupted = count("interrupted");
   const review = count("conflict", "lessons");
   const recovering = count("recovering");
+  const schedules = count("schedule");
 
   if (decisions) parts.push(`${decisions} ${decisions === 1 ? "decision" : "decisions"}`);
   if (stopped) parts.push(`${stopped} stopped`);
   if (stalled) parts.push(`${stalled} stalled`);
   if (setup) parts.push(`${setup} not set up`);
+  if (schedules) parts.push(`${schedules} ${schedules === 1 ? "schedule" : "schedules"} stopped`);
   if (agents) parts.push(`${agents} blocked on an agent`);
   if (interrupted) parts.push(`${interrupted} to resume`);
   if (review) parts.push(`${review} to review`);
