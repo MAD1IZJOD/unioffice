@@ -1,6 +1,7 @@
 import type {
   Agent,
   AgentId,
+  ContinuousMission,
   ApprovalId,
   ApprovalRequest,
   Event,
@@ -80,6 +81,7 @@ export function missionControlFixture() {
   const jobs: ExecutionJob[] = [];
   const approvals: ApprovalRequest[] = [];
   const agents: Agent[] = [];
+  const schedules: ContinuousMission[] = [];
   const knowledge = new InMemoryKnowledgeRepository();
 
   const eventRecorder = new EventRecorder({
@@ -123,9 +125,37 @@ export function missionControlFixture() {
       memories: knowledge,
       links: knowledge,
       eventRecorder,
+      schedules: {
+        async findByOrganization(organizationId) {
+          return schedules.filter((schedule) => schedule.organizationId === organizationId);
+        },
+      },
     },
     { now: () => now, stalledAfterMs: STALLED_AFTER_MS },
   );
+
+  /** A continuous mission, as the scheduler or a person left it. */
+  function schedule(name: string, overrides: Partial<ContinuousMission> = {}): ContinuousMission {
+    const created: ContinuousMission = {
+      id: crypto.randomUUID() as ContinuousMission["id"],
+      organizationId: orgA,
+      ownerId: crypto.randomUUID() as ContinuousMission["ownerId"],
+      name,
+      objective: `Keep an eye on ${name}.`,
+      priority: "normal",
+      schedule: { cadence: "daily", hour: 9, minute: 0, timezone: "UTC" },
+      status: "paused",
+      pauseReason: "repeated_failures",
+      runCount: 3,
+      createdAt: ago(10_000),
+      updatedAt: ago(5),
+      metadata: {},
+      ...overrides,
+    };
+
+    schedules.push(created);
+    return created;
+  }
 
   function agent(name: string, overrides: Partial<Agent> = {}): Agent {
     const created: Agent = {
@@ -267,5 +297,7 @@ export function missionControlFixture() {
     approval,
     event,
     memory,
+    schedule,
+    schedules,
   };
 }

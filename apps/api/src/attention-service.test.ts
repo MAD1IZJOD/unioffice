@@ -87,6 +87,7 @@ function queue(fixture: {
   denials?: AttentionInput["denials"];
   conflicts?: AttentionInput["conflicts"];
   lessons?: AttentionInput["lessons"];
+  schedules?: AttentionInput["schedules"];
   authority?: AttentionAuthority;
 }, limit?: number) {
   const works = fixture.works ?? [];
@@ -103,6 +104,7 @@ function queue(fixture: {
     conflicts: fixture.conflicts ?? [],
     lessons: fixture.lessons ?? [],
     agentIds: new Set<AgentId>(),
+    schedules: fixture.schedules,
     authority: fixture.authority ?? ALLOWS_EVERYTHING,
   }, limit);
 }
@@ -478,4 +480,78 @@ test("someone who may run missions but not configure agents is told whose setup 
 
   assert.equal(result.items[0]?.actionable, false);
   assert.equal(result.items[0]?.acknowledgeable, true, "they may still set the mission aside");
+});
+
+/* --------------------------------------------------------------------------
+   Continuous missions
+   -------------------------------------------------------------------------- */
+
+const pricingRun = { continuousMissionId: "cm-1", name: "Competitor pricing watch", sequence: 3 };
+
+test("a run's approval says which continuous mission and which run it is", () => {
+  const result = queue({
+    approvals: [approval("ap1", "w1", { action: "Send the pricing report outside the company" })],
+    works: [summary("w1", { status: "waiting_approval", run: pricingRun })],
+  });
+
+  const [entry] = result.items;
+  assert.equal(entry?.kind, "decision");
+  assert.deepEqual(entry?.run, pricingRun);
+  assert.equal(entry?.continuousMissionId, "cm-1");
+  assert.equal(entry?.actionable, true);
+});
+
+test("a failed run is an ordinary mission failure that still names its run", () => {
+  const result = queue({
+    works: [summary("w1", { status: "failed", executionError: "Task failed: Compare prices", completedAt: minutesAgo(3), run: pricingRun })],
+  });
+
+  assert.equal(result.items[0]?.kind, "failure");
+  assert.equal(result.items[0]?.run?.sequence, 3);
+});
+
+test("a continuous mission that stopped itself needs a person, above a single failure", () => {
+  const result = queue({
+    works: [summary("w1", { status: "failed", executionError: "Task failed: something", completedAt: minutesAgo(3) })],
+    schedules: [{ id: "cm-1", name: "Competitor pricing watch", reason: "repeated_failures", at: minutesAgo(5) }],
+  });
+
+  assert.deepEqual(result.items.map((item) => item.kind), ["schedule", "failure"]);
+
+  const [entry] = result.items;
+  assert.equal(entry?.severity, "action");
+  assert.match(entry?.label ?? "", /“Competitor pricing watch” stopped running/);
+  assert.match(entry?.detail ?? "", /failed one after another/);
+  assert.match(entry?.consequence ?? "", /No more runs start/);
+  assert.deepEqual(entry?.action, { label: "Review schedule", path: "/schedules/cm-1" });
+  assert.equal(entry?.acknowledgeable, false);
+});
+
+test("one that stopped because its owner lost access says so", () => {
+  const result = queue({
+    schedules: [{ id: "cm-2", name: "Weekly close", reason: "owner_access", at: minutesAgo(1) }],
+  });
+
+  assert.match(result.items[0]?.detail ?? "", /can no longer start missions there/);
+});
+
+test("a stopped schedule is resumed by whoever may operate missions in its workspace", () => {
+  const needs: unknown[] = [];
+
+  queue({
+    schedules: [{ id: "cm-1", name: "Watch", workspaceId: "ws-finance" as never, reason: "repeated_failures", at: minutesAgo(1) }],
+    authority: { decide: (need) => { needs.push(need); return { allowed: true }; } },
+  });
+
+  assert.deepEqual(needs[0], { of: "permission", permission: "missions.operate", workspaceId: "ws-finance" });
+
+  const viewer = queue({
+    schedules: [{ id: "cm-1", name: "Watch", reason: "repeated_failures", at: minutesAgo(1) }],
+    authority: allowsAllBut("missions.operate"),
+  });
+
+  assert.equal(viewer.items[0]?.actionable, false);
+  assert.match(viewer.items[0]?.handoff ?? "", /missions.operate/);
+  assert.equal(viewer.actionCount, 0);
+  assert.equal(viewer.waitingOnOthersCount, 1);
 });

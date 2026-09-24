@@ -19,6 +19,7 @@ import type {
   AgentRepository,
   ApprovalRepository,
   ExecutionJobRepository,
+  ContinuousMissionRepository,
   KnowledgeLinkRepository,
   KnowledgeSearchRepository,
   MemoryRepository,
@@ -94,6 +95,11 @@ export interface MissionControlDependencies {
   memories: Pick<MemoryRepository, "query"> & Pick<KnowledgeSearchRepository, "findByIds">;
   links: Pick<KnowledgeLinkRepository, "findConflicts">;
   eventRecorder: Pick<EventRecorder, "record">;
+  /**
+   * Continuous missions, for the ones that stopped themselves. Optional so
+   * the many tests that have none need not build a store.
+   */
+  schedules?: Pick<ContinuousMissionRepository, "findByOrganization">;
 }
 
 export interface MissionCard {
@@ -487,14 +493,32 @@ export class MissionControlService {
   ): Promise<OperationalState> {
     const now = this.now();
 
-    const [works, approvals, jobs, agents, openConflicts, proposed] = await Promise.all([
+    const [works, approvals, jobs, agents, openConflicts, proposed, schedules] = await Promise.all([
       this.deps.reads.findWorkSummaries(organizationId, WORK_WINDOW),
       this.deps.approvals.findPendingByOrganization(organizationId),
       this.deps.jobs.findByOrganization(organizationId, JOB_WINDOW),
       this.deps.agents.findByOrganization(organizationId),
       this.deps.links.findConflicts(organizationId, { status: "open", limit: CONFLICTS_READ }),
       this.deps.memories.query({ organizationId, statuses: ["proposed"], limit: PROPOSED_READ }),
+      this.deps.schedules ? this.deps.schedules.findByOrganization(organizationId) : Promise.resolve([]),
     ]);
+
+    // Only a continuous mission that stopped itself needs anyone: one a person
+    // paused is paused because they meant it. Out of reach is out of view.
+    const stoppedSchedules = schedules
+      .filter((schedule) => schedule.organizationId === organizationId)
+      .filter((schedule) => !reach || reach(schedule.workspaceId))
+      .flatMap((schedule) =>
+        schedule.status === "paused" &&
+        (schedule.pauseReason === "repeated_failures" || schedule.pauseReason === "owner_access")
+          ? [{
+              id: schedule.id,
+              name: schedule.name,
+              workspaceId: schedule.workspaceId,
+              reason: schedule.pauseReason,
+              at: schedule.updatedAt,
+            }]
+          : []);
 
     // Repositories already scope by organization. These filters are the second
     // line: nothing from another tenant is classified even if a store slips.
@@ -652,6 +676,7 @@ export class MissionControlService {
         conflicts: attentionConflicts,
         lessons: lessonsByWork(ownProposed, worksById),
         agentIds: new Set(agentsById.keys()),
+        schedules: stoppedSchedules,
         authority,
       },
     };

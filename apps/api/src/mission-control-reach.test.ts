@@ -163,3 +163,34 @@ test("a member reaching a workspace only as a viewer is not offered its missions
   assert.equal(working.items[0]?.actionable, true);
   assert.equal(working.items[0]?.acknowledgeable, true);
 });
+
+test("a continuous mission that stopped itself reaches Needs You, narrowed like everything else", async () => {
+  const f = missionControlFixture();
+  f.schedule("Company pricing watch");
+  f.schedule("Finance close watch", { workspaceId: finance, pauseReason: "owner_access" });
+  // Paused by a person: they know, so nobody is asked.
+  f.schedule("Paused on purpose", { pauseReason: "person" });
+  f.schedule("Running fine", { status: "active", pauseReason: undefined, nextRunAt: f.ago(-60) });
+  // Another company's is never read.
+  f.schedule("Elsewhere", { organizationId: "bbbbbbbb-0000-4000-8000-000000000002" as never });
+
+  const full = await f.service.getAttention(orgA, asOwner);
+  const narrowed = await f.service.getAttention(orgA, { ...asOwner, reach: companyOnly });
+
+  const labels = (queue: typeof full) => queue.items.filter((item) => item.kind === "schedule").map((item) => item.label);
+
+  assert.deepEqual(labels(full).sort(), ["“Company pricing watch” stopped running", "“Finance close watch” stopped running"]);
+  assert.deepEqual(labels(narrowed), ["“Company pricing watch” stopped running"]);
+});
+
+test("a viewer is told whose a stopped schedule is, and offered no control", async () => {
+  const f = missionControlFixture();
+  f.schedule("Company pricing watch");
+
+  const queue = await f.service.getAttention(orgA, asRole("viewer"));
+  const entry = queue.items.find((item) => item.kind === "schedule");
+
+  assert.equal(entry?.actionable, false);
+  assert.ok(entry?.handoff);
+  assert.equal(queue.actionCount, 0);
+});

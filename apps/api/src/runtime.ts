@@ -408,6 +408,7 @@ export function createExecutionRuntime(config: ApiConfig) {
       memories: memoryRepository,
       links: knowledgeLinkRepository,
       eventRecorder,
+      schedules: continuousMissionRepository,
     },
     { stalledAfterMs: config.staleRunAfterMs },
   );

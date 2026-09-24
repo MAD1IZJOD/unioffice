@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   boundedObjective,
   boundedText,
+  runLinkOf,
   dateOf,
   type ArtifactSummary,
   type OperationalEventQuery,
@@ -43,6 +44,7 @@ const WORK_SUMMARY_COLUMNS = [
   "acknowledged_at:metadata->acknowledged->>at",
   "mission_name:metadata->>missionName",
   "template_name:metadata->template->>name",
+  "run:metadata->continuousMission",
 ].join(",");
 
 const TASK_SUMMARY_COLUMNS = [
@@ -239,6 +241,7 @@ interface WorkSummaryRow {
   acknowledged_at: string | null;
   mission_name: string | null;
   template_name: string | null;
+  run: unknown;
 }
 
 interface TaskSummaryRow {
@@ -306,6 +309,7 @@ function toWorkSummary(row: WorkSummaryRow): WorkSummary {
     acknowledgedAt: dateOf(row.acknowledged_at),
     missionName: boundedText(row.mission_name),
     templateName: boundedText(row.template_name),
+    run: runLinkOf(row.run),
   };
 }
 

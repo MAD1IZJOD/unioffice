@@ -87,7 +87,9 @@ export type AttentionKind =
   | "interrupted"
   | "conflict"
   | "lessons"
-  | "recovering";
+  | "recovering"
+  /** A continuous mission that stopped itself and starts no runs until someone looks. */
+  | "schedule";
 
 export type AttentionSeverity = "action" | "review" | "watch";
 
@@ -100,7 +102,8 @@ export type AttentionSource =
   | "planning"
   | "queue"
   | "workforce"
-  | "knowledge";
+  | "knowledge"
+  | "schedule";
 
 export interface AttentionItem {
   id: string;
@@ -133,6 +136,15 @@ export interface AttentionItem {
   objective?: string;
   taskId?: string;
   agentId?: string;
+
+  /**
+   * When the entry is about a continuous mission's run: which one. A person
+   * reads "Run 3 of Competitor pricing watch" rather than wondering why the
+   * same objective keeps asking for them.
+   */
+  run?: { continuousMissionId: string; name: string; sequence: number };
+  /** The continuous mission an entry is about, when it is about one. */
+  continuousMissionId?: string;
 
   at: Date;
 }
@@ -172,6 +184,18 @@ export interface AttentionInput {
   lessons: Array<{ workId: WorkId; count: number; at: Date }>;
   /** Agent ids that exist in the organization, for linking to them. */
   agentIds: Set<AgentId>;
+  /**
+   * Continuous missions that stopped themselves - after repeated failed runs,
+   * or because the person they run for lost access - and will start nothing
+   * until someone looks. A person pausing one is not listed: they know.
+   */
+  schedules?: Array<{
+    id: string;
+    name: string;
+    workspaceId?: WorkspaceId;
+    reason: "repeated_failures" | "owner_access";
+    at: Date;
+  }>;
   /** Who this queue is for. Every entry's action is answered against it. */
   authority: AttentionAuthority;
 }
@@ -193,12 +217,15 @@ const KIND_RANK: Record<AttentionKind, number> = {
   // Above an ordinary failure: it is the one stop that will happen again to
   // every mission needing the same thing, so fixing it clears more than one.
   configuration: 3,
-  failure: 4,
-  stalled: 5,
-  interrupted: 6,
-  conflict: 7,
-  lessons: 8,
-  recovering: 9,
+  // A schedule that stopped itself stops every future run of that work, so it
+  // sits with configuration, above a single mission's failure.
+  schedule: 4,
+  failure: 5,
+  stalled: 6,
+  interrupted: 7,
+  conflict: 8,
+  lessons: 9,
+  recovering: 10,
 };
 
 /**
@@ -219,6 +246,7 @@ export function buildAttentionQueue(
     ...input.jobs.flatMap((job) => recoveringItem(job, input.worksById.get(job.workId))),
     ...input.conflicts.flatMap(conflictItem),
     ...input.lessons.flatMap((entry) => lessonsItem(entry, input.worksById.get(entry.workId))),
+    ...(input.schedules ?? []).map(scheduleItem),
   ]
     .map((draft) => answer(draft, input.authority))
     .sort(order);
@@ -337,7 +365,45 @@ function decisionItem(approval: ApprovalRequest, work: WorkSummary | undefined):
     objective: work ? clip(work.objective, 200) : undefined,
     taskId: approval.taskId,
     agentId: approval.agentId,
+    ...runOf(work),
     at: approval.createdAt,
+  };
+}
+
+/** The run an entry's mission is, when a continuous mission started it. */
+function runOf(work: WorkSummary | undefined): Pick<AttentionItem, "run" | "continuousMissionId"> {
+  return work?.run
+    ? { run: work.run, continuousMissionId: work.run.continuousMissionId }
+    : {};
+}
+
+/**
+ * A continuous mission that stopped itself.
+ *
+ * Resuming it is operating missions in its workspace, the same permission the
+ * route checks, so a viewer is told whose it is rather than offered a control.
+ */
+function scheduleItem(schedule: NonNullable<AttentionInput["schedules"]>[number]): AttentionDraft {
+  const failures = schedule.reason === "repeated_failures";
+
+  return {
+    need: { of: "permission", permission: "missions.operate", workspaceId: schedule.workspaceId },
+    id: `schedule:${schedule.id}`,
+    kind: "schedule",
+    severity: "action",
+    level: "high",
+    source: "schedule",
+    label: `“${clip(schedule.name, 100)}” stopped running`,
+    detail: failures
+      ? "Its last runs failed one after another, so it paused itself rather than keep failing on schedule."
+      : "The person it runs for can no longer start missions there, so it paused itself rather than act on their old permission.",
+    consequence: failures
+      ? "No more runs start until someone looks at why they failed and resumes it."
+      : "No more runs start until someone who may start missions there takes it on and resumes it.",
+    action: { label: "Review schedule", path: `/schedules/${schedule.id}` },
+    acknowledgeable: false,
+    continuousMissionId: schedule.id,
+    at: schedule.at,
   };
 }
 
@@ -356,6 +422,7 @@ function missionItems(
     } as const satisfies AttentionNeed,
     workId: work.id,
     objective: clip(work.objective, 200),
+    ...runOf(work),
   };
 
   if (reading.phase === "failed") {

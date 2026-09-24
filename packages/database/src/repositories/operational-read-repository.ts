@@ -65,6 +65,15 @@ export interface WorkSummary {
   /** A short name given when the mission was started from a template. */
   missionName?: string;
   templateName?: string;
+
+  /** When a continuous mission started this one: which, and which run. */
+  run?: MissionRunLink;
+}
+
+export interface MissionRunLink {
+  continuousMissionId: string;
+  name: string;
+  sequence: number;
 }
 
 export interface TaskSummary {
@@ -164,7 +173,25 @@ export function summarizeWork(work: Work): WorkSummary {
     acknowledgedAt: dateOf(acknowledged?.at),
     missionName: boundedText(work.metadata.missionName),
     templateName: boundedText(template?.name),
+    run: runLinkOf(work.metadata.continuousMission),
   };
+}
+
+/**
+ * The run a mission is, from what the scheduler wrote on it. Anything that is
+ * not the whole shape reads as no run: a link that names no mission or no
+ * number is not one.
+ */
+export function runLinkOf(value: unknown): MissionRunLink | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+
+  const link = value as Record<string, unknown>;
+  const sequence = typeof link.sequence === "number" ? link.sequence : Number(link.sequence);
+  const name = boundedText(link.name);
+
+  if (typeof link.id !== "string" || !name || !Number.isInteger(sequence) || sequence < 1) return undefined;
+
+  return { continuousMissionId: link.id, name, sequence };
 }
 
 /**
