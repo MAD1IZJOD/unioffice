@@ -46,3 +46,6 @@ export * from "./repositories/supabase-skill-version-repository.js";
 export * from "./repositories/action-proposal-repository.js";
 export * from "./repositories/in-memory-action-proposal-repository.js";
 export * from "./repositories/supabase-action-proposal-repository.js";
+export * from "./repositories/continuous-mission-repository.js";
+export * from "./repositories/supabase-continuous-mission-repository.js";
+export * from "./repositories/in-memory-continuous-mission-repository.js";

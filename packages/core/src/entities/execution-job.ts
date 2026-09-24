@@ -20,7 +20,12 @@ export type ExecutionJobReason =
   | "requested"
   | "approval_resumed"
   | "retry"
-  | "recovered";
+  | "recovered"
+  /**
+   * A continuous mission's run. Nobody holds a request open to plan it, so
+   * the worker plans it before executing it.
+   */
+  | "scheduled";
 
 /**
  * A durable instruction to execute one work item.
