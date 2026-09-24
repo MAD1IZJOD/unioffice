@@ -106,6 +106,41 @@ export interface PolicyScope {
   knowledgeTypes?: string[];
 }
 
+/**
+ * Who started the mission a step belongs to.
+ *
+ * "schedule" is a continuous mission's run, started with nobody watching;
+ * "person" is everything else. A mission carries no mark unless a schedule
+ * started it, so the absence of one reads as a person.
+ */
+export type MissionStarter = "schedule" | "person";
+
+/**
+ * The circumstances a policy is narrowed to, beyond who and what.
+ *
+ * Scope says which agents, tools and workspaces a rule is about. Conditions
+ * say when: only for work a schedule started, only for a step that changes
+ * something outside the company. Every condition is a fact the server
+ * establishes for itself - who started the mission is on the mission row, and
+ * whether a tool writes outside is the tool registry's answer - so a model
+ * can neither satisfy one nor talk its way out of one.
+ *
+ * Like scope, an absent condition means "not narrowed this way", and every
+ * condition present must hold for the policy to apply.
+ */
+export interface PolicyConditions {
+  /** Only when the mission was started this way. */
+  startedBy?: MissionStarter;
+
+  /** Only when the step, or the tool call, writes to a system outside the company. */
+  writesExternally?: boolean;
+}
+
+/** Whether a policy is narrowed by any condition at all. */
+export function hasPolicyConditions(conditions: PolicyConditions | undefined): boolean {
+  return Boolean(conditions && (conditions.startedBy !== undefined || conditions.writesExternally !== undefined));
+}
+
 export interface Policy {
   id: PolicyId;
 
@@ -119,6 +154,12 @@ export interface Policy {
   subject: PolicySubject;
 
   scope: PolicyScope;
+
+  /**
+   * When the rule applies, beyond its scope. Optional so every policy written
+   * before conditions existed still reads as what it always was.
+   */
+  conditions?: PolicyConditions;
 
   effect: PolicyEffect;
 
@@ -137,6 +178,9 @@ export interface Policy {
   updatedAt: Date;
 
   createdBy?: string;
+
+  /** Who last changed it. Absent until someone does. */
+  updatedBy?: string;
 
   metadata: Record<string, unknown>;
 }

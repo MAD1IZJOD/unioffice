@@ -463,3 +463,140 @@ test("the summary mentions the other policies that applied", () => {
 
   assert.match(decision.summary, /1 other policy also applied/);
 });
+
+/* --------------------------------------------------------------------------
+   Conditions: when a rule applies, beyond who and what.
+   -------------------------------------------------------------------------- */
+
+const publishReport: GovernanceAction = {
+  kind: "task",
+  title: "Publish the pricing report",
+  requiredTools: ["github_create_issue"],
+  externalWrites: ["github_create_issue"],
+};
+
+const summarizeInternally: GovernanceAction = {
+  kind: "task",
+  title: "Summarize competitor pricing",
+  requiredTools: ["web_search"],
+  externalWrites: [],
+};
+
+const unattendedOutside = policy("c1", {
+  name: "Unattended work stays inside",
+  subject: "task",
+  effect: "require_approval",
+  conditions: { startedBy: "schedule", writesExternally: true },
+});
+
+test("a scheduled step that writes outside needs approval under a conditioned rule", () => {
+  const decision = engine.evaluate(publishReport, context({ startedBy: "schedule" }), [unattendedOutside]);
+
+  assert.equal(decision.outcome, "require_approval");
+  assert.match(decision.reasons[0]!.explanation, /a schedule started this mission/);
+  assert.match(decision.reasons[0]!.explanation, /this step changes something outside the company/);
+});
+
+test("the same step started by a person is not caught by a schedule-only rule", () => {
+  assert.equal(engine.evaluate(publishReport, context(), [unattendedOutside]).outcome, "allow");
+  assert.equal(engine.evaluate(publishReport, context({ startedBy: "person" }), [unattendedOutside]).outcome, "allow");
+});
+
+test("a scheduled step that writes nothing outside is not caught by an external-write rule", () => {
+  const decision = engine.evaluate(summarizeInternally, context({ startedBy: "schedule" }), [unattendedOutside]);
+
+  assert.equal(decision.outcome, "allow");
+  assert.equal(decision.reasons.length, 0);
+});
+
+test("a schedule-only deny blocks unattended work and leaves attended work alone", () => {
+  const rule = policy("c2", {
+    name: "No unattended web research",
+    subject: "task",
+    effect: "deny",
+    scope: { agentIds: [], toolIds: ["web_search"], workspaceIds: [], capabilities: [] },
+    conditions: { startedBy: "schedule" },
+  });
+
+  assert.equal(engine.evaluate(summarizeInternally, context({ startedBy: "schedule" }), [rule]).outcome, "deny");
+  assert.equal(engine.evaluate(summarizeInternally, context({ startedBy: "person" }), [rule]).outcome, "allow");
+});
+
+test("a person-only allow never loosens anything for a schedule, and deny still wins", () => {
+  const allowAttended = policy("c3", {
+    subject: "task",
+    effect: "allow",
+    conditions: { startedBy: "person" },
+  });
+  const denyUnattended = policy("c4", {
+    subject: "task",
+    effect: "deny",
+    conditions: { startedBy: "schedule" },
+  });
+
+  const scheduled = engine.evaluate(summarizeInternally, context({ startedBy: "schedule" }), [allowAttended, denyUnattended]);
+  assert.equal(scheduled.outcome, "deny");
+  assert.equal(scheduled.reasons.length, 1);
+
+  const attended = engine.evaluate(summarizeInternally, context({ startedBy: "person" }), [allowAttended, denyUnattended]);
+  assert.equal(attended.outcome, "allow");
+  assert.match(attended.reasons[0]!.explanation, /a person started this mission/);
+});
+
+test("a tool rule conditioned on external writes follows the registry's answer", () => {
+  const rule = policy("c5", {
+    name: "No outside writes from tools",
+    subject: "tool",
+    effect: "deny",
+    conditions: { writesExternally: true },
+  });
+
+  const writing = engine.evaluate({ kind: "tool", toolId: "github_create_issue", toolRisk: "high", writesExternally: true }, context(), [rule]);
+  const reading = engine.evaluate({ kind: "tool", toolId: "github_list_issues", toolRisk: "low", writesExternally: false }, context(), [rule]);
+
+  assert.equal(writing.outcome, "deny");
+  assert.match(writing.reasons[0]!.explanation, /the tool changes something outside the company/);
+  assert.equal(reading.outcome, "allow");
+});
+
+test("an inactive conditioned rule takes no part", () => {
+  for (const status of ["draft", "paused", "archived"] as const) {
+    const decision = engine.evaluate(publishReport, context({ startedBy: "schedule" }), [{ ...unattendedOutside, status }]);
+    assert.equal(decision.outcome, "allow", status);
+  }
+});
+
+test("a conditioned rule scoped to another workspace does not apply here", () => {
+  const rule = {
+    ...unattendedOutside,
+    scope: { agentIds: [], toolIds: [], workspaceIds: ["ws-finance" as WorkspaceId], capabilities: [] },
+  };
+
+  assert.equal(
+    engine.evaluate(publishReport, context({ startedBy: "schedule", workspaceId: "ws-engineering" as WorkspaceId }), [rule]).outcome,
+    "allow",
+  );
+  assert.equal(
+    engine.evaluate(publishReport, context({ startedBy: "schedule", workspaceId: "ws-finance" as WorkspaceId }), [rule]).outcome,
+    "require_approval",
+  );
+});
+
+test("conditions never reach knowledge", () => {
+  const rule = policy("c6", {
+    subject: "knowledge_recall",
+    effect: "deny",
+    conditions: { startedBy: "schedule" },
+  });
+
+  assert.equal(engine.evaluate(recallAssumption, context({ startedBy: "schedule" }), [rule]).outcome, "allow");
+});
+
+test("the same conditioned inputs always give the same decision", () => {
+  const rules = [unattendedOutside, policy("c7", { subject: "task", effect: "allow" })];
+  const first = engine.evaluate(publishReport, context({ startedBy: "schedule" }), rules);
+
+  for (let run = 0; run < 5; run += 1) {
+    assert.deepEqual(engine.evaluate(publishReport, context({ startedBy: "schedule" }), [...rules].reverse()), first);
+  }
+});

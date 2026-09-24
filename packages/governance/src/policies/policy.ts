@@ -1,5 +1,6 @@
 import type {
   AgentId,
+  MissionStarter,
   OrganizationId,
   Policy,
   PolicyEffect,
@@ -26,12 +27,16 @@ export type GovernanceAction =
       toolId: string;
       /** The tool's own baseline risk, from the registry. */
       toolRisk?: RiskLevel;
+      /** Whether the registry says this tool writes outside the company. */
+      writesExternally?: boolean;
     }
   | {
       kind: "task";
       title: string;
       /** Tools the plan says this step needs, if any. */
       requiredTools: string[];
+      /** Those of them the registry says write outside the company. */
+      externalWrites?: string[];
     }
   | {
       /** An agent is about to be handed a piece of company knowledge. */
@@ -63,6 +68,12 @@ export interface GovernanceContext {
   workId?: WorkId;
 
   taskId?: TaskId;
+
+  /**
+   * Who started the mission, read from the mission row. Absent is a person:
+   * only a schedule marks the missions it starts.
+   */
+  startedBy?: MissionStarter;
 }
 
 /** One policy's contribution to a decision, in the words a person can read. */

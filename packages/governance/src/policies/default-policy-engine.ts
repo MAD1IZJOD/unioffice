@@ -192,7 +192,50 @@ function scopeMatches(
     }
   }
 
+  return conditionsHold(policy, action, context);
+}
+
+/**
+ * Whether the circumstances a policy is narrowed to are the ones at hand.
+ *
+ * Both facts are the server's own: who started the mission is on the mission
+ * row, and whether a tool writes outside is the registry's answer. Knowledge
+ * is never narrowed this way - the authoring rules refuse it - so a
+ * conditioned policy simply does not reach it.
+ */
+function conditionsHold(
+  policy: Policy,
+  action: GovernanceAction,
+  context: GovernanceContext,
+): boolean {
+  const conditions = policy.conditions;
+
+  if (!conditions) {
+    return true;
+  }
+
+  if (conditions.startedBy !== undefined) {
+    if (isKnowledgeAction(action)) return false;
+    if (startedBy(context) !== conditions.startedBy) return false;
+  }
+
+  if (conditions.writesExternally !== undefined) {
+    if (isKnowledgeAction(action)) return false;
+    if (writesExternally(action) !== conditions.writesExternally) return false;
+  }
+
   return true;
+}
+
+/** A mission with no mark on it was started by a person. */
+function startedBy(context: GovernanceContext): "schedule" | "person" {
+  return context.startedBy ?? "person";
+}
+
+function writesExternally(action: GovernanceAction): boolean {
+  if (action.kind === "tool") return action.writesExternally === true;
+  if (action.kind === "task") return (action.externalWrites ?? []).length > 0;
+  return false;
 }
 
 function isKnowledgeAction(
@@ -237,6 +280,26 @@ function explain(
 
   if ((policy.scope.knowledgeTypes ?? []).length > 0 && isKnowledgeAction(action)) {
     parts.push(`it covers ${action.knowledgeType} knowledge`);
+  }
+
+  if (policy.conditions?.startedBy === "schedule") {
+    parts.push("a schedule started this mission, with nobody watching");
+  }
+
+  if (policy.conditions?.startedBy === "person") {
+    parts.push("a person started this mission");
+  }
+
+  if (policy.conditions?.writesExternally === true) {
+    parts.push(
+      action.kind === "tool"
+        ? "the tool changes something outside the company"
+        : "this step changes something outside the company",
+    );
+  }
+
+  if (policy.conditions?.writesExternally === false) {
+    parts.push("nothing outside the company is changed");
   }
 
   if (parts.length === 0) {
