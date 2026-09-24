@@ -9,6 +9,7 @@ import {
 } from "../../lib/api";
 
 import {
+  conditionPhrase,
   effectLabel,
   effectTone,
   policySentence,
@@ -100,6 +101,10 @@ export function PolicyCard({
           <dl className="policy-detail">
             <Detail label="Covers">{scopeSentence(policy)}</Detail>
 
+            {conditionPhrase(policy) && (
+              <Detail label="Applies">{capitalizeFirst(conditionPhrase(policy)!)}</Detail>
+            )}
+
             {named.length > 0 && (
               <Detail label="Agents">{named.join(", ")}</Detail>
             )}
@@ -127,6 +132,10 @@ export function PolicyCard({
               {formatRelativeTime(policy.createdAt)}
               {policy.createdBy ? ` by ${policy.createdBy}` : ""}
             </Detail>
+
+            {policy.updatedBy && (
+              <Detail label="Last changed">{formatRelativeTime(policy.updatedAt)}</Detail>
+            )}
           </dl>
 
           <div className="policy-actions">
@@ -189,4 +198,8 @@ function Detail({
       <dd className="policy-detail-value">{children}</dd>
     </div>
   );
+}
+
+function capitalizeFirst(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

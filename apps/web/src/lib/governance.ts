@@ -228,14 +228,36 @@ export function policySentence(policy: PolicyItem): string {
       : `${capitalize(scope)} — explicitly permitted.`;
   }
 
+  const when = conditionPhrase(policy);
+  const covered = capitalize(when ? `${scope}, ${when}` : scope);
+
   switch (policy.effect) {
     case "deny":
-      return `${capitalize(scope)} — never permitted.`;
+      return `${covered} — never permitted.`;
     case "require_approval":
-      return `${capitalize(scope)} — stops for a person first.`;
+      return `${covered} — stops for a person first.`;
     default:
-      return `${capitalize(scope)} — explicitly permitted.`;
+      return `${covered} — explicitly permitted.`;
   }
+}
+
+/**
+ * When a rule applies, as the end of a sentence: "only when a schedule
+ * started the work and the step changes something outside the company".
+ * Undefined when the rule is not narrowed by circumstance.
+ */
+export function conditionPhrase(policy: Pick<PolicyItem, "conditions" | "subject">): string | undefined {
+  const conditions = policy.conditions ?? {};
+  const parts: string[] = [];
+
+  if (conditions.startedBy === "schedule") parts.push("a schedule started the work");
+  if (conditions.startedBy === "person") parts.push("a person started the work");
+
+  const thing = policy.subject === "tool" ? "the call" : "the step";
+  if (conditions.writesExternally === true) parts.push(`${thing} changes something outside the company`);
+  if (conditions.writesExternally === false) parts.push(`${thing} changes nothing outside the company`);
+
+  return parts.length === 0 ? undefined : `only when ${parts.join(" and ")}`;
 }
 
 export function readableCapability(capability: string): string {

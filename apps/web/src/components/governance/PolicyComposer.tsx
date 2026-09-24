@@ -86,6 +86,8 @@ export function PolicyComposer({
   const [workspaceIds, setWorkspaceIds] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [knowledgeTypes, setKnowledgeTypes] = useState<string[]>([]);
+  const [startedBy, setStartedBy] = useState<"any" | "schedule" | "person">("any");
+  const [outside, setOutside] = useState<"any" | "writes" | "reads">("any");
 
   const aboutKnowledge =
     subject === "knowledge_recall" || subject === "knowledge_capture";
@@ -228,8 +230,28 @@ export function PolicyComposer({
           )}
         </Field>
 
+        {!aboutKnowledge && (
+          <Field
+            index="03"
+            question="When does it apply?"
+            hint="Both are facts UNIOFFICE establishes for itself - who started the work is on the mission, and whether a tool changes something elsewhere is the tool's own declaration - so no plan can talk its way past them."
+          >
+            <div className="choice-row" role="group" aria-label="Who started the work">
+              <Choice active={startedBy === "any"} onClick={() => setStartedBy("any")} label="Any work" detail="Whoever started it" />
+              <Choice active={startedBy === "schedule"} onClick={() => setStartedBy("schedule")} label="Scheduled work" detail="Runs a schedule started, with nobody watching" />
+              <Choice active={startedBy === "person"} onClick={() => setStartedBy("person")} label="Work a person started" detail="Missions someone started themselves" />
+            </div>
+
+            <div className="choice-row mt-2" role="group" aria-label="Changes outside the company">
+              <Choice active={outside === "any"} onClick={() => setOutside("any")} label="Any step" detail="Inside the company or not" />
+              <Choice active={outside === "writes"} onClick={() => setOutside("writes")} label="Changes elsewhere" detail="Writes to a system outside the company" />
+              <Choice active={outside === "reads"} onClick={() => setOutside("reads")} label="Changes nothing elsewhere" detail="Stays within the company's own records" />
+            </div>
+          </Field>
+        )}
+
         <Field
-          index="03"
+          index={aboutKnowledge ? "03" : "04"}
           question="What happens when it matches?"
           hint="A rule that stops something always beats one that permits it, however they are written."
         >
@@ -254,7 +276,7 @@ export function PolicyComposer({
         </Field>
 
         <Field
-          index="04"
+          index={aboutKnowledge ? "04" : "05"}
           question="How much is at stake?"
           hint="Risk does not decide anything on its own. It is what a person reads when the rule fires."
         >
@@ -271,7 +293,7 @@ export function PolicyComposer({
           </div>
         </Field>
 
-        <Field index="05" question="Name it">
+        <Field index={aboutKnowledge ? "05" : "06"} question="Name it">
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -336,6 +358,16 @@ export function PolicyComposer({
                 scope: aboutKnowledge
                   ? { agentIds, toolIds: [], workspaceIds, capabilities, knowledgeTypes }
                   : { agentIds, toolIds, workspaceIds, capabilities, knowledgeTypes: [] },
+                // Knowledge is never narrowed by circumstance; the server
+                // refuses it, so nothing is sent.
+                ...(aboutKnowledge
+                  ? {}
+                  : {
+                      conditions: {
+                        ...(startedBy === "any" ? {} : { startedBy }),
+                        ...(outside === "any" ? {} : { writesExternally: outside === "writes" }),
+                      },
+                    }),
               })
             }
           >

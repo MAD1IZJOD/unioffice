@@ -775,6 +775,17 @@ export interface PolicyScope {
   knowledgeTypes?: string[];
 }
 
+/**
+ * When a rule applies, beyond who and what. Both are facts the server
+ * establishes itself; absent means the rule is not narrowed that way.
+ */
+export interface PolicyConditions {
+  /** Only for work a schedule started, or only for work a person started. */
+  startedBy?: "schedule" | "person";
+  /** Only when the step changes something outside the company, or only when it does not. */
+  writesExternally?: boolean;
+}
+
 export interface PolicyItem {
   id: string;
   organizationId: string;
@@ -782,6 +793,7 @@ export interface PolicyItem {
   description: string;
   subject: PolicySubject;
   scope: PolicyScope;
+  conditions?: PolicyConditions;
   effect: PolicyEffect;
   risk: RiskLevel;
   status: PolicyStatus;
@@ -789,6 +801,7 @@ export interface PolicyItem {
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
+  updatedBy?: string;
   metadata: Record<string, unknown>;
 }
 
@@ -882,6 +895,7 @@ export interface NewPolicy {
   risk: RiskLevel;
   status?: PolicyStatus;
   scope?: Partial<PolicyScope>;
+  conditions?: PolicyConditions;
   approvalPrompt?: string;
 }
 
@@ -892,6 +906,8 @@ export interface PolicyChanges {
   risk?: RiskLevel;
   status?: PolicyStatus;
   scope?: Partial<PolicyScope>;
+  /** Replaces the conditions; an empty object clears them. */
+  conditions?: PolicyConditions;
   /** null clears the prompt; undefined leaves it alone. */
   approvalPrompt?: string | null;
 }
