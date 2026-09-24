@@ -354,6 +354,7 @@ function harness(script: string[] = []) {
 
   return {
     model,
+    knowledge,
     works,
     tasks,
     events,
@@ -841,4 +842,40 @@ test("a scheduler failure is logged and never stops the worker", async () => {
 
   await worker.schedule();
   assert.match(lines.join("\n"), /Scheduler error: database unreachable/);
+});
+
+test("repeated runs that learn the same thing leave one piece of company knowledge", async () => {
+  const output = [
+    "Competitor pricing summary for the week.",
+    "Acme kept its Starter plan at 499 rupees a month while raising Pro to 1999 rupees, the first Pro change this quarter.",
+    "Nothing else on the three tracked price pages moved.",
+  ].join(" ");
+  const learned = JSON.stringify({
+    knowledge: [{
+      type: "insight",
+      title: "Acme raised its Pro plan to 1999 rupees a month",
+      content: "Acme kept its Starter plan at 499 rupees a month while raising Pro to 1999 rupees, the first Pro change this quarter.",
+      importance: 0.7,
+      confidence: 0.8,
+    }],
+  });
+
+  const h = harness([plan([step()]), output, learned, plan([step()]), output, learned]);
+  await h.addOwner();
+  const mission = await h.weekly();
+
+  h.setClock(new Date(firstDue.getTime() + 1_000));
+  await h.pass();
+  h.setClock(new Date(secondDue.getTime() + 1_000));
+  await h.pass();
+
+  const runs = await runsOf(h, mission.id);
+  assert.deepEqual(runs.map((run) => run.workStatus), ["completed", "completed"]);
+
+  // Both runs completed and both offered the same insight; the Brain kept
+  // one, recorded against the run that first learned it.
+  const memories = [...h.knowledge.memories.values()];
+  assert.equal(memories.length, 1);
+  assert.equal(memories[0]!.title, "Acme raised its Pro plan to 1999 rupees a month");
+  assert.equal(memories[0]!.workId, runs[1]!.workId);
 });
