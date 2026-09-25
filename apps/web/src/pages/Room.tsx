@@ -93,6 +93,14 @@ export default function Room() {
   const [openArtifact, setOpenArtifact] = useState<ArtifactItem>();
   const [focused, setFocused] = useState<string>();
 
+  // The moment a mission finishes while someone is watching it. Decided from
+  // the mission's own status changing under this page - from live to
+  // delivered or stopped - and never from a mission that was already finished
+  // when it was opened, which simply shows as finished. Adjusted during render,
+  // React's documented way to respond to a value the component already has.
+  const [lastStatus, setLastStatus] = useState<string>();
+  const [finishedHere, setFinishedHere] = useState<"delivered" | "stopped">();
+
   const room = useLiveResource<ExecutionRoomData>(
     useCallback(() => fetchExecutionRoom(missionId), [missionId]),
     {
@@ -122,6 +130,17 @@ export default function Room() {
   );
 
   const { reload } = room;
+
+  const status = room.data?.work.status;
+
+  if (status !== lastStatus) {
+    setLastStatus(status);
+
+    const wasLive = lastStatus !== undefined && !["completed", "failed", "cancelled"].includes(lastStatus);
+
+    if (wasLive && status === "completed") setFinishedHere("delivered");
+    else if (wasLive && (status === "failed" || status === "cancelled")) setFinishedHere("stopped");
+  }
 
   const run = useCallback(
     async (label: string, operation: () => Promise<unknown>) => {
@@ -264,7 +283,9 @@ export default function Room() {
 
   return (
     <div className="room fade-up">
-      <header className={`operation ${toneClass[state.tone]} ${moodOf(state)}`}>
+      <header
+        className={`operation ${toneClass[state.tone]} ${moodOf(state)}${finishedHere ? ` operation-settled operation-settled-${finishedHere}` : ""}`}
+      >
         <div className="operation-inner">
           <Link to="/missions" className="button-quiet mb-7 inline-flex">
             <ArrowLeft size={12} />
@@ -336,7 +357,7 @@ export default function Room() {
 
           <div className="operation-readout">
             <Fact
-              label="Plan"
+              label="Steps done"
               value={
                 plan.totalCount === 0
                   ? "—"
@@ -344,17 +365,32 @@ export default function Room() {
               }
             />
             <Fact label="Running now" value={plan.runningCount || "—"} />
-            <Fact
-              label="At once"
-              value={plan.widestLane > 1 ? `${plan.widestLane} wide` : "in order"}
-            />
-            <Fact label="Workforce" value={data.cast.length || "—"} />
-            <Fact label="Tool calls" value={toolCalls} />
+            <Fact label="Agents on it" value={data.cast.length || "—"} />
             <Fact
               label="Ran for"
               value={formatDuration(work.startedAt, work.completedAt)}
             />
           </div>
+
+          {/* How the run was shaped, for whoever wants the machinery. */}
+          {plan.totalCount > 0 && (
+            <details className="tech-detail operation-technical">
+              <summary>Technical details</summary>
+
+              <dl className="operation-technical-list">
+                <dt>Steps able to run side by side</dt>
+                <dd>{plan.widestLane > 1 ? plan.widestLane : "none; one after another"}</dd>
+                <dt>Tool calls made</dt>
+                <dd>{toolCalls}</dd>
+                {executionJob && (
+                  <>
+                    <dt>Queue attempts</dt>
+                    <dd>{executionJob.attempts}</dd>
+                  </>
+                )}
+              </dl>
+            </details>
+          )}
 
           <div className="operation-controls">
             {(opening || (!opening && work.status === "planning")) && (
@@ -594,11 +630,9 @@ export default function Room() {
               <>
                 <Chapter
                   index={chapter("floor")}
-                  title="The floor"
+                  title="The work"
                   action={
                     <span className="t-machine">
-                      {plan.lanes.length}{" "}
-                      {plan.lanes.length === 1 ? "lane" : "lanes"} ·{" "}
                       {plan.progress}% through
                     </span>
                   }
@@ -620,7 +654,7 @@ export default function Room() {
                 title="Who is on it"
                 action={
                   <span className="t-machine">
-                    routed on capability, not availability
+                    chosen for what each can do
                   </span>
                 }
               />
@@ -909,7 +943,7 @@ function Stations({
     },
     {
       label: "Queued",
-      detail: queued ? "durable job" : undefined,
+      detail: queued ? "on the queue" : undefined,
       passed: planned && (queued || ran),
       now: state.phase === "queued" || state.phase === "recovering",
     },
@@ -931,10 +965,12 @@ function Stations({
   ];
 
   return (
-    <div className="stations">
+    <div className="stations" role="list" aria-label="Where the mission is">
       {stations.map((station) => (
         <div
           key={station.label}
+          role="listitem"
+          aria-current={station.now ? "step" : undefined}
           className={`station${
             station.now
               ? " station-now"
@@ -943,6 +979,7 @@ function Stations({
                 : ""
           }`}
         >
+          <span className="station-node" aria-hidden="true" />
           <span className="station-label">{station.label}</span>
           {station.detail && (
             <span className="station-detail">{station.detail}</span>

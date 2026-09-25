@@ -240,43 +240,91 @@
    -------------------------------------------------------------------------- */
 
 .stations {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: 1px;
   margin-top: 34px;
-  background: var(--line-subtle);
 }
 
+/* One stop on the track. The line runs out of each node towards the next,
+   filled for the stretch the mission has already travelled. */
 .station {
-  flex: 1 1 118px;
-  padding: 11px 13px;
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 22px 12px 0 0;
+}
+
+.station::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 0;
+  left: 14px;
+  height: 1px;
+  background: var(--line);
+}
+
+.station:last-child::before {
+  display: none;
+}
+
+.station-passed::before {
+  background: linear-gradient(90deg, var(--ink-muted), var(--line-strong));
+}
+
+.station-node {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
   background: var(--surface-0);
+  transition:
+    transform var(--duration-slow) var(--ease-settle),
+    background var(--duration) var(--ease-standard),
+    border-color var(--duration) var(--ease-standard);
+}
+
+.station-passed .station-node {
+  border-color: var(--ink-muted);
+  background: var(--ink-muted);
+}
+
+/* Where the mission is now: the node comes forward, in the mission's tone. */
+.station-now .station-node {
+  border-color: var(--tone, var(--blue));
+  background: var(--tone, var(--blue));
+  box-shadow: 0 0 0 4px var(--tone-soft, var(--blue-soft)), 0 0 14px var(--tone, var(--blue));
+  transform: scale(1.12);
 }
 
 .station-label {
   display: block;
+  overflow: hidden;
   color: var(--ink-faint);
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .station-detail {
   display: block;
   margin-top: 3px;
+  overflow: hidden;
   color: var(--ink-faint);
   font-family: var(--mono);
   font-size: var(--text-2xs);
   opacity: 0.75;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .station-passed .station-label {
   color: var(--ink-secondary);
-}
-
-.station-now {
-  background: var(--surface-2);
-  box-shadow: inset 0 2px 0 0 var(--tone, var(--blue));
 }
 
 .station-now .station-label {
@@ -286,6 +334,121 @@
 .station-now .station-detail {
   color: var(--tone, var(--blue-ink));
   opacity: 1;
+}
+
+/* On a phone the track stands on end, so every stop keeps its words. */
+@media (max-width: 640px) {
+  .stations {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .station {
+    padding: 0 0 0 26px;
+  }
+
+  .station::before {
+    top: 14px;
+    right: auto;
+    bottom: -14px;
+    left: 6px;
+    width: 1px;
+    height: auto;
+  }
+
+  .station-passed::before {
+    background: linear-gradient(180deg, var(--ink-muted), var(--line-strong));
+  }
+}
+
+/* The technical facts of a run, folded away under the readout. */
+.operation-technical {
+  margin-top: 18px;
+}
+
+.operation-technical-list {
+  display: grid;
+  gap: 6px 18px;
+  margin: 10px 0 0;
+  grid-template-columns: max-content minmax(0, 1fr);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.operation-technical-list dt {
+  color: var(--ink-faint);
+}
+
+.operation-technical-list dd {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-family: var(--mono);
+}
+
+/* The moment a mission finishes while someone is watching. Played once, on
+   the real change of status: a band of light crosses the top of the room in
+   the ending's tone, the state settles into place, and the room goes still.
+   No confetti - the work is done, and the page says so and stops moving. */
+.operation-settled::before {
+  opacity: 1;
+}
+
+.operation-settled .operation-state .status-pill {
+  animation: stateSettle 620ms var(--ease-settle) both;
+}
+
+.operation-settled .operation-inner::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--tone), transparent);
+  background-repeat: no-repeat;
+  background-size: 45% 100%;
+  animation: settleSweep 1.2s var(--ease-arrive) both;
+}
+
+@keyframes stateSettle {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.4;
+  }
+
+  60% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes settleSweep {
+  from {
+    background-position: -50% 0;
+    opacity: 1;
+  }
+
+  to {
+    background-position: 150% 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .station-node,
+  .station-now .station-node {
+    transform: none;
+    transition: none;
+  }
+
+  .operation-settled .operation-state .status-pill,
+  .operation-settled .operation-inner::before {
+    animation: none;
+  }
 }
 
 /* --------------------------------------------------------------------------
