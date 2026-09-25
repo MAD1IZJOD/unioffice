@@ -193,14 +193,17 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-1);
+  box-shadow: var(--elev-1);
   transition:
-    border-color 0.16s ease,
-    background 0.16s ease;
+    border-color var(--duration) var(--ease-standard),
+    background var(--duration) var(--ease-standard),
+    box-shadow var(--duration) var(--ease-standard);
 }
 
 .policy:hover {
   border-color: var(--line-strong);
   background: var(--surface-2);
+  box-shadow: var(--elev-2);
 }
 
 /* A rule that is actually being applied is lit; a draft is not. This is the
@@ -228,8 +231,11 @@
   background: var(--tone-line, var(--line));
 }
 
+/* A rule being enforced is holding real work to account right now; its
+   rail carries a little of its own light to say so. */
 .policy-live .policy-rail {
   background: var(--tone, var(--blue));
+  box-shadow: 0 0 10px var(--tone, var(--blue));
 }
 
 .policy-name-row {
