@@ -384,38 +384,191 @@ a.outcome-text:hover {
   }
 }
 
-/* One line per agent: who, what state, and which mission. */
-.agent-activity-row {
+/* --------------------------------------------------------------------------
+   The floor
+
+   Every agent as a tile on one plane, seen with a little perspective. The
+   plane itself never moves; what moves is presence. An agent that is really
+   executing a step stands forward of the plane and catches light along its
+   top edge, one waiting on a decision stands half forward, and one that is
+   paused or disabled sinks back and dims. The only continuous motion is the
+   working edge, and it exists only while the backend says that agent is
+   working.
+   -------------------------------------------------------------------------- */
+
+.floor {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  gap: var(--space-3);
+  perspective: var(--perspective);
+  perspective-origin: 50% 0;
+}
+
+.floor-tile {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  box-shadow: var(--elev-1);
+  transition:
+    transform var(--duration-slow) var(--ease-settle),
+    box-shadow var(--duration-slow) var(--ease-standard),
+    border-color var(--duration) var(--ease-standard),
+    opacity var(--duration) var(--ease-standard);
+}
+
+.floor-tile:hover {
+  border-color: var(--line);
+  box-shadow: var(--elev-2);
+  transform: translateY(var(--lift));
+}
+
+/* Forward of the plane: someone is doing something right now. */
+.floor-tile-working,
+.floor-tile-working:hover {
+  border-color: var(--tone-line);
+  background: linear-gradient(180deg, var(--tone-soft), transparent 70%), var(--surface-2);
+  box-shadow: var(--elev-2), 0 0 0 1px color-mix(in srgb, var(--tone) 10%, transparent);
+  transform: translateZ(18px) translateY(-3px);
+}
+
+.floor-tile-waiting {
+  border-color: var(--tone-line);
+  box-shadow: var(--elev-2);
+  transform: translateZ(8px);
+}
+
+/* Back from the plane: not taking work. */
+.floor-tile-away {
+  opacity: 0.62;
+  transform: translateZ(-14px);
+}
+
+/* The working edge: a band of light running along the tile's top, for as
+   long as the step runs. */
+.floor-tile-working::before {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto;
+  height: 2px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: linear-gradient(90deg, transparent, var(--tone), transparent);
+  background-repeat: no-repeat;
+  background-size: 50% 100%;
+  animation: floorEdge 2.6s var(--ease-standard) infinite;
+}
+
+@keyframes floorEdge {
+  from {
+    background-position: -60% 0;
+  }
+
+  to {
+    background-position: 160% 0;
+  }
+}
+
+.floor-tile-head {
+  display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--space-3);
-  min-height: var(--row-height);
-  padding: 0 var(--space-3);
-  border-bottom: 1px solid var(--line-subtle);
-  grid-template-columns: 140px auto minmax(0, 1fr);
 }
 
-.agent-activity-name {
+.floor-tile-monogram {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tone-line);
+  border-radius: var(--radius-sm);
+  background: var(--tone-soft);
+  box-shadow: var(--edge-light);
+  color: var(--tone);
+  font-size: var(--text-base);
+  font-weight: 650;
+}
+
+.floor-tile-available .floor-tile-monogram {
+  border-color: var(--line);
+  background: var(--surface-3);
+  color: var(--ink-secondary);
+}
+
+.floor-tile-name {
+  display: block;
+  overflow: hidden;
   color: var(--ink-primary);
   font-size: var(--text-md);
-  font-weight: 600;
-}
-
-.agent-activity-detail {
-  overflow: hidden;
-  color: var(--ink-muted);
-  font-size: var(--text-sm);
+  font-weight: 620;
+  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.floor-tile-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.floor-tile-role {
+  display: block;
+  margin-top: 1px;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.floor-tile-work {
+  display: -webkit-box;
+  min-height: 3em;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.floor-tile-work a {
+  color: var(--ink-secondary);
+  text-decoration: none;
+}
+
+.floor-tile-work a:hover {
+  color: var(--ink-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 @media (max-width: 640px) {
-  .agent-activity-row {
-    grid-template-columns: 1fr auto;
-    padding: var(--space-2) 0;
+  .floor {
+    grid-template-columns: 1fr;
   }
 
-  .agent-activity-detail {
-    grid-column: 1 / -1;
+  .floor-tile-work {
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floor-tile,
+  .floor-tile:hover,
+  .floor-tile-working,
+  .floor-tile-waiting,
+  .floor-tile-away {
+    transform: none;
+    transition: none;
+  }
+
+  .floor-tile-working::before {
+    animation: none;
+    background-size: 100% 100%;
   }
 }

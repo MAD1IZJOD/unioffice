@@ -48,6 +48,7 @@ import {
 
 import { describeControl } from "../lib/statement";
 import { toneClass, type Tone } from "../lib/tone";
+import { profileOf } from "../lib/workforce";
 
 import {
   Chapter,
@@ -871,17 +872,41 @@ function AgentActivity({ control }: { control: MissionControl }) {
   const rank = (label: string) => (label === "Working" ? 0 : label === "Waiting on a decision" ? 1 : label === "Available" ? 2 : 3);
   rows.sort((left, right) => rank(left.label) - rank(right.label) || left.agent.name.localeCompare(right.agent.name));
 
+  // The floor: every agent as a place on one plane. Whoever is working
+  // stands forward of it, whoever is paused steps back, and each says what it
+  // is on - so "who is doing what" is a picture before it is a list.
   return (
-    <div className="ledger" role="list" aria-label="Agents">
-      {rows.map(({ agent, tone, label, card }) => (
-        <div key={agent.agentId} className={`agent-activity-row ${toneClass[tone]}`} role="listitem" aria-label={agent.name}>
-          <Link to={`/workforce/${agent.agentId}`} className="agent-activity-name">{agent.name}</Link>
-          <StatusPill tone={tone} pulse={label === "Working"}>{label}</StatusPill>
-          <span className="agent-activity-detail">
-            {card ? <Link to={`/missions/${card.id}`}>{missionTitle(card)}</Link> : "No step in flight"}
-          </span>
-        </div>
-      ))}
+    <div className="floor" role="list" aria-label="Agents">
+      {rows.map(({ agent, tone, label, card }) => {
+        const presence =
+          label === "Working" ? "working" : label === "Waiting on a decision" ? "waiting" : label === "Available" ? "available" : "away";
+
+        return (
+          <div
+            key={agent.agentId}
+            className={`floor-tile floor-tile-${presence} ${toneClass[tone]}`}
+            role="listitem"
+            aria-label={agent.name}
+          >
+            <span className="floor-tile-head">
+              <span className="floor-tile-monogram" aria-hidden="true">
+                {agent.name.slice(0, 1).toUpperCase()}
+              </span>
+
+              <span className="min-w-0 flex-1">
+                <Link to={`/workforce/${agent.agentId}`} className="floor-tile-name">{agent.name}</Link>
+                <span className="floor-tile-role">{profileOf(agent).label}</span>
+              </span>
+
+              <StatusPill tone={tone} pulse={label === "Working"}>{label}</StatusPill>
+            </span>
+
+            <span className="floor-tile-work">
+              {card ? <Link to={`/missions/${card.id}`}>{missionTitle(card)}</Link> : "No step in flight"}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
