@@ -288,6 +288,23 @@
   padding: 24px 22px 56px;
 }
 
+/* Arriving at a page. The surface is keyed on the path, so every navigation
+   plays this once: the page comes forward out of a hair of depth and settles.
+   It never delays anything - the content is interactive from the first
+   frame - and the fill mode leaves no transform behind afterwards, because a
+   transformed ancestor would trap the fixed-position sheets and drawers that
+   pages open. */
+.page-surface {
+  animation: pageArrive var(--duration-enter) var(--ease-arrive) backwards;
+}
+
+@keyframes pageArrive {
+  from {
+    opacity: 0;
+    transform: perspective(var(--perspective)) translate3d(0, 10px, -24px);
+  }
+}
+
 .icon-button {
   display: inline-flex;
   position: relative;
@@ -743,6 +760,7 @@
   .nav-item::before,
   .mobile-sidebar,
   .fade-up,
+  .page-surface,
   .command-palette,
   .attention-panel {
     animation: none;

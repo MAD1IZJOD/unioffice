@@ -2521,3 +2521,44 @@
 .tech-detail > summary:hover {
   color: var(--ink-muted);
 }
+
+/* --------------------------------------------------------------------------
+   Arrival
+
+   A list comes in in reading order, each row a beat behind the one above.
+   It plays when a row mounts - on the first render, and again only for a row
+   that a live refresh genuinely added - so the motion answers "what just
+   appeared" and a list that is merely re-polled stays still. Rows past the
+   twelfth arrive together; nobody waits on a long list.
+   -------------------------------------------------------------------------- */
+
+.ledger > *,
+.stagger > * {
+  animation: itemArrive var(--duration-enter) var(--ease-arrive) backwards;
+}
+
+.ledger > :nth-child(2), .stagger > :nth-child(2) { animation-delay: calc(var(--stagger) * 1); }
+.ledger > :nth-child(3), .stagger > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+.ledger > :nth-child(4), .stagger > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
+.ledger > :nth-child(5), .stagger > :nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
+.ledger > :nth-child(6), .stagger > :nth-child(6) { animation-delay: calc(var(--stagger) * 5); }
+.ledger > :nth-child(7), .stagger > :nth-child(7) { animation-delay: calc(var(--stagger) * 6); }
+.ledger > :nth-child(8), .stagger > :nth-child(8) { animation-delay: calc(var(--stagger) * 7); }
+.ledger > :nth-child(9), .stagger > :nth-child(9) { animation-delay: calc(var(--stagger) * 8); }
+.ledger > :nth-child(10), .stagger > :nth-child(10) { animation-delay: calc(var(--stagger) * 9); }
+.ledger > :nth-child(11), .stagger > :nth-child(11) { animation-delay: calc(var(--stagger) * 10); }
+.ledger > :nth-child(n + 12), .stagger > :nth-child(n + 12) { animation-delay: calc(var(--stagger) * 11); }
+
+@keyframes itemArrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ledger > *,
+  .stagger > * {
+    animation: none;
+  }
+}
