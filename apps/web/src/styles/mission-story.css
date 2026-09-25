@@ -93,7 +93,7 @@
 }
 
 .story-step {
-  color: var(--ink-ghost);
+  color: var(--ink-faint);
   font-family: var(--mono);
   font-size: var(--text-2xs);
 }
@@ -148,8 +148,9 @@
   color: var(--accent-ink);
 }
 
+/* The one mark that says work moved from one agent to the next. */
 .handoff-arrow {
-  color: var(--ink-ghost);
+  color: var(--blue-ink);
 }
 
 .handoff-sentence {
@@ -173,7 +174,7 @@
 
 .handoff-steps {
   min-width: 0;
-  color: var(--ink-ghost);
+  color: var(--ink-faint);
   font-family: var(--mono);
   font-size: var(--text-2xs);
   overflow-wrap: anywhere;

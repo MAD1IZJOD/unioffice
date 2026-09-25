@@ -335,6 +335,12 @@
   white-space: nowrap;
 }
 
+/* Idle is the quietest tone, and its rails and dots draw in ghost - but a
+   pill's words are still words, so they stay at a readable contrast. */
+.status-pill.tone-idle {
+  color: var(--ink-muted);
+}
+
 .pill-dot {
   width: 5px;
   height: 5px;
