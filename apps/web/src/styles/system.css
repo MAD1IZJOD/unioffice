@@ -39,8 +39,13 @@
      and never for anything a person has to read to act. */
   --ink-primary: #f2f4f7;
   --ink-secondary: #a7b0bd;
-  --ink-muted: #6f7887;
-  --ink-faint: #535b68;
+  /* Muted clears 4.5:1 on every surface, so secondary copy passes WCAG AA
+     wherever it lands; faint clears 3.6:1 and is for labels and metadata that
+     sit beside something primary. Both were darker, and faint in particular
+     fell under 3:1 - legible on a bright monitor in a dark room, not
+     otherwise. */
+  --ink-muted: #7d8696;
+  --ink-faint: #687182;
   --ink-ghost: #3a4250;
   --ink-inverse: #06070a;
 
