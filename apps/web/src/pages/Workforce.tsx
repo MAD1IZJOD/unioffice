@@ -187,7 +187,7 @@ function Worker({ member }: { member: WorkforceMember }) {
           capabilities={member.capabilities}
           tools={member.tools.length}
           type={member.type}
-          size={20}
+          size={30}
           active={working}
         />
       </span>

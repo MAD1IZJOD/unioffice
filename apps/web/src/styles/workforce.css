@@ -1,42 +1,93 @@
 /* --------------------------------------------------------------------------
    Workforce
 
-   A roster read like a crew board: one row per worker, scanned left to right
-   as who, how they are, what they are doing, what they can do and use.
+   A roster of cards, one per worker, each read top to bottom as who, how
+   they are, what they are doing, and what they can do and use.
    -------------------------------------------------------------------------- */
 
+/* The roster: each agent a card of its own, with its mark large enough to
+   read. Presence is spoken the same way as on the command center's floor -
+   an agent working a step stands forward with light running along its top
+   edge, one waiting on a decision stands half forward, and one taken off
+   work sits back and dims. The grid is plain; the cards carry the depth. */
 .workers {
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-3);
   margin-bottom: 30px;
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius);
-  background: var(--line-subtle);
+  perspective: var(--perspective);
+  perspective-origin: 50% 0;
 }
 
 .worker {
+  position: relative;
   display: grid;
-  gap: 8px 18px;
+  min-width: 0;
+  gap: 12px 14px;
   align-items: center;
-  padding: 14px 16px;
+  padding: 16px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
   background: var(--surface-1);
+  box-shadow: var(--elev-1);
   grid-template-areas:
     "mark who status"
     "now now now"
     "kit kit kit"
     "foot foot foot";
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  transition:
+    transform var(--duration-slow) var(--ease-settle),
+    box-shadow var(--duration-slow) var(--ease-standard),
+    border-color var(--duration) var(--ease-standard);
 }
 
-.worker + .worker {
-  border-top: 1px solid var(--line-subtle);
+.worker:hover {
+  border-color: var(--line);
+  box-shadow: var(--elev-2);
+  transform: translateY(var(--lift));
 }
 
-@media (min-width: 1000px) {
-  .worker {
-    grid-template-areas:
-      "mark who status now kit"
-      "mark who foot now kit";
-    grid-template-columns: 30px minmax(120px, 0.9fr) 170px minmax(0, 1.8fr) minmax(0, 1.5fr);
+.worker.tone-active {
+  border-color: var(--tone-line);
+  background: linear-gradient(180deg, var(--tone-soft), transparent 60%), var(--surface-2);
+  box-shadow: var(--elev-2);
+  transform: translateZ(14px) translateY(-2px);
+}
+
+.worker.tone-active::before {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto;
+  height: 2px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: linear-gradient(90deg, transparent, var(--tone), transparent);
+  background-repeat: no-repeat;
+  background-size: 50% 100%;
+  animation: edgeRun 2.6s var(--ease-standard) infinite;
+}
+
+.worker.tone-warning {
+  border-color: var(--tone-line);
+  transform: translateZ(6px);
+}
+
+.worker.tone-idle {
+  opacity: 0.66;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .worker,
+  .worker:hover,
+  .worker.tone-active,
+  .worker.tone-warning {
+    transform: none;
+    transition: none;
+  }
+
+  .worker.tone-active::before {
+    animation: none;
+    background-size: 100% 100%;
   }
 }
 
@@ -45,11 +96,12 @@
   grid-area: mark;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--tone-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--tone-soft);
+  box-shadow: var(--edge-light);
   color: var(--tone);
 }
 
