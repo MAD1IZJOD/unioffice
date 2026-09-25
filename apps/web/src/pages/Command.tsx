@@ -876,7 +876,7 @@ function AgentActivity({ control }: { control: MissionControl }) {
   // stands forward of it, whoever is paused steps back, and each says what it
   // is on - so "who is doing what" is a picture before it is a list.
   return (
-    <div className="floor" role="list" aria-label="Agents">
+    <div className="workforce-floor" role="list" aria-label="Agents">
       {rows.map(({ agent, tone, label, card }) => {
         const presence =
           label === "Working" ? "working" : label === "Waiting on a decision" ? "waiting" : label === "Available" ? "available" : "away";

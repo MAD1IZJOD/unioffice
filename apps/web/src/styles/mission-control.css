@@ -396,7 +396,7 @@ a.outcome-text:hover {
    working.
    -------------------------------------------------------------------------- */
 
-.floor {
+.workforce-floor {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
   gap: var(--space-3);
@@ -538,7 +538,7 @@ a.outcome-text:hover {
 }
 
 @media (max-width: 640px) {
-  .floor {
+  .workforce-floor {
     grid-template-columns: 1fr;
   }
 
