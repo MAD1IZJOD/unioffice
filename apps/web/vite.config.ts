@@ -11,7 +11,15 @@ export default defineConfig(({ mode }) => {
   // to hold are handed to the web app - the project URL and the public anon
   // key, which can do nothing the database's row-level security does not
   // allow. The service-role key is never read here.
+  const inheritedNodeEnv = process.env.VITE_USER_NODE_ENV;
   const env = loadEnv(mode, repositoryRoot, "");
+
+  // That .env also sets NODE_ENV for the API and the worker, and loadEnv
+  // passes any NODE_ENV it reads on to Vite as the web build's own. Left in
+  // place, `vite build` shipped React's development build - several times the
+  // size and much slower. The web app's mode comes from the command that runs
+  // it, not from the servers' settings.
+  if (inheritedNodeEnv === undefined) delete process.env.VITE_USER_NODE_ENV;
 
   return {
     plugins: [
