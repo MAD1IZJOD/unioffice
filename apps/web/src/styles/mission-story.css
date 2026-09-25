@@ -148,9 +148,26 @@
   color: var(--accent-ink);
 }
 
-/* The one mark that says work moved from one agent to the next. */
+/* The one mark that says work moved from one agent to the next. When a
+   handoff appears, the arrow travels once from the agent who finished to
+   the agent who picked it up - drawn only for handoffs the mission's own
+   events record. */
 .handoff-arrow {
   color: var(--blue-ink);
+  animation: handoffTravel 700ms var(--ease-arrive) 220ms backwards;
+}
+
+@keyframes handoffTravel {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handoff-arrow {
+    animation: none;
+  }
 }
 
 .handoff-sentence {

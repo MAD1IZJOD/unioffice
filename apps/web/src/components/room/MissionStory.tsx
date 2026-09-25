@@ -170,7 +170,7 @@ export function MissionHandoffs({
   }
 
   return (
-    <div className="handoffs">
+    <div className="handoffs stagger">
       {handoffs.map((handoff, index) => {
         const artifact = handoff.delivered
           ? artifacts.find((entry) => entry.id === handoff.delivered!.artifactId)
