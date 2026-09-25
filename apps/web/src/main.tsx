@@ -5,6 +5,11 @@ import {
 } from "react-router-dom";
 
 import { router } from "./app/routes";
+// Served with the app, one variable file per face. Each subset is fetched only
+// when a page contains its characters, and text renders in the fallback face
+// until it arrives rather than waiting blank.
+import "@fontsource-variable/geist/wght.css";
+import "@fontsource-variable/geist-mono/wght.css";
 import "./index.css";
 import "./App.css";
 
