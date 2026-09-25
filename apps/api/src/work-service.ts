@@ -286,7 +286,19 @@ export class WorkService {
         // step then requires, and what it is routed by.
         const resolution = resolveSkill({
           requirement: {
-            text: `${plannedTask.title} ${plannedTask.description} ${updatedWork.objective}`,
+            // The step's own words. The objective used to be added here, so
+            // its words counted as if every step had said them: in a launch
+            // plan for an "AI meeting-summary feature", steps such as "Create
+            // User Interface and Experience" and "Prepare for Launch" were put
+            // on the Meeting summary skill without mentioning it. The planner
+            // can still suggest a skill for a step, which is how a mission-wide
+            // one is named.
+            //
+            // This does not help a step whose own title names the feature -
+            // "Engineering the AI Meeting-Summary Feature" still matches the
+            // skill's name word for word. Choosing a skill by word overlap is
+            // the underlying limit.
+            text: `${plannedTask.title} ${plannedTask.description}`,
             capabilities: plannedTask.requiredCapabilities ?? [],
             tools: plannedTask.requiredTools ?? [],
             requestedSlug: requestedSkill,
