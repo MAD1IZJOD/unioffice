@@ -47,7 +47,9 @@
   mask-image: linear-gradient(to bottom, transparent 10%, #000 100%);
 }
 
-/* Only when semantic recall is genuinely running does the room light up. */
+/* Only when semantic recall is genuinely available does the room light up.
+   It is lit, not pulsing: recall being available is a standing fact, and a
+   standing fact that throbs forever reads as activity that is not there. */
 .brain-open-semantic::after {
   position: absolute;
   inset: 0;
@@ -58,17 +60,6 @@
     rgba(59, 130, 246, 0.1),
     transparent 62%
   );
-  animation: brain-breathe 9s ease-in-out infinite;
-}
-
-@keyframes brain-breathe {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 .brain-open-inner {
@@ -526,11 +517,16 @@
   line-height: 1.6;
 }
 
+/* The two sides lean in to face each other across the "vs" - a
+   disagreement you can see the shape of. Hovering (or focusing) a "keep"
+   decision previews it: the side that would be kept turns to face you and
+   the other steps back, so the consequence is visible before the click. */
 .conflict-sides {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 14px;
   align-items: stretch;
+  perspective: 900px;
 }
 
 .conflict-side {
@@ -538,6 +534,57 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-1);
+  box-shadow: var(--elev-1);
+  transition:
+    transform var(--duration-slow) var(--ease-settle),
+    opacity var(--duration) var(--ease-standard),
+    border-color var(--duration) var(--ease-standard),
+    box-shadow var(--duration-slow) var(--ease-standard);
+}
+
+.conflict-side:first-child {
+  transform: rotateY(9deg);
+  transform-origin: left center;
+}
+
+.conflict-side:last-child {
+  transform: rotateY(-9deg);
+  transform-origin: right center;
+}
+
+.conflict-pair:has(.conflict-keep-first:is(:hover, :focus-visible)) .conflict-side:first-child,
+.conflict-pair:has(.conflict-keep-second:is(:hover, :focus-visible)) .conflict-side:last-child {
+  border-color: var(--blue-line);
+  box-shadow: var(--elev-2);
+  transform: translateZ(16px);
+}
+
+.conflict-pair:has(.conflict-keep-first:is(:hover, :focus-visible)) .conflict-side:last-child,
+.conflict-pair:has(.conflict-keep-second:is(:hover, :focus-visible)) .conflict-side:first-child {
+  opacity: 0.4;
+  transform: translateZ(-30px);
+}
+
+/* Stacked on a phone (see the narrow layout below), the sides lie flat. */
+@media (max-width: 720px) {
+  .conflict-sides {
+    perspective: none;
+  }
+
+  .conflict-side:first-child,
+  .conflict-side:last-child {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conflict-side,
+  .conflict-side:first-child,
+  .conflict-side:last-child,
+  .conflict-pair .conflict-side {
+    transform: none;
+    transition: none;
+  }
 }
 
 .conflict-side-title {

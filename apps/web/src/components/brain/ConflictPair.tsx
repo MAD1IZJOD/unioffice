@@ -49,7 +49,7 @@ export function ConflictPair({
       <div className="conflict-actions">
         <button
           type="button"
-          className="button-ghost"
+          className="button-ghost conflict-keep-first"
           disabled={busy}
           onClick={() => onDecide({ resolution: "keep", keepId: left.id })}
         >
@@ -57,7 +57,7 @@ export function ConflictPair({
         </button>
         <button
           type="button"
-          className="button-ghost"
+          className="button-ghost conflict-keep-second"
           disabled={busy}
           onClick={() => onDecide({ resolution: "keep", keepId: right.id })}
         >

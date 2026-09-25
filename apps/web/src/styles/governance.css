@@ -67,17 +67,6 @@
     rgba(59, 130, 246, 0.08),
     transparent 58%
   );
-  animation: control-breathe 8s ease-in-out infinite;
-}
-
-@keyframes control-breathe {
-  0%,
-  100% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 .control-open-inner {
