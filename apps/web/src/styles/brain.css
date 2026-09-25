@@ -1062,3 +1062,13 @@ a.provenance-name:hover {
 .entry-why-unconfirmed {
   color: var(--warning-muted);
 }
+
+/* The opening reaches the edges of the page surface, so its gutter has to
+   follow the surface's own padding, which narrows on a phone. Without this
+   it reached 8px past each edge and pushed a 360px screen sideways. */
+@media (max-width: 640px) {
+  .brain {
+    --brain-gutter: 14px;
+    --brain-top: 18px;
+  }
+}
