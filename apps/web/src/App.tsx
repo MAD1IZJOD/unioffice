@@ -138,7 +138,7 @@ function UserCard() {
       <span className="user-avatar">{(email[0] ?? "?").toUpperCase()}</span>
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[11.5px] font-semibold text-ink-secondary" title={email}>
+        <span className="block truncate text-(length:--text-sm) font-semibold text-ink-secondary" title={email}>
           {email || "Signed in"}
         </span>
         {role && <span className="t-machine block">{role.toUpperCase()}</span>}
@@ -541,17 +541,17 @@ export default function App() {
                   }
                 }}
                 placeholder="Open a mission, find one, or go to a surface…"
-                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink-primary outline-none placeholder:text-ink-faint"
+                className="min-w-0 flex-1 bg-transparent text-(length:--text-base) text-ink-primary outline-none placeholder:text-ink-faint"
               />
 
-              <kbd className="rounded-sm border border-line-strong px-1.5 py-0.5 font-mono text-[8px] text-ink-faint">
+              <kbd className="rounded-sm border border-line-strong px-1.5 py-0.5 font-mono text-(length:--text-3xs) text-ink-faint">
                 ESC
               </kbd>
             </div>
 
             <div className="scroll-area max-h-[360px] p-1.5">
               {paletteResults.length === 0 ? (
-                <div className="px-2 py-6 text-center text-[11px] text-ink-muted">
+                <div className="px-2 py-6 text-center text-(length:--text-sm) text-ink-muted">
                   Nothing matches “{paletteQuery}”.
                 </div>
               ) : (

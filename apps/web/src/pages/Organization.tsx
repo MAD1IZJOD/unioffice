@@ -342,11 +342,11 @@ export default function Organization() {
             </span>
 
             <span className="min-w-0 flex-1">
-              <span className="block text-[12px] font-semibold text-ink-primary">
+              <span className="block text-(length:--text-md) font-semibold text-ink-primary">
                 {data!.unassignedAgentCount} on the roster belong to no
                 workspace
               </span>
-              <span className="mt-0.5 block text-[10.5px] text-ink-muted">
+              <span className="mt-0.5 block text-(length:--text-xs) text-ink-muted">
                 An unscoped agent stays available to every workspace, which is
                 right for an orchestrator and usually not for a specialist.
               </span>
@@ -386,11 +386,11 @@ export default function Organization() {
                   />
 
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[11px] text-ink-secondary">
+                    <span className="block truncate text-(length:--text-sm) text-ink-secondary">
                       {described.title}
                     </span>
                     {described.detail && (
-                      <span className="mt-0.5 block truncate text-[9.5px] text-ink-faint">
+                      <span className="mt-0.5 block truncate text-(length:--text-2xs) text-ink-faint">
                         {described.detail}
                       </span>
                     )}

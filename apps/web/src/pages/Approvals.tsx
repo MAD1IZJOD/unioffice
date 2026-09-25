@@ -156,7 +156,7 @@ export default function Approvals() {
                   <span className="approval-marker" aria-hidden="true" />
 
                   <div className="min-w-0 flex-1">
-                    <div className="text-[15px] font-semibold leading-snug tracking-[-0.018em] text-ink-primary">
+                    <div className="text-(length:--text-lg) font-semibold leading-snug tracking-[-0.018em] text-ink-primary">
                       {briefing?.step?.title ?? approval.action}
                     </div>
 
@@ -191,7 +191,7 @@ export default function Approvals() {
                 <dl className="approval-facts">
                   <div>
                     <dt className="t-eyebrow">Why it stopped</dt>
-                    <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
+                    <dd className="mt-1.5 text-(length:--text-sm) leading-[1.65] text-ink-secondary">
                       {approval.reason}
                       {briefing && <span className="mt-1.5 block text-ink-muted">{REQUESTED_BY[briefing.requestedBy](briefing)}</span>}
                     </dd>
@@ -199,7 +199,7 @@ export default function Approvals() {
 
                   <div>
                     <dt className="t-eyebrow">If you approve</dt>
-                    <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
+                    <dd className="mt-1.5 text-(length:--text-sm) leading-[1.65] text-ink-secondary">
                       {briefing?.onApprove ??
                         "The task goes onto the durable queue, a worker picks it up, and everything depending on it continues."}
                     </dd>
@@ -207,7 +207,7 @@ export default function Approvals() {
 
                   <div>
                     <dt className="t-eyebrow">If you reject</dt>
-                    <dd className="mt-1.5 text-[11.5px] leading-[1.65] text-ink-secondary">
+                    <dd className="mt-1.5 text-(length:--text-sm) leading-[1.65] text-ink-secondary">
                       {briefing?.onReject ??
                         "The decision is recorded against the run and the task stays unexecuted. Nothing is deleted."}
                     </dd>
@@ -299,18 +299,18 @@ export default function Approvals() {
                   {decision.decision === "approve" ? "approved" : "rejected"}
                 </StatusPill>
 
-                <span className="mono truncate text-[10px] text-ink-faint">
+                <span className="mono truncate text-(length:--text-xs) text-ink-faint">
                   {id}
                 </span>
 
-                <span className="mono ml-auto text-[9px] text-ink-ghost">
+                <span className="mono ml-auto text-(length:--text-2xs) text-ink-ghost">
                   {formatRelativeTime(decision.at)}
                 </span>
               </div>
             ))}
           </div>
 
-          <p className="mt-5 max-w-[62ch] text-[10.5px] leading-[1.7] text-ink-faint">
+          <p className="mt-5 max-w-[62ch] text-(length:--text-xs) leading-[1.7] text-ink-faint">
             Decisions are durable. This list is only what you did since the page
             loaded — the permanent record, including who resolved each one, is
             in Activity.

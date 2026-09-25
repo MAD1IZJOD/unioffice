@@ -68,7 +68,7 @@
 
 .worker-name {
   color: var(--ink-primary);
-  font-size: 13.5px;
+  font-size: var(--text-base);
   font-weight: 620;
   letter-spacing: -0.012em;
   transition: color 130ms ease;
@@ -78,7 +78,7 @@
   margin-top: 3px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: var(--text-3xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -101,7 +101,7 @@
 .worker-mission {
   overflow: hidden;
   color: var(--ink-primary);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   font-weight: 560;
   text-decoration: none;
   text-overflow: ellipsis;
@@ -120,7 +120,7 @@
 .worker-task {
   overflow: hidden;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -142,7 +142,7 @@
 
 .worker-tokens .token {
   padding: 3px 8px;
-  font-size: 9px;
+  font-size: var(--text-2xs);
 }
 
 .worker-foot {
@@ -152,7 +152,7 @@
   gap: 4px 12px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.06em;
 }
 
@@ -182,13 +182,13 @@
   align-items: center;
   gap: 7px;
   color: var(--ink-primary);
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 560;
 }
 
 .agent-tool-why {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.55;
   grid-column: 1 / -1;
 }
@@ -196,5 +196,5 @@
 .workers-note {
   margin-top: -14px;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }

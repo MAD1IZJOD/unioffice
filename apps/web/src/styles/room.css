@@ -96,7 +96,7 @@
   margin-bottom: 20px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -200,7 +200,7 @@
 .operation-line {
   margin: 0;
   color: var(--ink-secondary);
-  font-size: 14.5px;
+  font-size: var(--text-lg);
   line-height: 1.55;
 }
 
@@ -208,7 +208,7 @@
   max-width: 72ch;
   margin: 8px 0 0;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -218,7 +218,7 @@
   padding: 14px 16px;
   border-left: 2px solid var(--line-strong);
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.7;
   background: var(--surface-1);
 }
@@ -227,7 +227,7 @@
   margin-bottom: 6px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -256,7 +256,7 @@
 .station-label {
   display: block;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -266,7 +266,7 @@
   margin-top: 3px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   opacity: 0.75;
 }
 
@@ -301,7 +301,7 @@
 
 .fact-value {
   color: var(--ink-primary);
-  font-size: 19px;
+  font-size: var(--text-xl);
   font-weight: 620;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
@@ -312,7 +312,7 @@
   margin-top: 6px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -367,7 +367,7 @@
   margin-bottom: 18px;
   color: var(--red-ink);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -402,7 +402,7 @@
   max-width: 70ch;
   margin: 14px 0 0;
   color: var(--red-muted);
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.65;
 }
 
@@ -425,7 +425,7 @@
   padding: 13px 15px;
   background: var(--surface-alert);
   color: var(--red-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.65;
 }
 
@@ -433,7 +433,7 @@
   display: block;
   margin-bottom: 5px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -451,7 +451,7 @@
   margin-top: 16px;
   color: var(--red-muted);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
 }
 
 .decision-buttons {
@@ -501,7 +501,7 @@
 .room-headline {
   margin: 0 0 6px;
   color: var(--ink-primary);
-  font-size: 16px;
+  font-size: var(--text-title);
   font-weight: 620;
   letter-spacing: -0.02em;
 }
@@ -510,7 +510,7 @@
   max-width: 74ch;
   margin: 0 0 18px;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.7;
 }
 
@@ -540,7 +540,7 @@
 .lane-index {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 600;
   letter-spacing: 0.04em;
   line-height: 1.9;
@@ -568,7 +568,7 @@
   margin-bottom: 9px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -665,7 +665,7 @@
 .step-title {
   display: block;
   color: var(--ink-primary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: -0.008em;
   line-height: 1.4;
@@ -678,7 +678,7 @@
   gap: 5px 11px;
   margin-top: 5px;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .step-agent {
@@ -691,7 +691,7 @@
   display: block;
   margin-top: 6px;
   color: var(--warning);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -733,7 +733,7 @@
   max-width: 76ch;
   margin: 0;
   color: var(--ink-secondary);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.7;
 }
 
@@ -758,7 +758,7 @@
 .step-procedure-name {
   margin: 4px 0 0;
   color: var(--ink);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
@@ -775,7 +775,7 @@
   margin-left: 8px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 400;
 }
 
@@ -783,33 +783,33 @@
   margin: 8px 0 0;
   padding-left: 14px;
   color: var(--ink-muted);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.7;
 }
 
 .step-procedure-note {
   margin: 8px 0 0;
   color: var(--warning);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
 .step-procedure-none {
   margin: 12px 0 0;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 .step-downstream {
   margin: 10px 0 0;
   color: var(--ink-muted);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 .step-nothing {
   margin: 14px 0 0;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 /* --------------------------------------------------------------------------
@@ -859,7 +859,7 @@
 
 .cast-name {
   color: var(--ink-primary);
-  font-size: 13.5px;
+  font-size: var(--text-base);
   font-weight: 640;
   letter-spacing: -0.015em;
 }
@@ -867,7 +867,7 @@
 .cast-role {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -878,7 +878,7 @@
   margin-top: 5px;
   overflow: hidden;
   color: var(--ink-secondary);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -891,7 +891,7 @@
   margin-top: 7px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
 }
 
 .cast-reason {
@@ -900,7 +900,7 @@
   padding-top: 8px;
   border-top: 1px solid var(--line-subtle);
   color: var(--ink-muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
   line-height: 1.55;
 }
 
@@ -914,7 +914,7 @@
   cursor: pointer;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.04em;
   list-style: none;
 }

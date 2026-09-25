@@ -401,7 +401,7 @@ export function Failure({
       <div className="detail-label mb-2">{headline}</div>
       <div>{detail}</div>
       {consequence && (
-        <div className="mt-2 text-[10.5px] text-red-muted">{consequence}</div>
+        <div className="mt-2 text-(length:--text-xs) text-red-muted">{consequence}</div>
       )}
       {action && <div className="mt-3 flex flex-wrap gap-2">{action}</div>}
     </div>

@@ -85,7 +85,7 @@
   margin-bottom: 26px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -117,7 +117,7 @@
   max-width: 64ch;
   margin: 24px 0 0;
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   line-height: 1.75;
 }
 
@@ -134,7 +134,7 @@
 
 .brain-reading-value {
   color: var(--ink-primary);
-  font-size: 26px;
+  font-size: var(--text-2xl);
   font-weight: 620;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.035em;
@@ -145,7 +145,7 @@
   margin-top: 7px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -190,7 +190,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 560;
   background: transparent;
   cursor: pointer;
@@ -255,7 +255,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   color: var(--ink-secondary);
-  font-size: 11px;
+  font-size: var(--text-sm);
   background: var(--surface-1);
 }
 
@@ -277,7 +277,7 @@
   margin-right: 4px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -287,7 +287,7 @@
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--ink-muted);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   background: transparent;
   cursor: pointer;
 }
@@ -307,7 +307,7 @@
   max-width: 76ch;
   margin: 16px 0 0;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.7;
 }
 
@@ -338,7 +338,7 @@
 .knowledge-relevance {
   color: var(--blue-ink);
   font-family: var(--mono);
-  font-size: 15px;
+  font-size: var(--text-lg);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -346,7 +346,7 @@
 .knowledge-relevance-label {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: var(--text-3xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -367,7 +367,7 @@
 
 .knowledge-row-title {
   color: var(--ink-primary);
-  font-size: 15px;
+  font-size: var(--text-lg);
   font-weight: 580;
   letter-spacing: -0.015em;
   line-height: 1.4;
@@ -384,7 +384,7 @@
   margin: 7px 0 0;
   overflow: hidden;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.7;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -404,7 +404,7 @@
   align-items: center;
   gap: 6px;
   color: var(--ink-secondary);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 .knowledge-why li::before {
@@ -429,7 +429,7 @@
 
 .knowledge-marker {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.04em;
 }
 
@@ -479,7 +479,7 @@
 
 .stratum-name {
   color: var(--ink-primary);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 650;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -488,13 +488,13 @@
 .stratum-count {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .stratum-note {
   margin-left: auto;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 .stratum-red .stratum-head {
@@ -522,7 +522,7 @@
 .conflict-reason {
   margin: 0 0 14px;
   color: var(--red-ink);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -542,7 +542,7 @@
 
 .conflict-side-title {
   color: var(--ink-primary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   font-weight: 580;
   line-height: 1.45;
   text-decoration: none;
@@ -556,7 +556,7 @@
   margin-top: 8px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   line-height: 1.6;
 }
 
@@ -564,7 +564,7 @@
   align-self: center;
   color: var(--red);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -589,13 +589,13 @@
   padding-top: 2px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   text-align: right;
 }
 
 .learned-title {
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.5;
   text-decoration: none;
 }
@@ -607,13 +607,13 @@
 .learned-source {
   margin-top: 4px;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .in-use-count {
   color: var(--blue-ink);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 /* What the Brain is made of, counted. */
@@ -633,7 +633,7 @@
 
 .kind-bar-label {
   color: var(--ink-secondary);
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 .kind-bar-track {
@@ -651,7 +651,7 @@
 .kind-bar-value {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   text-align: right;
 }
 
@@ -678,13 +678,13 @@
   border-radius: var(--radius-sm);
   color: var(--blue-ink);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .recall-standing {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
 }
 
 .recall-warning {
@@ -693,7 +693,7 @@
   border: 1px solid var(--red-line);
   border-radius: var(--radius-sm);
   color: var(--red-ink);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.6;
   background: var(--red-soft);
 }
@@ -713,7 +713,7 @@
   gap: 6px;
   margin-bottom: 26px;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
@@ -743,7 +743,7 @@
   max-width: 70ch;
   margin: 20px 0 0;
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--text-lg);
   line-height: 1.8;
   white-space: pre-wrap;
 }
@@ -765,7 +765,7 @@
   border-bottom: 1px solid var(--line);
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -780,13 +780,13 @@
 
 .entry-facts dt {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 .entry-facts dd {
   margin: 0;
   color: var(--ink-secondary);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -855,14 +855,14 @@
 .provenance-kind {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .provenance-name {
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.45;
   text-decoration: none;
 }
@@ -882,7 +882,7 @@ a.provenance-name:hover {
   border-left: 2px solid var(--red);
   border-radius: var(--radius-sm);
   color: var(--red-ink);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.65;
   background: var(--red-soft);
 }
@@ -890,7 +890,7 @@ a.provenance-name:hover {
 .entry-stale {
   margin-top: 14px;
   color: var(--warning);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
 }
 
 .entry-input {
@@ -899,7 +899,7 @@ a.provenance-name:hover {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   color: var(--ink-primary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   background: var(--surface-1);
 }
 
@@ -930,7 +930,7 @@ a.provenance-name:hover {
   }
 
   .brain-reading-value {
-    font-size: 21px;
+    font-size: var(--text-xl);
   }
 
   .brain-query-row {

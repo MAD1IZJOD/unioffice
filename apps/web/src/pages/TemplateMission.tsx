@@ -345,7 +345,7 @@ export default function TemplateMission() {
               <div className="space-y-2">
                 {governance.gatingPolicies.map((policy) => (
                   <div key={policy.id} className="flex items-center justify-between gap-3">
-                    <span className="text-[11.5px] text-ink-secondary">{policy.name}</span>
+                    <span className="text-(length:--text-sm) text-ink-secondary">{policy.name}</span>
                     <StatusPill tone={policy.effect === "deny" ? "error" : "warning"}>
                       {policy.effect === "deny" ? "never" : "ask a person"}
                     </StatusPill>

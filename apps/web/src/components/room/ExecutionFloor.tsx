@@ -333,7 +333,7 @@ function ToolCalls({
           <div className="flex flex-wrap items-center gap-2">
             <Wrench size={12} className="text-blue-ink" />
 
-            <span className="mono text-[10.5px] font-semibold text-ink-primary">
+            <span className="mono text-(length:--text-xs) font-semibold text-ink-primary">
               {toolNameOf(room, call.toolId)}
             </span>
 

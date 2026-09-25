@@ -530,7 +530,7 @@ export default function Room() {
                 <div className="callout callout-warning">
                   <div className="detail-label mb-1.5">Interrupted</div>
                   {failure}
-                  <div className="mt-2 text-[10.5px] text-warning-muted">
+                  <div className="mt-2 text-(length:--text-xs) text-warning-muted">
                     The process stopped, not the mission. Finished steps were
                     kept and it resumes from the first one that did not finish.
                   </div>
@@ -671,7 +671,7 @@ export default function Room() {
                   <div key={approval.id} className="settled-decision">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[12.5px] font-semibold text-ink-primary">
+                        <div className="text-(length:--text-md) font-semibold text-ink-primary">
                           {approval.action}
                         </div>
                         {(() => {
@@ -690,7 +690,7 @@ export default function Room() {
                       </StatusPill>
                     </div>
 
-                    <p className="mt-3 text-[11.5px] leading-[1.7] text-ink-secondary">
+                    <p className="mt-3 text-(length:--text-sm) leading-[1.7] text-ink-secondary">
                       {approval.reason}
                     </p>
 

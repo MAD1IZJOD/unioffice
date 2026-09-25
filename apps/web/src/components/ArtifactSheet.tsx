@@ -74,7 +74,7 @@ export function ArtifactSheet({
             <h2 className="sheet-title">{artifact.name}</h2>
 
             {artifact.description && (
-              <p className="mt-2.5 max-w-[62ch] text-[11.5px] leading-[1.7] text-ink-secondary">
+              <p className="mt-2.5 max-w-[62ch] text-(length:--text-sm) leading-[1.7] text-ink-secondary">
                 {artifact.description}
               </p>
             )}

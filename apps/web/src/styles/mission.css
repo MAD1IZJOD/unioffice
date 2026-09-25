@@ -83,7 +83,7 @@
   margin-bottom: 18px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
@@ -129,7 +129,7 @@
   max-width: 62ch;
   margin-top: 7px;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.65;
 }
 
@@ -141,7 +141,7 @@
   padding: 2px 0 2px 16px;
   border-left: 2px solid var(--line-strong);
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   line-height: 1.72;
   white-space: pre-wrap;
 }
@@ -150,7 +150,7 @@
   margin-bottom: 6px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -185,7 +185,7 @@
   border-top: 2px solid var(--line);
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   transition:
@@ -206,7 +206,7 @@
 .mission-phase-detail {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: var(--text-3xs);
   letter-spacing: 0.06em;
   text-transform: none;
 }
@@ -229,7 +229,7 @@
 .mission-decision-label {
   color: var(--red-ink);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
@@ -237,7 +237,7 @@
 .mission-decision-action {
   margin-top: 11px;
   color: var(--ink-primary);
-  font-size: 16px;
+  font-size: var(--text-title);
   font-weight: 600;
   letter-spacing: -0.016em;
   line-height: 1.35;
@@ -247,14 +247,14 @@
   max-width: 68ch;
   margin-top: 9px;
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.7;
 }
 
 .mission-decision-next {
   margin-top: 9px;
   color: var(--red-muted);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 
@@ -337,14 +337,14 @@
 .mission-act-index {
   color: var(--tone);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.14em;
 }
 
 .mission-act-title {
   color: var(--ink-primary);
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -354,7 +354,7 @@
   flex: 1 1 auto;
   min-width: 0;
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: var(--text-sm);
   letter-spacing: -0.004em;
   text-align: right;
 }
@@ -369,7 +369,7 @@
   max-width: 68ch;
   margin: 0 0 18px;
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   line-height: 1.72;
 }
 
@@ -435,7 +435,7 @@
 
 .mission-member-name {
   color: var(--ink-primary);
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 620;
   letter-spacing: -0.012em;
 }
@@ -444,7 +444,7 @@
   margin-top: 2px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: var(--text-3xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -452,21 +452,21 @@
 .mission-member-doing {
   margin-top: 12px;
   color: var(--ink-secondary);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
 .mission-member-why {
   margin-top: 6px;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 
 .mission-member-stretch {
   margin-top: 8px;
   color: var(--warning-muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
   line-height: 1.55;
 }
 
@@ -477,7 +477,7 @@
   margin-top: 12px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.05em;
 }
 
@@ -517,13 +517,13 @@
   padding-top: 2px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
 .mission-step-title {
   color: var(--ink-primary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   font-weight: 560;
   letter-spacing: -0.008em;
   line-height: 1.45;
@@ -537,7 +537,7 @@
   margin-top: 7px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.04em;
 }
 
@@ -578,7 +578,7 @@
 
 .mission-record-title {
   color: var(--ink-primary);
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -633,7 +633,7 @@
 
 .mission-moment-line {
   color: var(--ink-secondary);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   letter-spacing: -0.004em;
   line-height: 1.6;
 }
@@ -646,7 +646,7 @@
 .mission-moment-note {
   margin-top: 4px;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.62;
   overflow-wrap: anywhere;
 }
@@ -658,7 +658,7 @@
   margin-top: 6px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: var(--text-3xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -720,7 +720,7 @@
 .mission-entry-state {
   margin-top: 8px;
   color: var(--tone);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -732,7 +732,7 @@
   margin-top: 9px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.05em;
 }
 
@@ -783,7 +783,7 @@
   max-width: 58ch;
   margin-top: 16px;
   color: var(--ink-muted);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   line-height: 1.72;
 }
 
@@ -803,7 +803,7 @@
   padding-top: 14px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
@@ -829,7 +829,7 @@
 }
 
 .mission-input-small {
-  font-size: 13.5px;
+  font-size: var(--text-base);
   font-weight: 400;
   letter-spacing: -0.004em;
   line-height: 1.7;
@@ -843,7 +843,7 @@
 .mission-hint {
   margin-top: 8px;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 
@@ -861,7 +861,7 @@
   background: transparent;
   color: var(--ink-muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   transition:
@@ -900,7 +900,7 @@
   flex: 1 1 200px;
   min-width: 0;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.62;
 }
 
@@ -918,7 +918,7 @@
   border-bottom: 1px solid var(--line-subtle);
   background: none;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--text-md);
   letter-spacing: -0.006em;
   line-height: 1.6;
   text-align: left;

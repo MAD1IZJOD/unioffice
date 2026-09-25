@@ -52,7 +52,7 @@
   padding-top: 3px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
 }
@@ -61,7 +61,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--ink-primary);
-  font-size: 14.5px;
+  font-size: var(--text-lg);
   font-weight: 500;
   letter-spacing: -0.012em;
   line-height: 1.42;
@@ -81,7 +81,7 @@
   margin-top: 8px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.02em;
 }
 
@@ -98,7 +98,7 @@
   padding-left: 11px;
   border-left: 1px solid var(--line);
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.6;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -154,7 +154,7 @@
 .story-label-name {
   color: var(--ink-secondary);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -164,7 +164,7 @@
   margin-top: 6px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -208,7 +208,7 @@
 .story-headline {
   margin: 0;
   color: var(--ink-primary);
-  font-size: 16px;
+  font-size: var(--text-title);
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.4;
@@ -218,14 +218,14 @@
   max-width: 68ch;
   margin: 9px 0 0;
   color: var(--ink-secondary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   line-height: 1.7;
 }
 
 .story-note {
   margin: 8px 0 0;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 
@@ -259,7 +259,7 @@
 .delivery-eyebrow {
   color: var(--success-ink);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: var(--text-3xs);
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -271,7 +271,7 @@
 
 .delivery-body .prose-result {
   color: var(--ink-primary);
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.8;
 }
 
@@ -338,7 +338,7 @@
 
 .discipline-name {
   color: var(--ink-primary);
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 640;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -346,7 +346,7 @@
 
 .discipline-role {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 
@@ -358,7 +358,7 @@
 
 .roster-name {
   color: var(--ink-primary);
-  font-size: 14px;
+  font-size: var(--text-lg);
   font-weight: 620;
   letter-spacing: -0.015em;
 }
@@ -366,7 +366,7 @@
 .roster-role {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -395,7 +395,7 @@
 
 .agent-portrait-name {
   color: var(--ink-primary);
-  font-size: 22px;
+  font-size: var(--text-xl);
   font-weight: 660;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -437,7 +437,7 @@
 
 .artifact-tile-name {
   color: var(--ink-primary);
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 620;
   letter-spacing: -0.012em;
   line-height: 1.4;
@@ -448,7 +448,7 @@
   margin-top: 10px;
   overflow: hidden;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.65;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
@@ -503,7 +503,7 @@
 .sheet-title {
   margin: 0;
   color: var(--ink-primary);
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 640;
   letter-spacing: -0.028em;
   line-height: 1.2;
@@ -575,20 +575,20 @@
 .memory-when {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
 }
 
 .memory-weight {
   margin-top: 8px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
 .memory-title {
   color: var(--ink-primary);
-  font-size: 13.5px;
+  font-size: var(--text-base);
   font-weight: 560;
   letter-spacing: -0.012em;
   line-height: 1.5;
@@ -598,7 +598,7 @@
   max-width: 74ch;
   margin: 8px 0 0;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.75;
 }
 
@@ -655,7 +655,7 @@
 .log-day-name {
   color: var(--ink-secondary);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -665,7 +665,7 @@
 .log-day-count {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -695,7 +695,7 @@
   padding-top: 2px;
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -711,7 +711,7 @@
 
 .log-title {
   color: var(--ink-secondary);
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.5;
 }
 
@@ -720,7 +720,7 @@
   margin-top: 3px;
   overflow: hidden;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.55;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -758,7 +758,7 @@
   align-items: baseline;
   gap: 10px;
   color: var(--ink-primary);
-  font-size: 15px;
+  font-size: var(--text-lg);
   font-weight: 620;
   letter-spacing: -0.018em;
 }
@@ -766,14 +766,14 @@
 .infra-id {
   color: var(--ink-faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
 }
 
 .infra-description {
   max-width: 60ch;
   margin: 9px 0 0;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   line-height: 1.7;
 }
 
@@ -793,7 +793,7 @@
   border-radius: 999px;
   background: var(--blue-soft);
   color: var(--blue-ink);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   font-weight: 560;
 }
 
@@ -823,7 +823,7 @@
   gap: 11px;
   padding: 26px 2px;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
 }
 
 .connecting-bar {
@@ -877,7 +877,7 @@
   max-width: 52ch;
   margin: 14px 0 0;
   color: var(--ink-faint);
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.7;
 }
 

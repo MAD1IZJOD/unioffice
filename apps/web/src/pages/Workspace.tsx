@@ -436,11 +436,11 @@ export default function Workspace() {
                     className="presence-row"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[11.5px] text-ink-primary">
+                      <span className="block truncate text-(length:--text-sm) text-ink-primary">
                         {artifact.name}
                       </span>
                       {artifact.metadata.content !== undefined && (
-                        <span className="mt-1 block truncate text-[10px] text-ink-muted">
+                        <span className="mt-1 block truncate text-(length:--text-xs) text-ink-muted">
                           {excerptOf(artifact.metadata.content, 90)}
                         </span>
                       )}
@@ -476,7 +476,7 @@ export default function Workspace() {
                       />
 
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11px] text-ink-secondary">
+                        <span className="block truncate text-(length:--text-sm) text-ink-secondary">
                           {described.title}
                         </span>
                       </span>
@@ -499,7 +499,7 @@ export default function Workspace() {
 function Fact({ label, value }: { label: string; value: number }) {
   return (
     <div className="dispatch-stat tone-idle">
-      <div className="dispatch-stat-value !text-[19px]">{value}</div>
+      <div className="dispatch-stat-value !text-(length:--text-xl)">{value}</div>
       <div className="dispatch-stat-label">{label}</div>
     </div>
   );
