@@ -2549,6 +2549,19 @@
 .ledger > :nth-child(11), .stagger > :nth-child(11) { animation-delay: calc(var(--stagger) * 10); }
 .ledger > :nth-child(n + 12), .stagger > :nth-child(n + 12) { animation-delay: calc(var(--stagger) * 11); }
 
+/* A band of light running along an edge, for as long as something is really
+   in progress: a step executing, a request in flight. Used on a pseudo-element
+   whose background is a narrow gradient. */
+@keyframes edgeRun {
+  from {
+    background-position: -60% 0;
+  }
+
+  to {
+    background-position: 160% 0;
+  }
+}
+
 @keyframes itemArrive {
   from {
     opacity: 0;

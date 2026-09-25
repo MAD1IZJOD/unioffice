@@ -106,11 +106,11 @@ export default function MissionStart() {
 
   return (
     <div className="mission-brief-sheet fade-up">
-      <div className="t-eyebrow mb-5">Open a mission</div>
+      <div className="t-eyebrow mb-5">New mission</div>
 
       <h2 className="mission-ask">
-        Tell the company
-        <span className="mission-ask-quiet">what needs to happen.</span>
+        Give the company a job.
+        <span className="mission-ask-quiet">Say what needs to happen.</span>
       </h2>
 
       <p className="mission-ask-detail">
@@ -119,8 +119,15 @@ export default function MissionStart() {
           : "It becomes a plan, and each step goes to whoever can actually do it. You see what that plan is, and what it needs, before anything runs."}
       </p>
 
-      <div className="mission-field">
-        <label className="mission-field-label" htmlFor="mission-objective">
+      {/* The objective and the control that hands it over are one object: a
+          slab you write on and send. While the request is in flight the slab
+          says so - that is the real state of the request, not a delay put in
+          for effect - and the brief takes over once the server answers. */}
+      <div
+        className={`composer${opening ? " composer-sending" : ""}`}
+        aria-busy={opening}
+      >
+        <label className="composer-label" htmlFor="mission-objective">
           The objective
         </label>
 
@@ -138,13 +145,54 @@ export default function MissionStart() {
             }
           }}
           placeholder="Prepare a plan for launching our new product next month."
-          className="mission-input"
+          className="mission-input composer-input"
         />
 
-        <p className="mission-hint">
-          One outcome, in your own words. Ctrl + Enter opens it.
-        </p>
+        <div className="composer-foot">
+          <p className="composer-hint">
+            {opening
+              ? "Handing it to the company…"
+              : "One outcome, in your own words. Ctrl + Enter opens it."}
+          </p>
+
+          <button
+            type="button"
+            onClick={open}
+            disabled={!ready}
+            className="button-primary composer-send"
+          >
+            {opening ? (
+              <LoaderCircle size={13} className="spin-slow" />
+            ) : (
+              <Zap size={13} />
+            )}
+            {opening ? "Opening…" : "Open the mission"}
+          </button>
+        </div>
       </div>
+
+      <p className="composer-note">
+        {canCreate
+          ? "Nothing runs until the plan exists. You will see it, and what it needs, first."
+          : workspaceId
+            ? "Your access to this workspace lets you see its missions, not open them."
+            : "Your role lets you see missions, not open them."}
+      </p>
+
+      {error && (
+        <div className="mt-6">
+          <Failure
+            headline="The mission was not opened"
+            detail={error}
+            consequence="Nothing was recorded. Nothing is running."
+            action={
+              <button type="button" onClick={open} className="button-ghost">
+                Try again
+              </button>
+            }
+          />
+        </div>
+      )}
 
       {briefingOpen ? (
         <div className="mission-field">
@@ -247,48 +295,11 @@ export default function MissionStart() {
         </p>
       </div>
 
-      {error && (
-        <div className="mt-6">
-          <Failure
-            headline="The mission was not opened"
-            detail={error}
-            consequence="Nothing was recorded. Nothing is running."
-            action={
-              <button type="button" onClick={open} className="button-ghost">
-                Try again
-              </button>
-            }
-          />
-        </div>
-      )}
-
       <div className="mission-launch">
-        <button
-          type="button"
-          onClick={open}
-          disabled={!ready}
-          className="button-primary"
-        >
-          {opening ? (
-            <LoaderCircle size={13} className="spin-slow" />
-          ) : (
-            <Zap size={13} />
-          )}
-          {opening ? "Opening…" : "Open the mission"}
-        </button>
-
         <Link to="/missions" className="button-quiet">
           Every mission
           <ArrowRight size={11} />
         </Link>
-
-        <p className="mission-launch-note">
-          {canCreate
-            ? "Nothing runs until the plan exists. You will see it being written."
-            : workspaceId
-              ? "Your access to this workspace lets you see its missions, not open them."
-              : "Your role lets you see missions, not open them."}
-        </p>
       </div>
 
       <section className="templates" id="templates" aria-labelledby="templates-title">

@@ -460,17 +460,7 @@ a.outcome-text:hover {
   background: linear-gradient(90deg, transparent, var(--tone), transparent);
   background-repeat: no-repeat;
   background-size: 50% 100%;
-  animation: floorEdge 2.6s var(--ease-standard) infinite;
-}
-
-@keyframes floorEdge {
-  from {
-    background-position: -60% 0;
-  }
-
-  to {
-    background-position: 160% 0;
-  }
+  animation: edgeRun 2.6s var(--ease-standard) infinite;
 }
 
 .floor-tile-head {

@@ -787,7 +787,119 @@
   line-height: 1.72;
 }
 
+/* The composer: the objective and its send control as one raised slab.
+   Focus brings it forward and lights its edge, so the place to write is
+   unmistakable; while the request is in flight a band of light runs along
+   the top edge for exactly as long as the request takes. */
+.composer {
+  position: relative;
+  margin-top: 34px;
+  padding: 18px 20px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--elev-2);
+  transition:
+    border-color var(--duration) var(--ease-standard),
+    box-shadow var(--duration-slow) var(--ease-standard),
+    transform var(--duration-slow) var(--ease-arrive);
+}
+
+.composer:focus-within {
+  border-color: var(--blue-line);
+  box-shadow: var(--elev-3), 0 0 0 1px color-mix(in srgb, var(--blue) 18%, transparent);
+  transform: translateY(var(--lift));
+}
+
+.composer-label {
+  display: block;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.composer-input {
+  min-height: 3.2em;
+}
+
+.composer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.composer-hint {
+  min-width: 0;
+  flex: 1 1 220px;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.composer-send {
+  min-height: 36px;
+  padding: 0 16px;
+}
+
+.composer-note {
+  margin-top: 12px;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.composer-sending {
+  border-color: var(--blue-line);
+}
+
+.composer-sending .composer-hint {
+  color: var(--blue-ink);
+}
+
+.composer-sending::before {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto;
+  height: 2px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(90deg, transparent, var(--blue-ink), transparent);
+  background-repeat: no-repeat;
+  background-size: 40% 100%;
+  animation: edgeRun 1.4s var(--ease-standard) infinite;
+}
+
+@media (max-width: 640px) {
+  .composer {
+    padding: 14px 14px 12px;
+  }
+
+  .composer-send {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer,
+  .composer:focus-within {
+    transform: none;
+    transition: none;
+  }
+
+  .composer-sending::before {
+    animation: none;
+    background-size: 100% 100%;
+  }
+}
+
 .mission-field {
+
   margin-top: 34px;
   padding: 4px 0 0;
   border-top: 1px solid var(--line);
