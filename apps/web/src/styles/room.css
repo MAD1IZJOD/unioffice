@@ -920,7 +920,7 @@
 
 .step-procedure-name {
   margin: 4px 0 0;
-  color: var(--ink);
+  color: var(--ink-primary);
   font-size: var(--text-sm);
   font-weight: 600;
 }

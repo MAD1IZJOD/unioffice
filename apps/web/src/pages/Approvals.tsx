@@ -42,24 +42,32 @@ export default function Approvals() {
     { pollMs: 15_000 },
   );
 
-  const [resolving, setResolving] = useState<string>();
+  const [resolving, setResolving] = useState<{ id: string; decision: "approve" | "reject" }>();
   const [error, setError] = useState<string>();
+  // What was decided here, named the way the card named it. The record keeps
+  // the step's title rather than the approval's id: an id is how the server
+  // finds a decision, not how a person recognises one.
   const [resolved, setResolved] = useState<
-    Record<string, { decision: "approve" | "reject"; at: string }>
+    Record<string, { decision: "approve" | "reject"; at: string; title: string; mission?: string }>
   >({});
 
   async function decide(
-    approval: ApprovalItem,
+    approval: ApprovalItem & { briefing?: ApprovalBriefing },
     decision: "approve" | "reject",
   ) {
-    setResolving(approval.id);
+    setResolving({ id: approval.id, decision });
     setError(undefined);
 
     try {
       await resolveApproval(approval.id, decision);
       setResolved((current) => ({
         ...current,
-        [approval.id]: { decision, at: new Date().toISOString() },
+        [approval.id]: {
+          decision,
+          at: new Date().toISOString(),
+          title: approval.briefing?.step?.title ?? approval.action,
+          mission: approval.briefing?.mission?.objective,
+        },
       }));
       approvals.reload();
     } catch (caught) {
@@ -141,7 +149,7 @@ export default function Approvals() {
           }
         />
       ) : (
-        <div className="divide-y divide-line-subtle border-t border-line-subtle">
+        <div className="approval-stack stagger">
           {pending.map((approval) => {
             const briefing = approval.briefing;
             // The server says who may decide; without a briefing (an older
@@ -197,7 +205,7 @@ export default function Approvals() {
                     </dd>
                   </div>
 
-                  <div>
+                  <div className="approval-if-approve">
                     <dt className="t-eyebrow">If you approve</dt>
                     <dd className="mt-1.5 text-(length:--text-sm) leading-[1.65] text-ink-secondary">
                       {briefing?.onApprove ??
@@ -205,7 +213,7 @@ export default function Approvals() {
                     </dd>
                   </div>
 
-                  <div>
+                  <div className="approval-if-reject">
                     <dt className="t-eyebrow">If you reject</dt>
                     <dd className="mt-1.5 text-(length:--text-sm) leading-[1.65] text-ink-secondary">
                       {briefing?.onReject ??
@@ -253,21 +261,21 @@ export default function Approvals() {
                     <>
                       <button
                         type="button"
-                        disabled={resolving === approval.id}
+                        disabled={resolving?.id === approval.id}
                         onClick={() => decide(approval, "reject")}
-                        className="button-ghost button-reject"
+                        className="button-ghost button-reject approval-reject"
                       >
-                        Reject
+                        {resolving?.id === approval.id && resolving.decision === "reject" ? "Rejecting…" : "Reject"}
                       </button>
 
                       <button
                         type="button"
-                        disabled={resolving === approval.id}
+                        disabled={resolving?.id === approval.id}
                         onClick={() => decide(approval, "approve")}
-                        className="button-primary button-approve-strong"
+                        className="button-primary button-approve-strong approval-approve"
                       >
-                        {resolving === approval.id
-                          ? "Working…"
+                        {resolving?.id === approval.id && resolving.decision === "approve"
+                          ? "Approving…"
                           : "Approve and continue"}
                       </button>
                     </>
@@ -290,20 +298,21 @@ export default function Approvals() {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="decided-list stagger">
             {recentDecisions.map(([id, decision]) => (
-              <div key={id} className="flex items-center gap-3">
+              <div key={id} className={`decided-line decided-${decision.decision}`}>
                 <StatusPill
                   tone={decision.decision === "approve" ? "live" : "error"}
                 >
                   {decision.decision === "approve" ? "approved" : "rejected"}
                 </StatusPill>
 
-                <span className="mono truncate text-(length:--text-xs) text-ink-faint">
-                  {id}
+                <span className="min-w-0 flex-1">
+                  <span className="decided-title">{decision.title}</span>
+                  {decision.mission && <span className="decided-mission">{decision.mission}</span>}
                 </span>
 
-                <span className="mono ml-auto text-(length:--text-2xs) text-ink-ghost">
+                <span className="t-machine shrink-0">
                   {formatRelativeTime(decision.at)}
                 </span>
               </div>

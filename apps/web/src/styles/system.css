@@ -1748,20 +1748,35 @@
    what you can do about it.
    -------------------------------------------------------------------------- */
 
-.approval-row {
-  position: relative;
-  padding: 18px 18px 16px 20px;
+/* Each request is a document on the desk: a raised card with a red edge,
+   because a step of the company's work is stopped until someone with the
+   standing to decide does. The stack keeps them apart so no two requests
+   read as one. */
+.approval-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-/* A red edge marks the whole row as blocked, without wrapping it in a card. */
+.approval-row {
+  position: relative;
+  padding: 20px 20px 16px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--elev-2);
+}
+
+/* A red edge marks the whole request as a step that is stopped. */
 .approval-marker {
   position: absolute;
   top: 18px;
-  bottom: 16px;
-  left: 0;
+  bottom: 18px;
+  left: -1px;
   width: 3px;
   border-radius: 0 2px 2px 0;
   background: var(--red);
+  box-shadow: 0 0 12px rgba(229, 72, 77, 0.45);
 }
 
 .approval-row-head {
@@ -1785,6 +1800,66 @@
   margin: 0;
 }
 
+.approval-facts > div {
+  margin: -6px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--duration) var(--ease-standard),
+    box-shadow var(--duration) var(--ease-standard),
+    opacity var(--duration) var(--ease-standard);
+}
+
+/* Pointing at a decision shows what it does. Hover or focus "Approve" and
+   the paragraph saying what approving does comes forward; the same for
+   "Reject". The other two recede, so the consequence is read before the
+   click rather than discovered after it. */
+.approval-row:has(.approval-approve:is(:hover, :focus-visible)) .approval-if-approve,
+.approval-row:has(.approval-reject:is(:hover, :focus-visible)) .approval-if-reject {
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.approval-row:has(.approval-approve:is(:hover, :focus-visible)) .approval-facts > div:not(.approval-if-approve),
+.approval-row:has(.approval-reject:is(:hover, :focus-visible)) .approval-facts > div:not(.approval-if-reject) {
+  opacity: 0.45;
+}
+
+/* What was decided on this page, by name. */
+.decided-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.decided-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.decided-title {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decided-mission {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The action itself. Given the most weight on the card, because it is the
    thing being decided: everything else is context around it. */
 .approval-proposal {
@@ -1798,7 +1873,7 @@
 
 .approval-proposal-summary {
   margin: 6px 0 0;
-  color: var(--ink);
+  color: var(--ink-primary);
   font-size: var(--text-md);
   font-weight: 600;
   line-height: 1.6;
