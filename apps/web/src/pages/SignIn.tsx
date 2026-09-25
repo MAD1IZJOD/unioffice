@@ -1,8 +1,9 @@
-import { Boxes, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 
 import { useState, type FormEvent } from "react";
 
 import { sendSignInLink, signInWithGoogle } from "../lib/session";
+import { BrandMark } from "../components/BrandMark";
 
 /**
  * Signing in.
@@ -52,9 +53,7 @@ export default function SignIn() {
     <div className="session-screen">
       <div className="session-card">
         <div className="session-brand">
-          <span className="brand-icon">
-            <Boxes size={14} strokeWidth={2} />
-          </span>
+          <BrandMark size={30} />
           <span>
             <span className="brand-name block">UNIOFFICE</span>
             <span className="brand-subtitle block">OPERATING SYSTEM</span>

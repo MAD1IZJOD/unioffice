@@ -1,6 +1,5 @@
 import {
   ArrowRight,
-  Boxes,
   Brain,
   CalendarX2,
   ChevronRight,
@@ -49,10 +48,11 @@ import {
   summarizeAttention,
 } from "./lib/attention";
 
-import { useAccess } from "./lib/access";
+import { useAccess, useCan } from "./lib/access";
 import { signOut } from "./lib/session";
 import { toneClass } from "./lib/tone";
 import { profileOf } from "./lib/workforce";
+import { BrandMark } from "./components/BrandMark";
 
 const ATTENTION_ICON: Record<AttentionItem["kind"], LucideIcon> = {
   decision: ShieldAlert,
@@ -157,6 +157,23 @@ function UserCard() {
   );
 }
 
+/**
+ * The one action the rail always offers: give the company a job. Shown to
+ * anyone whose role may open missions somewhere; the page it leads to checks
+ * the chosen workspace, and the server checks again.
+ */
+function RailLaunch({ onNavigate }: { onNavigate?: () => void }) {
+  const canCreate = useCan("missions.create");
+  if (!canCreate) return null;
+
+  return (
+    <NavLink to="/missions/new" end onClick={onNavigate} className="rail-launch">
+      <Plus size={14} strokeWidth={2.2} />
+      <span>New mission</span>
+    </NavLink>
+  );
+}
+
 function Brand({ onNavigate, version }: { onNavigate?: () => void; version: string }) {
   return (
     <NavLink
@@ -164,9 +181,7 @@ function Brand({ onNavigate, version }: { onNavigate?: () => void; version: stri
       onClick={onNavigate}
       className="flex items-center gap-2.5"
     >
-      <span className="brand-icon">
-        <Boxes size={14} strokeWidth={2} />
-      </span>
+      <BrandMark />
 
       <span>
         <span className="brand-name block">UNIOFFICE</span>
@@ -334,6 +349,7 @@ export default function App() {
         </div>
 
         <div className="sidebar-content">
+          <RailLaunch />
           <Navigation groups={groups} context={context} />
         </div>
 
@@ -368,6 +384,7 @@ export default function App() {
         </div>
 
         <div className="sidebar-content">
+          <RailLaunch onNavigate={() => setMobileOpen(false)} />
           <Navigation
             groups={groups}
             context={context}

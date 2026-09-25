@@ -35,16 +35,89 @@
   border-bottom: 1px solid var(--line-subtle);
 }
 
-.brand-icon {
+/* The mark. The top plane is the work in flight, so it carries the system's
+   blue; the two beneath step back into the rail's own greys. */
+.brand-mark {
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.brand-mark-plane {
+  stroke-linejoin: round;
+  stroke-width: 1.1;
+}
+
+.brand-mark-plane-1 {
+  fill: color-mix(in srgb, var(--blue) 30%, var(--surface-2));
+  stroke: var(--blue-ink);
+}
+
+.brand-mark-plane-2 {
+  fill: var(--surface-4);
+  stroke: var(--ink-faint);
+}
+
+.brand-mark-plane-3 {
+  fill: var(--surface-3);
+  stroke: var(--line-strong);
+}
+
+.brand-mark-edge {
+  fill: var(--surface-2);
+  stroke: var(--line-strong);
+  stroke-linejoin: round;
+  stroke-width: 1.1;
+}
+
+/* Opening the rail's link home lifts the top plane off the stack a little -
+   the one place the mark moves, and only under the pointer. */
+.brand-mark-plane-1 {
+  transition: transform var(--duration) var(--ease-settle);
+}
+
+a:hover > .brand-mark .brand-mark-plane-1 {
+  transform: translateY(-1.5px);
+}
+
+/* The rail's standing offer to start work. A full-width control above the
+   navigation rather than one more entry in it: it is an action, not a place. */
+.rail-launch {
   display: flex;
-  width: 26px;
-  height: 26px;
+  min-height: 34px;
   align-items: center;
-  justify-content: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  padding: 0 11px;
+  border: 1px solid var(--blue-line);
   border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--blue) 12%, var(--surface-1));
+  box-shadow: var(--edge-light);
+  color: var(--blue-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.rail-launch:hover {
+  border-color: color-mix(in srgb, var(--blue) 60%, transparent);
+  background: color-mix(in srgb, var(--blue) 20%, var(--surface-1));
   color: var(--ink-primary);
-  /* The one place a red-to-blue transition is allowed: the mark itself. */
-  background: linear-gradient(135deg, var(--red) 0%, var(--blue) 100%);
+}
+
+.rail-launch:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+/* Already on the page it opens: it says so rather than offering itself. */
+.rail-launch.active {
+  border-color: var(--line);
+  background: var(--surface-3);
+  color: var(--ink-primary);
 }
 
 .brand-name {
@@ -112,7 +185,7 @@
   border-radius: 0 2px 2px 0;
   background: var(--blue);
   transform: translateY(-50%);
-  transition: height 160ms ease;
+  transition: height var(--duration) var(--ease-settle);
 }
 
 .nav-item-idle:hover {
