@@ -137,13 +137,13 @@ export default function Agent() {
             The workforce
           </Link>
 
-          <span className="place-mark">
+          <span className="place-mark agent-plate">
             <AgentMark
               agentId={member.id}
               capabilities={member.capabilities}
               tools={member.tools.length}
               type={member.type}
-              size={32}
+              size={46}
               active={member.presence === "working"}
             />
           </span>

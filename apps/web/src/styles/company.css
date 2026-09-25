@@ -257,6 +257,34 @@
   color: var(--tone);
 }
 
+/* An agent's mark as an object: a plate held at a slight angle in
+   perspective, which turns to face you under the pointer. The figure on it is
+   the agent's real capabilities and tools, so this is the one place the mark
+   is shown at a size where each member and filled node can be counted. */
+.agent-plate {
+  width: 78px;
+  height: 78px;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    var(--edge-light),
+    0 1px 0 rgba(255, 255, 255, 0.03),
+    6px 14px 30px -10px rgba(0, 0, 0, 0.8);
+  transform: perspective(600px) rotateX(10deg) rotateY(-14deg);
+  transition: transform var(--duration-slow) var(--ease-settle);
+}
+
+.agent-plate:hover {
+  transform: perspective(600px) rotateX(0) rotateY(0) translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-plate,
+  .agent-plate:hover {
+    transform: none;
+    transition: none;
+  }
+}
+
 .place-name {
   max-width: 18ch;
   margin: 0;
