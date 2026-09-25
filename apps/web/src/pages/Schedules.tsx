@@ -136,7 +136,12 @@ function ScheduleRow({ mission }: { mission: ContinuousMissionItem }) {
   const latest = mission.latestRun;
 
   return (
-    <Link to={`/schedules/${mission.id}`} className="schedule-row" role="listitem" aria-label={mission.name}>
+    <Link
+      to={`/schedules/${mission.id}`}
+      className={`schedule-row ${toneClass[standing.tone]}`}
+      role="listitem"
+      aria-label={mission.name}
+    >
       <span className="min-w-0">
         <span className="schedule-name">{mission.name}</span>
         <span className="schedule-cadence">{mission.cadence}</span>
@@ -147,7 +152,7 @@ function ScheduleRow({ mission }: { mission: ContinuousMissionItem }) {
       <span className="schedule-meta">
         <StatusPill tone={standing.tone}>{standing.label}</StatusPill>
         {mission.status === "active" && mission.nextRunAt && (
-          <span className="t-meta" title={formatExact(mission.nextRunAt)}>Next run {formatWhen(mission.nextRunAt)}</span>
+          <span className="schedule-next" title={formatExact(mission.nextRunAt)}>Next run {formatWhen(mission.nextRunAt)}</span>
         )}
         {latest ? (
           <span className="t-meta">
