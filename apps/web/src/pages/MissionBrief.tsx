@@ -27,7 +27,7 @@ import {
   StatusPill,
 } from "../components/primitives";
 
-import type { Tone } from "../lib/tone";
+import { toneClass, type Tone } from "../lib/tone";
 
 /**
  * What UNIOFFICE understood, and whether it can do it.
@@ -297,7 +297,22 @@ export default function MissionBrief() {
         </>
       )}
 
-      <div className="intel-commit">
+      {/* The launch bar. It stays in view while the plan is read, so the
+          decision and what it commits to are never a scroll away; while the
+          start request is in flight it says so, for exactly that long. */}
+      <div
+        className={`intel-commit${decidable && preflight.canStart ? " intel-commit-armed" : ""}${starting ? " intel-commit-starting" : ""}`}
+      >
+        {!preparing && plan && (
+          <span className={`intel-commit-summary ${toneClass[STATE_TONE[preflight.state]]}`}>
+            <span className="pill-dot" aria-hidden="true" />
+            {plan.steps.length} {plan.steps.length === 1 ? "step" : "steps"}
+            {plan.approvalCount > 0 && (
+              <> · {plan.approvalCount} {plan.approvalCount === 1 ? "waits" : "wait"} for you</>
+            )}
+          </span>
+        )}
+
         {startError && (
           <Failure
             headline="This mission could not be started"
@@ -474,7 +489,9 @@ function Check_({ check }: { check: PreflightCheck }) {
 
 function Step({ step }: { step: PlanStep }) {
   return (
-    <li className="intel-step">
+    <li
+      className={`intel-step${step.needsApproval ? " intel-step-gated" : ""}${step.agent ? "" : " intel-step-unassigned"}`}
+    >
       <span className="intel-step-number" aria-hidden="true">{step.number}</span>
 
       <div className="min-w-0">

@@ -282,6 +282,9 @@
    The plan
    -------------------------------------------------------------------------- */
 
+/* The plan as a route: each step a stop on one line, so the order the work
+   happens in is visible before any of it is read. A stop that waits for a
+   person is drawn in red; one nobody can take yet is drawn open. */
 .intel-plan {
   margin: 0 0 var(--space-7);
   padding: 0;
@@ -289,29 +292,52 @@
 }
 
 .intel-step {
+  position: relative;
   display: grid;
   align-items: start;
   gap: var(--space-4);
   padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--line-subtle);
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
 }
 
-.intel-step:last-child {
-  border-bottom: none;
+/* The line to the next stop. */
+.intel-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--space-4) + 30px);
+  bottom: calc(-1 * var(--space-4) + 2px);
+  left: 13.5px;
+  width: 1px;
+  background: linear-gradient(180deg, var(--line-strong), var(--line));
 }
 
 .intel-step-number {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-pill);
-  color: var(--ink-muted);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  color: var(--ink-secondary);
   font-family: var(--mono);
   font-size: var(--text-xs);
+}
+
+.intel-step-gated .intel-step-number {
+  border-color: var(--red-line);
+  background: color-mix(in srgb, var(--red) 14%, var(--surface-2));
+  color: var(--red-ink);
+}
+
+.intel-step-unassigned .intel-step-number {
+  border-style: dashed;
+  background: var(--surface-0);
+  color: var(--ink-faint);
 }
 
 .intel-step-title {
@@ -480,13 +506,58 @@
    Committing to it
    -------------------------------------------------------------------------- */
 
+/* The launch bar. It rides the bottom of the viewport while the brief is
+   read - a console, not a footer - so "start it" and what that commits to
+   are always in reach. Solid rather than frosted: what is behind it is the
+   plan, and blurring the plan to look expensive would hide it. */
 .intel-commit {
+  position: sticky;
+  bottom: var(--space-3);
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--line);
+  margin-top: var(--space-7);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-3);
+}
+
+.intel-commit > .callout {
+  flex-basis: 100%;
+}
+
+/* Ready to go: the bar picks up the system's blue along its top edge. */
+.intel-commit-armed {
+  border-color: var(--blue-line);
+  box-shadow: var(--elev-3), inset 0 1px 0 color-mix(in srgb, var(--blue-ink) 45%, transparent);
+}
+
+.intel-commit-starting::before {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto;
+  height: 2px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(90deg, transparent, var(--blue-ink), transparent);
+  background-repeat: no-repeat;
+  background-size: 40% 100%;
+  animation: edgeRun 1.4s var(--ease-standard) infinite;
+}
+
+.intel-commit-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-secondary);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .intel-commit-note {
@@ -495,6 +566,23 @@
   color: var(--ink-faint);
   font-size: var(--text-sm);
   line-height: var(--leading-snug);
+}
+
+@media (max-width: 640px) {
+  .intel-commit {
+    bottom: var(--space-2);
+  }
+
+  .intel-commit .button-primary {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intel-commit-starting::before {
+    animation: none;
+    background-size: 100% 100%;
+  }
 }
 
 @media (max-width: 720px) {
