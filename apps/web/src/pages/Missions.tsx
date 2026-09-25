@@ -148,7 +148,7 @@ export default function Missions() {
         action={
           <Link to="/missions/new" className="button-primary">
             <Plus size={13} />
-            Open a mission
+            New mission
           </Link>
         }
         meta={

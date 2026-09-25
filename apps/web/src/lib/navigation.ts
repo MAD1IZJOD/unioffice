@@ -154,7 +154,7 @@ const DETAIL_PAGES: Array<{ prefix: string; area: FeatureArea; title: string }> 
 
 /** Where a path sits, for the breadcrumb: its area and its own name. */
 export function locate(pathname: string, groups: NavigationGroup[]): { group: string; title: string } {
-  if (pathname === "/missions/new") return { group: AREA_LABEL.work, title: "Open a mission" };
+  if (pathname === "/missions/new") return { group: AREA_LABEL.work, title: "New mission" };
   // Matched before the /missions/ detail prefix, which would otherwise claim
   // this as the execution room.
   if (pathname.startsWith("/missions/") && pathname.endsWith("/brief")) {

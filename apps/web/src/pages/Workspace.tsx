@@ -192,7 +192,7 @@ export default function Workspace() {
                 className="button-primary"
               >
                 <Zap size={13} />
-                Open a mission here
+                New mission here
               </Link>
             )}
 

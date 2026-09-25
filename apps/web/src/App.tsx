@@ -277,7 +277,7 @@ export default function App() {
     const actions = [
       {
         key: "action:new-mission",
-        label: "Open a mission",
+        label: "New mission",
         path: "/missions/new",
         icon: Plus,
         kind: "Action",
@@ -557,7 +557,7 @@ export default function App() {
                     navigate(target.path);
                   }
                 }}
-                placeholder="Open a mission, find one, or go to a surface…"
+                placeholder="Start a mission, find one, or go anywhere…"
                 className="min-w-0 flex-1 bg-transparent text-(length:--text-base) text-ink-primary outline-none placeholder:text-ink-faint"
               />
 
