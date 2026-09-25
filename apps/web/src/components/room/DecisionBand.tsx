@@ -77,7 +77,7 @@ export function DecisionBand({
                   type="button"
                   disabled={busy}
                   onClick={() => onDecide(approval.id, "approve")}
-                  className="button-primary button-approve-strong"
+                  className="button-primary button-approve-strong decision-approve"
                 >
                   Approve and continue
                 </button>
@@ -86,7 +86,7 @@ export function DecisionBand({
                   type="button"
                   disabled={busy}
                   onClick={() => onDecide(approval.id, "reject")}
-                  className="button-ghost button-reject"
+                  className="button-ghost button-reject decision-reject"
                 >
                   Reject
                 </button>
