@@ -414,6 +414,8 @@
   gap: 12px;
 }
 
+/* An artifact is a document the company kept. It rests like one and, under
+   the pointer, is picked up off the shelf towards you. */
 .artifact-tile {
   display: flex;
   min-height: 152px;
@@ -422,17 +424,26 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-1);
+  box-shadow: var(--elev-1);
   text-align: left;
   transition:
     border-color 170ms ease,
     background 170ms ease,
-    transform 170ms cubic-bezier(0.22, 0.8, 0.3, 1);
+    box-shadow var(--duration-slow) var(--ease-standard),
+    transform var(--duration-slow) var(--ease-settle);
 }
 
 .artifact-tile:hover {
   border-color: var(--line-strong);
   background: var(--surface-2);
-  transform: translateY(-2px);
+  box-shadow: var(--elev-3);
+  transform: perspective(var(--perspective)) translate3d(0, -3px, 12px) rotateX(2deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artifact-tile:hover {
+    transform: none;
+  }
 }
 
 .artifact-tile-name {

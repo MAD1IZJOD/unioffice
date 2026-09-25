@@ -189,25 +189,49 @@
    The result, read as a brief
    -------------------------------------------------------------------------- */
 
+/* The payoff of a mission, drawn as a document raised off the page. Its top
+   edge carries how the mission really ended - finished, finished with
+   limits, blocked, failed - because "the run ended" and "the result is good"
+   are different claims, and the edge is read before the words. It surfaces
+   out of a little depth when it first appears. */
 .brief {
+  position: relative;
   margin-bottom: var(--space-8);
   padding: var(--space-6);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface-1);
+  box-shadow: var(--elev-2), inset 0 2px 0 var(--brief-edge, transparent);
+  animation: briefSurface 560ms var(--ease-arrive) backwards;
 }
 
 .brief-completed {
+  --brief-edge: var(--success);
   border-color: var(--success-line);
 }
 
 .brief-completed_with_limitations,
 .brief-blocked {
+  --brief-edge: var(--warning);
   border-color: var(--warning-line);
 }
 
 .brief-failed {
+  --brief-edge: var(--red);
   border-color: var(--red-line);
+}
+
+@keyframes briefSurface {
+  from {
+    opacity: 0;
+    transform: perspective(var(--perspective)) translate3d(0, 14px, -40px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brief {
+    animation: none;
+  }
 }
 
 .brief-head {
