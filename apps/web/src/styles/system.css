@@ -141,12 +141,36 @@
   --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line);
   --shadow-raised: 0 8px 24px rgba(0, 0, 0, 0.35);
 
+  /* Depth. A surface that sits above the page catches a hairline of light on
+     its top edge and casts a short, soft shadow below - the way a physical
+     panel does - instead of glowing or blurring what is behind it. Three
+     steps: resting on the page, lifted under the pointer, and floating. */
+  --edge-light: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --elev-1: var(--edge-light), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --elev-2: var(--edge-light), 0 2px 4px rgba(0, 0, 0, 0.3), 0 10px 28px -8px rgba(0, 0, 0, 0.6);
+  --elev-3: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 10px rgba(0, 0, 0, 0.35), 0 28px 64px -16px rgba(0, 0, 0, 0.75);
+  /* How far a surface travels toward you when it becomes the thing in hand. */
+  --lift: -2px;
+  /* The camera for the few surfaces that use real perspective. Far enough
+     away that nothing looks distorted - depth, not a fisheye. */
+  --perspective: 1400px;
+
   /* Motion. Short and purposeful; nothing moves just to look alive. */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --duration-fast: 120ms;
   --duration: 200ms;
   --duration-slow: 360ms;
+  /* Arrivals decelerate hard - most of the travel happens in the first
+     frames, so something new is readable almost at once and then settles. */
+  --ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+  /* A small overshoot, for the rare moment a state change should feel
+     physical: a mission accepted, a decision recorded. */
+  --ease-settle: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --duration-enter: 440ms;
+  /* The delay between siblings arriving one after another. Short enough that
+     a list of twenty is complete in well under a second. */
+  --stagger: 36ms;
 
   /* Focus is always visible for keyboard users, and always the same. */
   --focus: var(--blue-ink);
@@ -375,6 +399,7 @@
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius);
   background: var(--surface-1);
+  box-shadow: var(--elev-1);
 }
 
 /* Marks a panel as the thing that needs a person. Used sparingly - if two
@@ -653,59 +678,72 @@
 
 /* --------------------------------------------------------------------------
    Buttons
+
+   Three weights. Primary is the one thing a page wants you to do and is the
+   only solid control on it; ghost is a real alternative; quiet is a link
+   that happens to be a button. Under the pointer a button rises a hair and
+   catches light; pressed, it sinks - so a click is felt before the page
+   answers it.
    -------------------------------------------------------------------------- */
 
 .button-primary,
 .button-ghost,
-.button-quiet {
+.button-quiet,
+.button-reject {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   min-height: 34px;
   padding: 0 14px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: 600;
+  letter-spacing: -0.005em;
   white-space: nowrap;
   transition:
-    background 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease,
-    transform 120ms ease;
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
 .button-primary {
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--blue-ink);
+  border-color: rgba(132, 180, 251, 0.35);
+  background: var(--blue);
+  box-shadow: var(--elev-1), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: #ffffff;
 }
 
 .button-primary:hover:not(:disabled) {
-  border-color: rgba(34, 211, 238, 0.42);
-  background: rgba(34, 211, 238, 0.17);
-}
-
-.button-primary:active:not(:disabled) {
-  transform: translateY(1px);
+  background: color-mix(in srgb, var(--blue) 88%, white);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 6px 18px -6px rgba(59, 130, 246, 0.6);
+  transform: translateY(-1px);
 }
 
 .button-ghost {
-  border: 1px solid var(--line);
+  border-color: var(--line);
   background: var(--surface-2);
+  box-shadow: var(--edge-light);
   color: var(--ink-secondary);
 }
 
 .button-ghost:hover:not(:disabled) {
   border-color: var(--line-strong);
   background: var(--surface-3);
+  box-shadow: var(--elev-1);
   color: var(--ink-primary);
+  transform: translateY(-1px);
 }
 
 .button-quiet {
   min-height: 28px;
   padding: 0 9px;
-  border: 1px solid transparent;
   background: transparent;
   color: var(--ink-muted);
   font-size: var(--text-xs);
@@ -717,9 +755,19 @@
   color: var(--ink-secondary);
 }
 
+.button-primary:active:not(:disabled),
+.button-ghost:active:not(:disabled),
+.button-quiet:active:not(:disabled),
+.button-reject:active:not(:disabled) {
+  box-shadow: none;
+  transform: translateY(1px) scale(0.985);
+  transition-duration: 60ms;
+}
+
 .button-primary:disabled,
 .button-ghost:disabled,
-.button-quiet:disabled {
+.button-quiet:disabled,
+.button-reject:disabled {
   cursor: not-allowed;
   opacity: 0.38;
 }
@@ -731,8 +779,8 @@
 }
 
 .button-approve:hover:not(:disabled) {
-  border-color: rgba(52, 211, 153, 0.45);
-  background: rgba(52, 211, 153, 0.16);
+  border-color: color-mix(in srgb, var(--success) 60%, transparent);
+  background: color-mix(in srgb, var(--success) 18%, transparent);
 }
 
 .button-reject {
@@ -742,8 +790,9 @@
 }
 
 .button-reject:hover:not(:disabled) {
-  border-color: rgba(248, 113, 113, 0.45);
-  background: rgba(248, 113, 113, 0.16);
+  border-color: color-mix(in srgb, var(--red) 60%, transparent);
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+  color: var(--red-whisper);
 }
 
 .timestamp {
@@ -1438,11 +1487,6 @@
   background: rgba(255, 255, 255, 0.035);
 }
 
-.button-ghost:active:not(:disabled),
-.button-quiet:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
 /* --------------------------------------------------------------------------
    Command Center
 
@@ -1831,6 +1875,7 @@
 .button-approve-strong:hover:not(:disabled) {
   border-color: var(--red);
   background: rgba(229, 72, 77, 0.26);
+  box-shadow: var(--edge-light), 0 6px 18px -6px rgba(229, 72, 77, 0.5);
 }
 
 @media (max-width: 860px) {
