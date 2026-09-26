@@ -609,6 +609,12 @@
   .intel-commit > .callout {
     order: 0;
   }
+
+  /* While the verdict is on screen the bar rests at the end of the page
+     rather than over it (see MissionBrief). */
+  .intel-commit-yield {
+    position: static;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

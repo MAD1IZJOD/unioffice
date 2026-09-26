@@ -356,7 +356,11 @@
     gap: 14px;
   }
 
+  /* Every stop takes the same height whether or not it has a detail line,
+     so the track keeps one rhythm instead of bunching the stops that have
+     nothing to add. */
   .station {
+    min-height: 40px;
     padding: 0 0 0 26px;
   }
 

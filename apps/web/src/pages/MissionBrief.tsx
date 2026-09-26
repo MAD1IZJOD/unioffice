@@ -88,6 +88,23 @@ export default function MissionBrief() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string>();
 
+  // Whether the verdict is on screen. On a phone the launch bar gives way -
+  // it rests at the end of the page instead of riding the bottom edge - for
+  // as long as any of the verdict is visible, so the bar can never sit over
+  // the one statement it exists to act on. Sticky elements keep their place
+  // in the flow either way, so nothing moves when it does.
+  const [verdict, setVerdict] = useState<HTMLDivElement | null>(null);
+  const [verdictInView, setVerdictInView] = useState(false);
+
+  useEffect(() => {
+    if (!verdict || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(([entry]) => setVerdictInView(entry?.isIntersecting ?? false));
+    observer.observe(verdict);
+
+    return () => observer.disconnect();
+  }, [verdict]);
+
   const intelligence = useResource<MissionIntelligence>(
     useCallback(() => fetchMissionIntelligence(missionId), [missionId]),
     // Only while the plan is still being written does this need to be live;
@@ -243,7 +260,7 @@ export default function MissionBrief() {
 
           <Chapter index="02" title="Can the company do it" />
 
-          <div className={`intel-verdict intel-verdict-${preflight.state}`}>
+          <div ref={setVerdict} className={`intel-verdict intel-verdict-${preflight.state}`}>
             <StatusPill tone={STATE_TONE[preflight.state]}>{STATE_LABEL[preflight.state]}</StatusPill>
             <p className="intel-verdict-line">{preflight.headline}</p>
             <p className="intel-verdict-detail">{preflight.detail}</p>
@@ -301,7 +318,7 @@ export default function MissionBrief() {
           decision and what it commits to are never a scroll away; while the
           start request is in flight it says so, for exactly that long. */}
       <div
-        className={`intel-commit${decidable && preflight.canStart ? " intel-commit-armed" : ""}${starting ? " intel-commit-starting" : ""}`}
+        className={`intel-commit${decidable && preflight.canStart ? " intel-commit-armed" : ""}${starting ? " intel-commit-starting" : ""}${verdictInView ? " intel-commit-yield" : ""}`}
       >
         {!preparing && plan && (
           <span className={`intel-commit-summary ${toneClass[STATE_TONE[preflight.state]]}`}>

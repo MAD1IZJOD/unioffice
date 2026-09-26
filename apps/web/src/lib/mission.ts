@@ -457,7 +457,10 @@ function tell(
         line: `${named(planner, "The orchestrator")} wrote the task “${
           task ?? "untitled"
         }”.`,
-        note: requirementNote(payload, words),
+        // The tools a step must use are named; the capabilities the router
+        // matched on are its own identifiers, so they sit under Details.
+        note: requirementNote(payload, words).tools,
+        technical: requirementNote(payload, words).capabilities,
       };
 
     case "agent.assigned":
@@ -802,17 +805,16 @@ function tell(
 function requirementNote(
   payload: Record<string, unknown>,
   words: Vocabulary,
-): string | undefined {
+): { tools?: string; capabilities?: string } {
   const tools = stringsOf(payload.requiredTools).map(
     (tool) => words.toolName(tool) ?? tool,
   );
   const capabilities = stringsOf(payload.requiredCapabilities);
 
-  const parts: string[] = [];
-  if (capabilities.length) parts.push(`needs ${capabilities.join(", ")}`);
-  if (tools.length) parts.push(`must use ${tools.join(", ")}`);
-
-  return parts.length ? parts.join(" · ") : undefined;
+  return {
+    tools: tools.length ? `must use ${tools.join(", ")}` : undefined,
+    capabilities: capabilities.length ? `Required capabilities: ${capabilities.join(", ")}` : undefined,
+  };
 }
 
 function delegationNote(payload: Record<string, unknown>): string | undefined {
