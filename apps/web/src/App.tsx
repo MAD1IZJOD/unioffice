@@ -340,6 +340,14 @@ export default function App() {
 
   const { group, title } = locate(location.pathname, groups);
   const attentionCount = queue?.actionCount ?? 0;
+  const systemDown = !online || Boolean(missionControl.error);
+  const systemState = !online
+    ? "OFFLINE"
+    : missionControl.error
+      ? "RECONNECTING"
+      : missionControl.loading
+        ? "CONNECTING"
+        : "OPERATIONAL";
 
   return (
     <div className="app-shell">
@@ -406,6 +414,18 @@ export default function App() {
         <span className="mobile-brand">UNIOFFICE</span>
 
         <div className="flex items-center gap-2">
+          {/* The connection state, as a dot. Below desktop width this bar is
+              the only header with controls, so the page header below it does
+              not repeat search, attention or status. */}
+          <span
+            className={`mobile-status${systemDown ? " mobile-status-down" : ""}`}
+            role="status"
+            aria-label={systemState.toLowerCase()}
+            title={!online ? "This device has no network connection." : missionControl.error?.message ?? systemState.toLowerCase()}
+          >
+            <span className={`pill-dot ${systemDown ? "tone-error" : "tone-active"}`} aria-hidden="true" />
+          </span>
+
           {/* On a phone the attention queue outranks search, so it stays in
               the bar rather than behind the drawer. */}
           <button
@@ -480,22 +500,14 @@ export default function App() {
             </div>
 
             <div
-              className={`system-status${!online || missionControl.error ? " system-status-down" : ""}`}
+              className={`system-status${systemDown ? " system-status-down" : ""}`}
               role="status"
               title={!online ? "This device has no network connection." : missionControl.error?.message}
             >
               <span
-                className={`pill-dot ${!online || missionControl.error ? "tone-error" : "tone-active"}`}
+                className={`pill-dot ${systemDown ? "tone-error" : "tone-active"}`}
               />
-              <span>
-                {!online
-                  ? "OFFLINE"
-                  : missionControl.error
-                    ? "RECONNECTING"
-                    : missionControl.loading
-                      ? "CONNECTING"
-                      : "OPERATIONAL"}
-              </span>
+              <span>{systemState}</span>
             </div>
           </div>
         </header>

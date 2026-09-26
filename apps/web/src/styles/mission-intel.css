@@ -568,13 +568,46 @@
   line-height: var(--leading-snug);
 }
 
+/* On a phone the bar is two short rows, not four stacked ones: what starting
+   commits to beside the action, then the explanation - held to two lines -
+   beside the way into the room. Everything the desktop bar offers is still
+   here; it just no longer takes a fifth of the screen or sits over the
+   verdict it is about. */
 @media (max-width: 640px) {
   .intel-commit {
     bottom: var(--space-2);
+    gap: 8px 10px;
+    padding: 10px 12px;
+  }
+
+  .intel-commit-summary {
+    order: 1;
   }
 
   .intel-commit .button-primary {
-    flex: 1 1 100%;
+    order: 2;
+    min-height: 40px;
+    margin-left: auto;
+  }
+
+  .intel-commit-note {
+    display: -webkit-box;
+    order: 3;
+    flex: 1 1 0;
+    overflow: hidden;
+    font-size: var(--text-xs);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .intel-commit .button-quiet {
+    order: 4;
+    min-height: 32px;
+    padding: 0 4px;
+  }
+
+  .intel-commit > .callout {
+    order: 0;
   }
 }
 

@@ -800,28 +800,41 @@ a:hover > .brand-mark .brand-mark-plane-1 {
   .topbar {
     margin-top: 50px;
   }
+
+  /* One header with controls below desktop width: the fixed bar above has
+     navigation, attention, search and status, so the page header keeps only
+     where you are. The attention panel stays mounted here and drops from the
+     fixed bar instead, so it is reachable at any scroll position. */
+  .topbar .search-button,
+  .topbar .attention-button,
+  .topbar .system-status {
+    display: none;
+  }
+
+  .attention-panel {
+    position: fixed;
+    top: 58px;
+    right: 12px;
+    z-index: 45;
+  }
+}
+
+.mobile-status {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-status-down .pill-dot {
+  box-shadow: 0 0 8px var(--red);
 }
 
 @media (max-width: 640px) {
   .topbar {
     min-height: 50px;
     padding: 0 14px;
-  }
-
-  .topbar-actions .search-button span,
-  .topbar-actions .search-button kbd,
-  .attention-button-label,
-  .attention-button kbd,
-  .system-status span {
-    display: none;
-  }
-
-  .attention-button {
-    padding: 0 9px;
-  }
-
-  .system-status {
-    padding: 0 7px;
   }
 
   .page-surface {
