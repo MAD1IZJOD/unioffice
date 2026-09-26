@@ -226,11 +226,13 @@ export default function Brain() {
           </p>
 
           <div className="brain-readout">
-            <Reading label="Current" value={counts?.active} tone="blue" />
-            <Reading label="Proposed" value={counts?.proposed} tone={counts?.proposed ? "amber" : undefined} />
+            {/* Ink, not a colour per number. The one reading that asks for a
+                person - knowledge that contradicts itself - keeps its red. */}
+            <Reading label="Current" value={counts?.active} />
+            <Reading label="Proposed" value={counts?.proposed} />
             <Reading label="Conflicting" value={counts?.openConflicts} tone={counts?.openConflicts ? "red" : undefined} />
             <Reading label="Missions informed" value={counts?.missionsInformed} />
-            <Reading label="May be outdated" value={counts?.stale} tone={counts?.stale ? "amber" : undefined} />
+            <Reading label="May be outdated" value={counts?.stale} />
             <Reading label="Archived" value={counts?.archived} />
           </div>
         </div>
@@ -476,7 +478,7 @@ function Reading({
 }: {
   label: string;
   value: number | undefined;
-  tone?: "blue" | "red" | "amber";
+  tone?: "red";
 }) {
   return (
     <div className={`brain-reading${tone ? ` brain-reading-${tone}` : ""}`}>

@@ -400,7 +400,10 @@ function FirstMorning({ readiness }: { readiness: CompanyReadiness }) {
    Needs you
    -------------------------------------------------------------------------- */
 
-const COLLAPSED = { action: 5, review: 3, watch: 2 };
+// How many of each band the Command Center shows before "Show all". The
+// page is a summary: a few of the most pressing entries, and the rest one
+// click away, so the queue never pushes the missions off the first screens.
+const COLLAPSED = { action: 3, review: 2, watch: 1 };
 
 function NeedsYou({
   queue,
@@ -527,7 +530,7 @@ function NeedsYou({
         <div className="needs-more">
           {(hidden > 0 || expanded) && (
             <button type="button" className="button-quiet" onClick={() => setExpanded((value) => !value)}>
-              {expanded ? "Show less" : `Show ${hidden} more`}
+              {expanded ? "Show less" : `Show all ${queue.items.length}`}
             </button>
           )}
           {beyond > 0 && <span className="t-machine">{beyond} more beyond these</span>}
@@ -871,6 +874,37 @@ function AgentActivity({ control }: { control: MissionControl }) {
   // listing who is free.
   const rank = (label: string) => (label === "Working" ? 0 : label === "Waiting on a decision" ? 1 : label === "Available" ? 2 : 3);
   rows.sort((left, right) => rank(left.label) - rank(right.label) || left.agent.name.localeCompare(right.agent.name));
+
+  // With nothing in flight the floor would be a screen of identical "No step
+  // in flight" tiles. It collapses to one line and the roster as names; the
+  // floor comes back the moment the backend reports an agent working or
+  // waiting on a decision.
+  const engaged = rows.some(({ label }) => label === "Working" || label === "Waiting on a decision");
+
+  if (!engaged) {
+    const available = rows.filter(({ label }) => label === "Available").length;
+    const away = rows.length - available;
+
+    return (
+      <div className="workforce-idle">
+        <p className="workforce-idle-line">
+          <span className="workforce-idle-lead">No active work.</span>{" "}
+          {available} {available === 1 ? "agent" : "agents"} available
+          {away > 0 && ` · ${away} paused or unavailable`}.
+        </p>
+
+        <ul className="workforce-idle-roster" aria-label="Agents">
+          {rows.map(({ agent, tone, label }) => (
+            <li key={agent.agentId} className={`workforce-idle-agent ${toneClass[tone]}`} aria-label={agent.name}>
+              <span className="pill-dot" aria-hidden="true" />
+              <Link to={`/workforce/${agent.agentId}`}>{agent.name}</Link>
+              <span className="workforce-idle-role">{label === "Available" ? profileOf(agent).label : label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
 
   // The floor: every agent as a place on one plane. Whoever is working
   // stands forward of it, whoever is paused steps back, and each says what it

@@ -95,8 +95,11 @@
   line-height: 0.98;
 }
 
+/* Each line is balanced on its own, so the last line never strands a single
+   word such as "it." at display size. */
 .brain-statement-line {
   display: block;
+  text-wrap: balance;
   color: var(--ink-primary);
 }
 
@@ -141,16 +144,8 @@
   text-transform: uppercase;
 }
 
-.brain-reading-blue .brain-reading-value {
-  color: var(--blue-ink);
-}
-
 .brain-reading-red .brain-reading-value {
   color: var(--red-ink);
-}
-
-.brain-reading-amber .brain-reading-value {
-  color: var(--warning);
 }
 
 /* --------------------------------------------------------------------------
