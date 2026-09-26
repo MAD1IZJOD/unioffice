@@ -189,6 +189,19 @@
   line-height: 1.2;
 }
 
+/* Three lines are enough to know which mission this is. The rest is one
+   click away, and nothing is removed from the text itself. */
+.operation-objective-clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.operation-objective-toggle {
+  margin: 8px 0 0 -9px;
+}
+
 .operation-state {
   display: flex;
   flex-wrap: wrap;

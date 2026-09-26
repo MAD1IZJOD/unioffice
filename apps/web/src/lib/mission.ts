@@ -327,6 +327,12 @@ export interface MissionMoment {
   note?: string;
   /** The agent the moment belongs to, when the event names one. */
   actor?: string;
+  /**
+   * How the system arrived at this moment, in its own terms - the router's
+   * ranking, the queue that holds the run. Kept for whoever needs to check
+   * the machinery, and shown only when asked for.
+   */
+  technical?: string;
 }
 
 export interface NarrationSources {
@@ -462,7 +468,7 @@ function tell(
         line: actor
           ? `${named(planner, "The orchestrator")} gave “${task ?? "a task"}” to ${actor}.`
           : `“${task ?? "A task"}” was routed to a specialist.`,
-        note: delegationNote(payload),
+        technical: delegationNote(payload),
       };
 
     case "work.queued":
@@ -476,8 +482,9 @@ function tell(
               ? "The mission went back on the queue to be retried."
               : payload.reason === "recovered"
                 ? "UNIOFFICE recovered the mission and queued it again."
-                : "The mission went onto the durable queue.",
+                : "The mission was queued for a worker.",
         note: "A worker takes it from here, so the run survives a restart.",
+        technical: "Held on the durable execution queue until a worker claims it.",
       };
 
     case "work.started":

@@ -228,10 +228,13 @@
   border-color: var(--success-line);
 }
 
+/* A result with limits, or one that could not finish, is marked in the same
+   tone its status pill uses - the product's "a person should look at this" -
+   so the card, its pill and the room's header tell one story. */
 .brief-completed_with_limitations,
 .brief-blocked {
-  --brief-edge: var(--warning);
-  border-color: var(--warning-line);
+  --brief-edge: var(--red-ink);
+  border-color: var(--red-line);
 }
 
 .brief-failed {
@@ -296,9 +299,9 @@
 .brief-limits {
   margin-top: var(--space-5);
   padding: var(--space-4);
-  border: 1px solid var(--warning-line);
+  border: 1px solid var(--red-line);
   border-radius: var(--radius);
-  background: var(--warning-soft);
+  background: var(--red-soft);
 }
 
 .brief-limits ul {
@@ -308,7 +311,7 @@
 
 .brief-limits li {
   max-width: 62ch;
-  color: var(--warning-muted);
+  color: var(--red-pale);
   font-size: var(--text-sm);
   line-height: var(--leading-body);
 }

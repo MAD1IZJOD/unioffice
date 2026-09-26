@@ -651,6 +651,10 @@
   overflow-wrap: anywhere;
 }
 
+.mission-moment-technical {
+  margin-top: 4px;
+}
+
 .mission-moment-foot {
   display: flex;
   flex-wrap: wrap;

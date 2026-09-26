@@ -100,6 +100,7 @@ export default function Room() {
   // React's documented way to respond to a value the component already has.
   const [lastStatus, setLastStatus] = useState<string>();
   const [finishedHere, setFinishedHere] = useState<"delivered" | "stopped">();
+  const [objectiveOpen, setObjectiveOpen] = useState(false);
 
   const room = useLiveResource<ExecutionRoomData>(
     useCallback(() => fetchExecutionRoom(missionId), [missionId]),
@@ -227,6 +228,18 @@ export default function Room() {
   const used = knowledge.data?.used.filter((entry) => !entry.fromThisMission) ?? [];
 
   const state = readMission(missionDataOfRoom(data));
+
+  // A mission can finish running and still hand back a result with limits.
+  // The header then says so in the same tone the result below uses, rather
+  // than a green "delivered" sitting over a result that says otherwise.
+  const limited = state.phase === "delivered" && narrative.outcome.status === "completed_with_limitations";
+  const headerTone = limited ? "warning" : state.tone;
+  const headerLabel = limited ? "Delivered with limits" : state.label;
+
+  // A long objective is shown in its first lines until asked for in full, so
+  // it names the mission without taking the whole first screen. Nothing is
+  // cut from the text; the clamp is presentation only.
+  const longObjective = work.objective.length > 110;
   const moments = narrateMission(data.events, {
     tasks: data.tasks,
     agents: data.agents,
@@ -284,7 +297,7 @@ export default function Room() {
   return (
     <div className="room fade-up">
       <header
-        className={`operation ${toneClass[state.tone]} ${moodOf(state)}${finishedHere ? ` operation-settled operation-settled-${finishedHere}` : ""}`}
+        className={`operation ${toneClass[headerTone]} ${moodOf(state)}${finishedHere ? ` operation-settled operation-settled-${finishedHere}` : ""}`}
       >
         <div className="operation-inner">
           <Link to="/missions" className="button-quiet mb-7 inline-flex">
@@ -313,16 +326,29 @@ export default function Room() {
           </div>
 
           <h2
-            className={`operation-objective${
-              work.objective.length > 110 ? " operation-objective-long" : ""
+            id="operation-objective"
+            className={`operation-objective${longObjective ? " operation-objective-long" : ""}${
+              longObjective && !objectiveOpen ? " operation-objective-clamped" : ""
             }`}
           >
             {work.objective}
           </h2>
 
+          {longObjective && (
+            <button
+              type="button"
+              className="button-quiet operation-objective-toggle"
+              aria-expanded={objectiveOpen}
+              aria-controls="operation-objective"
+              onClick={() => setObjectiveOpen((open) => !open)}
+            >
+              {objectiveOpen ? "Show less" : "Show the whole objective"}
+            </button>
+          )}
+
           <div className="operation-state">
-            <StatusPill tone={state.tone} pulse={state.live}>
-              {state.label}
+            <StatusPill tone={headerTone} pulse={state.live}>
+              {headerLabel}
             </StatusPill>
 
             <p className="operation-line">{state.line}</p>

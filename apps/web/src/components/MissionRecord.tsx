@@ -91,6 +91,13 @@ export function MissionRecord({
                 <p className="mission-moment-note">{moment.note}</p>
               )}
 
+              {moment.technical && (
+                <details className="tech-detail mission-moment-technical">
+                  <summary>Details</summary>
+                  <p className="mission-moment-note">{moment.technical}</p>
+                </details>
+              )}
+
               <div className="mission-moment-foot">
                 {moment.actor && (
                   <span className="mission-moment-actor">{moment.actor}</span>

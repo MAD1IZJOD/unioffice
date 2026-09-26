@@ -80,7 +80,7 @@ export function laneMeaning(size: number, depth: number): string {
     return `${size} steps that do not wait on each other`;
   }
 
-  return depth === 0 ? "Starts immediately" : "Waits for the lane above";
+  return depth === 0 ? "Starts immediately" : "Starts when the work above is done";
 }
 
 /**
