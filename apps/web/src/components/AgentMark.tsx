@@ -106,26 +106,31 @@ function orchestrationFigure(seed: number, members: number, filled: number) {
   const rotation = seed % 60;
 
   return (
-    <g className="mark-body" transform={`rotate(${rotation} 16 16)`}>
-      {Array.from({ length: members }, (_, index) => {
-        const angle = (index / members) * Math.PI * 2;
-        const x = 16 + Math.cos(angle) * 11.5;
-        const y = 16 + Math.sin(angle) * 11.5;
+    <g className="mark-body">
+      {/* The seed rotation lives on its own group: on the body it would be
+          composed with the CSS transform-origin and push the figure off
+          centre. */}
+      <g transform={`rotate(${rotation} 16 16)`}>
+        {Array.from({ length: members }, (_, index) => {
+          const angle = (index / members) * Math.PI * 2;
+          const x = 16 + Math.cos(angle) * 11.5;
+          const y = 16 + Math.sin(angle) * 11.5;
 
-        return (
-          <g key={index}>
-            <line x1="16" y1="16" x2={x} y2={y} className="mark-line" />
-            <circle
-              cx={x}
-              cy={y}
-              r="1.7"
-              className={index < filled ? "mark-node-filled" : "mark-node"}
-            />
-          </g>
-        );
-      })}
+          return (
+            <g key={index}>
+              <line x1="16" y1="16" x2={x} y2={y} className="mark-line" />
+              <circle
+                cx={x}
+                cy={y}
+                r="1.7"
+                className={index < filled ? "mark-node-filled" : "mark-node"}
+              />
+            </g>
+          );
+        })}
 
-      <circle cx="16" cy="16" r="3.4" className="mark-core" />
+        <circle cx="16" cy="16" r="3.4" className="mark-core" />
+      </g>
     </g>
   );
 }
@@ -312,35 +317,40 @@ function communicationFigure(members: number, filled: number) {
 /** Fallback for an agent whose capabilities name no discipline. */
 function generalFigure(seed: number, members: number, filled: number) {
   return (
-    <g className="mark-body" transform={`rotate(${seed % 90} 16 16)`}>
-      {Array.from({ length: members }, (_, index) => {
-        const angle = (index / members) * Math.PI * 2;
+    <g className="mark-body">
+      {/* The seed rotation lives on its own group: on the body it would be
+          composed with the CSS transform-origin and push the figure off
+          centre. */}
+      <g transform={`rotate(${seed % 90} 16 16)`}>
+        {Array.from({ length: members }, (_, index) => {
+          const angle = (index / members) * Math.PI * 2;
 
-        return (
-          <line
-            key={index}
-            x1={16 + Math.cos(angle) * 4}
-            y1={16 + Math.sin(angle) * 4}
-            x2={16 + Math.cos(angle) * 12}
-            y2={16 + Math.sin(angle) * 12}
-            className="mark-line"
-          />
-        );
-      })}
+          return (
+            <line
+              key={index}
+              x1={16 + Math.cos(angle) * 4}
+              y1={16 + Math.sin(angle) * 4}
+              x2={16 + Math.cos(angle) * 12}
+              y2={16 + Math.sin(angle) * 12}
+              className="mark-line"
+            />
+          );
+        })}
 
-      {Array.from({ length: filled }, (_, index) => {
-        const angle = ((index + 0.5) / Math.max(filled, 1)) * Math.PI * 2;
+        {Array.from({ length: filled }, (_, index) => {
+          const angle = ((index + 0.5) / Math.max(filled, 1)) * Math.PI * 2;
 
-        return (
-          <circle
-            key={index}
-            cx={16 + Math.cos(angle) * 13}
-            cy={16 + Math.sin(angle) * 13}
-            r="1.6"
-            className="mark-node-filled"
-          />
-        );
-      })}
+          return (
+            <circle
+              key={index}
+              cx={16 + Math.cos(angle) * 13}
+              cy={16 + Math.sin(angle) * 13}
+              r="1.6"
+              className="mark-node-filled"
+            />
+          );
+        })}
+      </g>
     </g>
   );
 }
