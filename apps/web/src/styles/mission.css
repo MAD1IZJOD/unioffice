@@ -809,9 +809,11 @@
     transform var(--duration-slow) var(--ease-arrive);
 }
 
+/* The composer owns focus: its whole edge lights, drawn as a 2px ring so it
+   is as plain to a keyboard user as the product's standard focus ring. */
 .composer:focus-within {
-  border-color: var(--blue-line);
-  box-shadow: var(--elev-3), 0 0 0 1px color-mix(in srgb, var(--blue) 18%, transparent);
+  border-color: var(--blue-ink);
+  box-shadow: var(--elev-3), 0 0 0 2px color-mix(in srgb, var(--blue) 45%, transparent);
   transform: translateY(var(--lift));
 }
 
@@ -824,8 +826,17 @@
   text-transform: uppercase;
 }
 
+/* The field sits inside the composer's focus, so it draws no ring of its
+   own - two rings, one square inside one rounded, read as a mistake - and
+   it keeps a little room around the words. */
 .composer-input {
   min-height: 3.2em;
+  padding: 8px 4px 10px;
+}
+
+.composer-input:focus-visible {
+  box-shadow: none;
+  outline: none;
 }
 
 .composer-foot {

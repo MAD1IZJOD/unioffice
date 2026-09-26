@@ -132,36 +132,44 @@ export default function Agent() {
     <div className="fade-up">
       <header className={`place ${toneClass[presence.tone]}`}>
         <div className="place-inner">
-          <Link to="/workforce" className="button-quiet mb-6 inline-flex">
-            <ArrowLeft size={12} />
-            The workforce
-          </Link>
+          <div>
+            <Link to="/workforce" className="button-quiet mb-6 inline-flex">
+              <ArrowLeft size={12} />
+              The workforce
+            </Link>
+          </div>
 
-          <span className="place-mark agent-plate">
-            <AgentMark
-              agentId={member.id}
-              capabilities={member.capabilities}
-              tools={member.tools.length}
-              type={member.type}
-              size={46}
-              active={member.presence === "working"}
-            />
-          </span>
+          {/* Who this is, as one block: the agent's mark on its plate, its
+              name, and the discipline it works in. */}
+          <div className="agent-identity">
+            <span className="place-mark agent-plate">
+              <AgentMark
+                agentId={member.id}
+                capabilities={member.capabilities}
+                tools={member.tools.length}
+                type={member.type}
+                size={46}
+                active={member.presence === "working"}
+              />
+            </span>
 
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <h2 className="place-name">{member.name}</h2>
+            <div className="agent-identity-text">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h2 className="place-name">{member.name}</h2>
 
-            <StatusPill tone={presence.tone} pulse={member.presence === "working"}>
-              {presence.label}
-            </StatusPill>
+                <StatusPill tone={presence.tone} pulse={member.presence === "working"}>
+                  {presence.label}
+                </StatusPill>
+              </div>
+
+              <div className="place-slug">
+                {profileOf(member).label} · {member.type}
+                {orchestrator && " · system-critical"}
+              </div>
+            </div>
           </div>
 
           <p className="place-description">{member.description}</p>
-
-          <div className="place-slug">
-            {profileOf(member).label} · {member.type}
-            {orchestrator && " · system-critical"}
-          </div>
 
           {member.workspace ? (
             <Link to={`/workspaces/${member.workspace.id}`} className="place-tag mt-5 inline-flex">

@@ -257,31 +257,49 @@
   color: var(--tone);
 }
 
-/* An agent's mark as an object: a plate held at a slight angle in
-   perspective, which turns to face you under the pointer. The figure on it is
-   the agent's real capabilities and tools, so this is the one place the mark
-   is shown at a size where each member and filled node can be counted. */
+/* Who the agent is, as one block: the mark on its plate beside the name and
+   discipline, so the plate reads as the agent's and not as an icon floating
+   near the back link. */
+.agent-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.agent-identity-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-identity-text .place-slug {
+  margin-top: 6px;
+}
+
+/* The agent's mark as an object: a plate held at a slight angle, the one
+   place the mark is shown large enough to count each member and filled node
+   it is drawn from. The angle is still - it is how the plate sits, not an
+   effect to play with. */
 .agent-plate {
   width: 78px;
   height: 78px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   border-radius: var(--radius-lg);
   box-shadow:
     var(--edge-light),
     0 1px 0 rgba(255, 255, 255, 0.03),
     6px 14px 30px -10px rgba(0, 0, 0, 0.8);
-  transform: perspective(600px) rotateX(10deg) rotateY(-14deg);
-  transition: transform var(--duration-slow) var(--ease-settle);
+  transform: perspective(600px) rotateX(6deg) rotateY(-10deg);
 }
 
-.agent-plate:hover {
-  transform: perspective(600px) rotateX(0) rotateY(0) translateY(-2px);
-}
+@media (max-width: 640px) {
+  .agent-identity {
+    gap: var(--space-4);
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  .agent-plate,
-  .agent-plate:hover {
-    transform: none;
-    transition: none;
+  .agent-plate {
+    width: 60px;
+    height: 60px;
   }
 }
 

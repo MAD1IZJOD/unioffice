@@ -941,21 +941,6 @@
   color: var(--ink-faint);
 }
 
-.agent-mark {
-  display: flex;
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--tone-line);
-  border-radius: 9px;
-  background: var(--tone-soft);
-  color: var(--tone);
-  font-size: var(--text-sm);
-  font-weight: 700;
-}
-
 .activity-line {
   display: flex;
   align-items: center;
@@ -2246,9 +2231,26 @@
    black, blue and red instead of turning into a palette of mascots.
    -------------------------------------------------------------------------- */
 
+/* The mark is drawn at the size it is asked for and never spills past its
+   own square: where it sits in a tile, the tile is the edge. */
 .agent-mark {
+  flex-shrink: 0;
   color: var(--tone, var(--ink-muted));
-  overflow: visible;
+  overflow: hidden;
+}
+
+/* Where a mark stands on its own - a step, a member of a mission's cast, an
+   agent under governance - it is framed as a small tile. Elsewhere the
+   surrounding card or plate is the frame, so the mark draws none of its own. */
+.step-mark > .agent-mark,
+.cast-mark > .agent-mark,
+.governed-agent-mark > .agent-mark {
+  width: 30px;
+  height: 30px;
+  padding: 3px;
+  border: 1px solid var(--tone-line);
+  border-radius: 9px;
+  background: var(--tone-soft);
 }
 
 .agent-mark .mark-line,
