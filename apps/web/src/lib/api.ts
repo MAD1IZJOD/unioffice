@@ -1934,6 +1934,68 @@ export async function fetchWorkforce(): Promise<Workforce> {
   return get<Workforce>(scoped("/workforce"));
 }
 
+/* --------------------------------------------------------------------------
+   The world: the workforce as a place
+   -------------------------------------------------------------------------- */
+
+/** A workspace the caller can reach, or the hall for agents who work in all of them. */
+export interface WorldRoom {
+  id: string;
+  kind: "workspace" | "hall";
+  name: string;
+  slug?: string;
+  /** Who sits here, in seat order. */
+  agentIds: string[];
+}
+
+export interface WorldAgent {
+  id: string;
+  name: string;
+  type: AgentSummary["type"];
+  status: AgentSummary["status"];
+  presence: WorkforcePresence;
+  capabilities: string[];
+  roomId: string;
+  /** Their place in the room, fixed by the server. */
+  seat: number;
+  current?: WorkforceMember["current"];
+  workingElsewhere: boolean;
+  upcomingSteps: number;
+  lastOutcome?: WorkforceMember["lastOutcome"];
+  /** The planner writing a plan for a mission the caller may open. */
+  planning?: { missionId: string; missionName: string };
+  /** Writing a plan for one they cannot. */
+  planningElsewhere: boolean;
+}
+
+export interface WorldMission {
+  id: string;
+  name: string;
+  status: WorkStatus;
+  workspaceId?: string;
+  agentIds: string[];
+  steps: number;
+  completedSteps: number;
+}
+
+export interface WorldHandoff extends Handoff {
+  missionId: string;
+  missionName: string;
+}
+
+export interface WorldSnapshot {
+  organizationId: string;
+  generatedAt: string;
+  rooms: WorldRoom[];
+  agents: WorldAgent[];
+  missions: WorldMission[];
+  handoffs: WorldHandoff[];
+}
+
+export async function fetchWorld(): Promise<WorldSnapshot> {
+  return get<WorldSnapshot>(scoped("/world"));
+}
+
 export async function fetchAgentProfile(agentId: string): Promise<AgentProfile> {
   return get<AgentProfile>(scoped(`/workforce/${encodeURIComponent(agentId)}`));
 }
