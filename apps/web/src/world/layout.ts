@@ -11,16 +11,16 @@
  * Units are art pixels. One tile is TILE pixels; the page scales the whole
  * scene, so a sprite drawn at one unit per pixel stays crisp.
  *
- *   ┌────────┐┌────────┐┌────────┐┌──────┐
- *   │  hall  ││ room   ││ room   ││      │
- *   └───▢────┘└───▢────┘└───▢────┘│      │
- *   ══════════ corridor ══════════ commons
- *   ┌───▢────┐┌───▢────┐┌───▢────┐│      │
- *   │ room   ││ room   ││ room   ││      │
- *   └────────┘└────────┘└────────┘└──────┘
+ *   ┌──────┐┌────────┐┌────────┐┌────────┐
+ *   │      ││  hall  ││ room   ││ room   │
+ *   │      │└───▢────┘└───▢────┘└───▢────┘
+ *   commons ══════════ corridor ══════════
+ *   │      │┌───▢────┐┌───▢────┐┌───▢────┐
+ *   │      ││ room   ││ room   ││ room   │
+ *   └──────┘└────────┘└────────┘└────────┘
  *
- * Doors open onto the corridor, and the corridor runs into the commons, where
- * the live missions are pinned. Anything moving between two desks - a
+ * The commons is the way in, with the live missions pinned to its board.
+ * Doors open onto the corridor that runs from it. Anything moving between two desks - a
  * handoff, an assignment - goes desk, door, corridor, door, desk.
  */
 
@@ -107,13 +107,14 @@ export function planFloor(rooms: RoomInput[]): FloorPlan {
   const corridorY = MARGIN + northH;
   const southY = corridorY + CORRIDOR_H;
   const corridorW = columns * ROOM_W + (columns - 1) * GAP;
+  const roomsX = MARGIN + COMMONS_W + GAP;
 
   const placed: PlacedRoom[] = [];
   const seats = new Map<string, PlacedSeat>();
 
   const place = (row: RoomInput[], y: number, height: number, side: PlacedRoom["side"]) => {
     row.forEach((room, index) => {
-      const x = MARGIN + index * (ROOM_W + GAP);
+      const x = roomsX + index * (ROOM_W + GAP);
       const rect = { x: x * TILE, y: y * TILE, width: ROOM_W * TILE, height: height * TILE };
       const door = {
         x: rect.x + rect.width / 2,
@@ -148,21 +149,20 @@ export function planFloor(rooms: RoomInput[]): FloorPlan {
   place(north, MARGIN, northH, "north");
   place(south, southY, southH || 0, "south");
 
-  const commonsX = MARGIN + corridorW + GAP;
   const commonsH = northH + CORRIDOR_H + southH;
 
   return {
-    width: (commonsX + COMMONS_W + MARGIN) * TILE,
+    width: (roomsX + corridorW + MARGIN) * TILE,
     height: (MARGIN + commonsH + MARGIN) * TILE,
     rooms: placed,
     corridor: {
-      x: MARGIN * TILE,
+      x: (MARGIN + COMMONS_W) * TILE,
       y: corridorY * TILE,
       width: (corridorW + GAP) * TILE,
       height: CORRIDOR_H * TILE,
     },
     commons: {
-      x: commonsX * TILE,
+      x: MARGIN * TILE,
       y: MARGIN * TILE,
       width: COMMONS_W * TILE,
       height: commonsH * TILE,
