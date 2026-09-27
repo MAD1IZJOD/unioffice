@@ -166,8 +166,11 @@ export default function World() {
   const inPlay = snapshot.handoffs.filter((handoff) => handoff.state !== "delivered");
 
   return (
-    <div className={`world fade-up${motion ? "" : " world-still"}`}>
-      <header className="world-head">
+    // Only the head fades in. The entrance leaves a transform on whatever it
+    // animates, and on the page itself that would pin the phone's details
+    // sheet to the page instead of to the bottom of the screen.
+    <div className={`world${motion ? "" : " world-still"}`}>
+      <header className="world-head fade-up">
         <div className="min-w-0">
           <div className="t-eyebrow mb-3">Workforce</div>
           <h2 className="world-title">World</h2>
