@@ -115,6 +115,7 @@ export async function createApiServer() {
     workspaceService: runtime.workspaceService,
     agentDirectoryService: runtime.agentDirectoryService,
     workforceService: runtime.workforceService,
+    worldService: runtime.worldService,
     missionTemplateService: runtime.missionTemplateService,
     toolRegistry: runtime.toolRegistry,
     corsOrigins: config.corsOrigins,

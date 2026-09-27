@@ -55,6 +55,7 @@ import { GovernanceToolGuard } from "./governance-tool-guard.js";
 import { PolicyTaskGovernanceGate } from "./task-governance-gate.js";
 import { MissionControlService } from "./mission-control-service.js";
 import { WorkforceService } from "./workforce-service.js";
+import { WorldService } from "./world-service.js";
 import { WorkApplicationService } from "./application.js";
 import { CompanyBrainService } from "./company-brain-service.js";
 import { CompanyOverviewService } from "./company-overview-service.js";
@@ -506,6 +507,15 @@ export function createExecutionRuntime(config: ApiConfig) {
     skills: skillService,
   });
 
+  // The company as a place: the workforce read, laid out in rooms, with the
+  // handoffs of the missions under way. Records and decides nothing.
+  const worldService = new WorldService({
+    workforce: workforceService,
+    reads: operationalReads,
+    tasks: taskRepository,
+    workspaces: workspaceRepository,
+  });
+
   // Standing instructions and their runs. A run is an ordinary mission on the
   // ordinary queue; this owns only the instruction and reads runs back.
   const continuousMissionService = new ContinuousMissionService({
@@ -589,6 +599,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workspaceService,
     agentDirectoryService,
     workforceService,
+    worldService,
     staleRunReconciler,
     continuousMissionRepository,
     continuousMissionService,

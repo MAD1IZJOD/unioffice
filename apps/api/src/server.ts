@@ -156,6 +156,7 @@ import type {
 } from "./agent-directory-service.js";
 
 import type { WorkforceService } from "./workforce-service.js";
+import type { WorldService } from "./world-service.js";
 
 import { publicAgent } from "./public-agent.js";
 
@@ -277,6 +278,11 @@ export interface ApiServices {
   workspaceService: WorkspaceService;
   agentDirectoryService: AgentDirectoryService;
   workforceService: Pick<WorkforceService, "getWorkforce" | "getProfile">;
+  /**
+   * The company as a place, for the world view. Optional so the route tests
+   * that never read it need not build it.
+   */
+  worldService?: Pick<WorldService, "getWorld">;
   missionTemplateService: MissionTemplateService;
   toolRegistry: ToolRegistry;
   healthCheck: () => Promise<Record<string, unknown>>;
@@ -1519,6 +1525,19 @@ export function buildApiServer(
       const access = accessOf(request);
 
       return services.workforceService.getWorkforce(access.organizationId, { reach: reachOf(access) });
+    });
+
+    // The workforce laid out as rooms, with the handoffs of the missions under
+    // way - narrowed, like the roster, to the workspaces the caller reaches.
+    // Read-only: the world view starts, decides and changes nothing itself.
+    instance.get("/world", async (request) => {
+      const access = accessOf(request);
+
+      if (!services.worldService) {
+        throw new ApiError(503, "The world view is not available on this server.");
+      }
+
+      return services.worldService.getWorld(access.organizationId, { reach: reachOf(access) });
     });
 
     instance.get("/workforce/:id", async (request) => {

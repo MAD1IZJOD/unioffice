@@ -23,6 +23,7 @@ import { createDefaultToolRegistry } from "@unioffice/tools";
 import { AgentDirectoryService } from "../agent-directory-service.js";
 import { buildApiServer, type ApiServices } from "../server.js";
 import { WorkforceService } from "../workforce-service.js";
+import { WorldService } from "../world-service.js";
 
 import { AccessResolver } from "./access-resolver.js";
 import type { Identity } from "./authenticator.js";
@@ -146,22 +147,30 @@ async function company() {
   };
   const workspaceRepository = {
     async findByOrganization(organizationId: OrganizationId) {
-      return organizationId === orgA ? [{ id: finance, organizationId: orgA, name: "Finance", slug: "finance" }] : [];
+      return organizationId === orgA ? [{ id: finance, organizationId: orgA, name: "Finance", slug: "finance", status: "active" }] : [];
     },
     async findById(id: WorkspaceId) { return id === finance ? { id: finance, organizationId: orgA, name: "Finance", slug: "finance" } : null; },
   };
   const tools = createDefaultToolRegistry();
+  const reads = new InMemoryOperationalReadRepository(works, tasks);
+  const workforceService = new WorkforceService({
+    agents: agentRepository,
+    reads,
+    workspaces: workspaceRepository as never,
+    policies: { async findEnforced() { return []; } },
+    tools,
+  });
 
   const services = {
     authenticator: { verify: async (token: string) => identities.get(token) ?? null },
     accessResolver: new AccessResolver(members, () => now),
     streamTickets: new StreamTickets(),
-    workforceService: new WorkforceService({
-      agents: agentRepository,
-      reads: new InMemoryOperationalReadRepository(works, tasks),
+    workforceService,
+    worldService: new WorldService({
+      workforce: workforceService,
+      reads,
+      tasks: { async findByWork(workId: WorkId) { return tasks.filter((entry) => entry.workId === workId); } },
       workspaces: workspaceRepository as never,
-      policies: { async findEnforced() { return []; } },
-      tools,
     }),
     agentDirectoryService: new AgentDirectoryService(
       agentRepository as never,
@@ -248,4 +257,31 @@ test("pausing, resuming and granting tools is for owners and admins, and only to
   assert.equal(agents[0]!.status, "paused");
   assert.equal((await post("owner", `/agents/${theirs}`, { status: "paused" })).statusCode, 404);
   assert.equal(agents[2]!.status, "active");
+});
+
+test("the world is the same workforce, laid out in the rooms the caller can reach", async () => {
+  const { get } = await company();
+
+  assert.equal((await get(null, "/world")).statusCode, 401);
+  assert.equal((await get("suspended", "/world")).statusCode, 403);
+  assert.equal((await get("outsider", `/world?organizationId=${orgA}`)).statusCode, 404);
+
+  const owner = (await get("owner", "/world")).json();
+  assert.deepEqual(owner.rooms.map((room: { name: string; agentIds: string[] }) => [room.name, room.agentIds]), [
+    ["Company hall", [tony]],
+    ["Finance", [ledger]],
+  ]);
+  assert.equal(owner.missions[0].name, "Close the Finance books");
+
+  // A viewer reaches company-wide work only: no Finance room, no Finance
+  // mission, and Tony shown as busy without saying on what.
+  const viewer = await get("viewer", "/world");
+  const seen = viewer.json();
+  assert.deepEqual(seen.rooms.map((room: { name: string }) => room.name), ["Company hall"]);
+  assert.deepEqual(seen.missions, []);
+  assert.equal(seen.agents[0].workingElsewhere, true);
+  assert.doesNotMatch(viewer.body, /Finance|Ledger|Reconcile|PROMPT-THAT-MUST-STAY-ON-THE-SERVER|systemInstructions/);
+
+  const outsider = (await get("outsider", "/world")).json();
+  assert.deepEqual(outsider.agents.map((entry: { name: string }) => entry.name), ["Theirs"]);
 });
