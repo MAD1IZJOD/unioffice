@@ -1202,3 +1202,22 @@
     animation: none;
   }
 }
+
+/* Why the room will not offer to run a mission its brief says is blocked. */
+.operation-blocked {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  max-width: 64ch;
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.operation-blocked-link {
+  color: var(--ink-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}

@@ -707,7 +707,32 @@ export interface ExecutionRoom {
   /** The same operation, read as something to watch rather than to inspect. */
   narrative: MissionNarrative;
   tools: Array<{ id: string; name: string; description: string }>;
+  /**
+   * Whether the mission can be started now - the decision the brief and the
+   * execute route read too. Absent while a job is on the queue, when it could
+   * not be worked out, and from an API that predates it.
+   */
+  startability?: Startability;
 }
+
+/**
+ * Whether a mission can be started now, as the server decided it. Whether
+ * this person may start it is a separate question, answered by their role.
+ */
+export type Startability =
+  | { startable: true; mode: "start" | "resume" }
+  | {
+      startable: false;
+      reason:
+        | "not_planned"
+        | "planning"
+        | "waiting_approval"
+        | "completed"
+        | "cancelled"
+        | "failed"
+        | "blocked";
+      message: string;
+    };
 
 export interface AgentPresenceSummary extends AgentSummary {
   agentId: string;
@@ -2654,6 +2679,8 @@ export interface MissionIntelligence {
   stage: MissionStage;
   brief: MissionBrief;
   preflight: MissionPreflight;
+  /** The shared start decision. Absent from an API that predates it. */
+  startability?: Startability;
   plan: MissionPlanView | null;
   /**
    * What the company already knew, as it was handed to the planner.

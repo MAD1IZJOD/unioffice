@@ -221,7 +221,7 @@ export default function Room() {
   }
 
   const data = room.data;
-  const { work, plan, approvals, artifacts, executionJob, workspace, narrative } = data;
+  const { work, plan, approvals, artifacts, executionJob, workspace, narrative, startability } = data;
 
   const review = knowledge.data?.review ?? [];
   const toDecide = review.filter((item) => item.outcome === "pending").length;
@@ -456,11 +456,17 @@ export default function Room() {
               </span>
             )}
 
+            {/* Offered only when the server's start decision - the one the
+                brief shows and the execute route enforces - says it can
+                run. An API that predates the decision falls back to the
+                mission's status, as this room always did. */}
             {canOperate &&
               !opening &&
               plan.totalCount > 0 &&
               !executionJob &&
-              (work.status === "queued" || work.status === "executing") && (
+              (startability
+                ? startability.startable
+                : work.status === "queued" || work.status === "executing") && (
                 <button
                   type="button"
                   disabled={busy}
@@ -470,10 +476,27 @@ export default function Room() {
                   <Play size={13} />
                   {action === "execute"
                     ? "Starting…"
-                    : work.status === "executing"
+                    : (startability?.startable ? startability.mode === "resume" : work.status === "executing")
                       ? "Resume it"
                       : "Run it"}
                 </button>
+              )}
+
+            {/* Blocked is the one refusal the room has no other way of
+                showing: the rest are the mission's own status, which the
+                page already says. */}
+            {canOperate &&
+              !opening &&
+              !executionJob &&
+              startability &&
+              !startability.startable &&
+              startability.reason === "blocked" && (
+                <span className="operation-blocked">
+                  <span>{startability.message}</span>
+                  <Link to={`/missions/${work.id}/brief`} className="operation-blocked-link">
+                    See what it needs
+                  </Link>
+                </span>
               )}
 
             {canOperate && work.status === "failed" && (
