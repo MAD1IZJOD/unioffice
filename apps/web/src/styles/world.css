@@ -1,0 +1,757 @@
+/* ==========================================================================
+   The world
+
+   An office drawn in pixels, inside a product that is otherwise all type and
+   hairlines. It keeps to the product's rules: the floor and furniture are
+   graphite, blue is only ever live work, red is only ever a person being
+   needed, and the only things that move are things that are happening.
+
+   Loaded with the world page alone, so no other page pays for it.
+   ========================================================================== */
+
+.world {
+  --world-ground: #07080b;
+  --world-floor-a: #10141b;
+  --world-floor-b: #0e1218;
+  --world-band: #151a22;
+  --world-wall: #2b323d;
+  --world-plank: #0c0f14;
+  --world-seam: #090b0f;
+  --world-desk-top: #464e5c;
+  --world-desk-edge: #313744;
+  --world-desk-front: #232833;
+  --world-chair: #1b2029;
+  --world-chair-top: #282e39;
+  --world-monitor: #2c3340;
+  --world-screen-off: #10141b;
+
+  display: grid;
+  gap: var(--space-5);
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* The page's head ------------------------------------------------------- */
+
+.world-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-6);
+}
+
+.world-title {
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+
+.world-summary {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+}
+
+.world-summary-sep {
+  margin: 0 var(--space-2);
+  color: var(--ink-ghost);
+}
+
+.world-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.world-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.world-toggle button,
+.world-switch {
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  transition: color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard);
+}
+
+.world-toggle button[aria-pressed="true"] {
+  background: var(--surface-4);
+  color: var(--ink-primary);
+}
+
+.world-switch {
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+}
+
+.world-switch[aria-pressed="true"] {
+  border-color: var(--blue-line);
+  color: var(--blue-ink);
+}
+
+.world-toggle button:hover,
+.world-switch:hover {
+  color: var(--ink-primary);
+}
+
+.world-notice {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 2px solid var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+/* The stage and the inspector beside it --------------------------------- */
+
+.world-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.world-body-inspecting {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.world-stage {
+  position: relative;
+  height: clamp(440px, 70vh, 780px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--world-ground);
+  box-shadow: var(--elev-1);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.world-stage:active {
+  cursor: grabbing;
+}
+
+.world-stage:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.world-svg {
+  display: block;
+}
+
+.world-svg rect,
+.world-svg path {
+  shape-rendering: crispEdges;
+}
+
+.world-svg text {
+  font-family: var(--mono);
+  user-select: none;
+}
+
+.world-zoom {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: grid;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(10, 12, 17, 0.88);
+}
+
+.world-zoom-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-secondary);
+}
+
+.world-zoom-button:hover {
+  background: var(--surface-4);
+  color: var(--ink-primary);
+}
+
+/* The building ----------------------------------------------------------- */
+
+.world-ground { fill: var(--world-ground); }
+.world-floor-a { fill: var(--world-floor-a); }
+.world-floor-b { fill: var(--world-floor-b); }
+.world-plank-a { fill: var(--world-plank); }
+.world-plank-seam { fill: var(--world-seam); }
+
+.world-corridor { fill: url(#world-planks); }
+.world-room-floor { fill: url(#world-floor); }
+.world-room-band { fill: var(--world-band); }
+.world-door { fill: var(--world-plank); }
+
+.world-room-wall {
+  fill: none;
+  stroke: var(--world-wall);
+  stroke-width: 2;
+}
+
+.world-room-selected .world-room-wall {
+  stroke: var(--blue-line);
+}
+
+.world-room-name {
+  fill: var(--ink-muted);
+  font-size: 6px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.world-room-count {
+  fill: var(--ink-faint);
+  font-size: 6px;
+}
+
+.world-room-empty {
+  fill: var(--ink-faint);
+  font-size: 5.5px;
+  font-style: italic;
+}
+
+.world-room-sign,
+.world-desk,
+.world-card,
+.world-route {
+  cursor: pointer;
+  outline: none;
+}
+
+.world-hit {
+  fill: transparent;
+}
+
+.world-focus {
+  fill: none;
+  stroke: none;
+  stroke-width: 1;
+}
+
+.world-room-sign:focus-visible .world-focus,
+.world-desk:focus-visible .world-focus,
+.world-card:focus-visible .world-focus {
+  stroke: var(--focus);
+}
+
+.world-desk-selected .world-focus {
+  stroke: var(--blue-ink);
+  stroke-dasharray: 2 1;
+}
+
+.world-desk:hover .world-name,
+.world-room-sign:hover .world-room-name {
+  fill: var(--ink-primary);
+}
+
+/* A desk ------------------------------------------------------------------- */
+
+.world-chair { fill: var(--world-chair); }
+.world-chair-top { fill: var(--world-chair-top); }
+.world-desk-top { fill: var(--world-desk-top); }
+.world-desk-edge { fill: var(--world-desk-edge); }
+.world-desk-front { fill: var(--world-desk-front); }
+.world-desk-handle { fill: var(--world-desk-edge); }
+.world-monitor-frame { fill: var(--world-monitor); }
+.world-hand { fill: #d7d0e6; }
+
+.world-name {
+  fill: var(--ink-secondary);
+  font-size: 5px;
+  letter-spacing: 0.02em;
+}
+
+.world-desk-selected .world-name {
+  fill: var(--ink-primary);
+}
+
+/* The lamp on the desk front: the desk's state as one colour. */
+.world-lamp { fill: var(--ink-ghost); }
+.world-desk-available .world-lamp { fill: var(--success-ink); }
+.world-desk-working .world-lamp,
+.world-desk-elsewhere .world-lamp,
+.world-desk-planning .world-lamp { fill: var(--blue-ink); }
+.world-desk-waiting .world-lamp { fill: var(--red-ink); }
+.world-desk-paused .world-lamp { fill: var(--ink-faint); }
+
+/* The screen. Lit only while there is work on it. */
+.world-screen { fill: var(--world-screen-off); }
+.world-screen-working { fill: #173a73; }
+.world-screen-elsewhere { fill: #1a2331; }
+.world-screen-waiting { fill: #2a1216; }
+.world-screen-planning { fill: #122640; }
+.world-code rect { fill: var(--blue-ink); }
+.world-lock rect { fill: var(--ink-muted); }
+
+.world-desk-paused .world-figure,
+.world-desk-paused .world-hand {
+  opacity: 0.5;
+  filter: grayscale(0.7);
+}
+
+.world-desk-unavailable .world-figure,
+.world-desk-unavailable .world-hand,
+.world-desk-unavailable .world-desk-top,
+.world-desk-unavailable .world-desk-front {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+/* Bubbles over the head. */
+.world-bubble-waiting > rect:not(.world-bubble-glyph) { fill: var(--red); }
+.world-bubble-waiting .world-bubble-glyph { fill: #fff; }
+.world-bubble-planning > rect:not(.world-bubble-glyph) { fill: #13223a; }
+.world-bubble-planning .world-bubble-glyph { fill: var(--blue-ink); }
+.world-bubble-paused .world-bubble-glyph { fill: var(--ink-faint); }
+
+/* Work changing hands ------------------------------------------------------ */
+
+.world-route-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  shape-rendering: auto;
+}
+
+.world-route-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 9;
+  pointer-events: stroke;
+}
+
+.world-route-in_progress .world-route-line { stroke: var(--blue-ink); }
+.world-route-waiting .world-route-line { stroke: var(--red-ink); }
+.world-route-stalled .world-route-line { stroke: var(--ink-faint); }
+
+.world-route-selected .world-route-line,
+.world-route:focus-visible .world-route-line {
+  stroke-width: 2.5;
+}
+
+.world-parcel-box { fill: #a9865a; }
+.world-parcel-lid { fill: #c7a26d; }
+.world-parcel-ribbon { fill: var(--blue-ink); }
+
+.world-parcel-edge {
+  fill: none;
+  stroke: #161920;
+  stroke-width: 1;
+}
+
+.world-slip-paper { fill: #e9ecf2; }
+.world-slip-line { fill: var(--ink-muted); }
+
+.world-traveller {
+  pointer-events: none;
+}
+
+/* The mission board ----------------------------------------------------- */
+
+.world-commons-floor { fill: url(#world-floor); }
+
+.world-board {
+  fill: #0c1016;
+  stroke: var(--world-wall);
+  stroke-width: 1;
+}
+
+.world-card-paper {
+  fill: #1a1f28;
+  stroke: #262c37;
+  stroke-width: 0.5;
+}
+
+.world-card-pin { fill: var(--warning-muted); }
+
+.world-card-name {
+  fill: var(--ink-secondary);
+  font-size: 5px;
+}
+
+.world-card-track { fill: #262c37; }
+.world-card-progress { fill: var(--blue-ink); }
+.world-card-waiting_approval .world-card-pin { fill: var(--red-ink); }
+.world-card-queued .world-card-progress { fill: var(--ink-faint); }
+
+.world-card-selected .world-card-paper {
+  stroke: var(--blue-ink);
+}
+
+.world-card:hover .world-card-name {
+  fill: var(--ink-primary);
+}
+
+/* Only what is happening moves --------------------------------------------- */
+
+.world-desk-working .world-hand-left,
+.world-desk-elsewhere .world-hand-left {
+  animation: world-type 0.5s steps(1) infinite;
+}
+
+.world-desk-working .world-hand-right,
+.world-desk-elsewhere .world-hand-right {
+  animation: world-type 0.5s steps(1) infinite 0.25s;
+}
+
+.world-desk-working .world-code rect {
+  animation: world-code 1.6s steps(4) infinite;
+}
+
+.world-bubble-planning .world-dot-1 { animation: world-dot 1.2s steps(1) infinite; }
+.world-bubble-planning .world-dot-2 { animation: world-dot 1.2s steps(1) infinite 0.3s; }
+.world-bubble-planning .world-dot-3 { animation: world-dot 1.2s steps(1) infinite 0.6s; }
+
+.world-bubble-waiting {
+  animation: world-bob 1.6s steps(2) infinite;
+}
+
+.world-route-in_progress .world-route-line {
+  animation: world-flow 1.2s linear infinite;
+}
+
+@keyframes world-type {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+@keyframes world-code {
+  0% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes world-dot {
+  0% { opacity: 0.35; }
+  33% { opacity: 1; }
+}
+
+@keyframes world-bob {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+@keyframes world-flow {
+  to { stroke-dashoffset: -12; }
+}
+
+/* Motion switched off here, or at the system: the same facts, standing still. */
+.world-still .world-svg *,
+.world-still .world-svg *::before {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world .world-svg * {
+    animation: none !important;
+  }
+}
+
+/* The inspector ------------------------------------------------------------ */
+
+.world-inspector {
+  display: grid;
+  gap: var(--space-3);
+  max-height: clamp(440px, 70vh, 780px);
+  overflow: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-2);
+}
+
+.world-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.world-inspector-title {
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.world-inspector-body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.world-portrait {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.world-portrait-figure {
+  flex: none;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--world-ground);
+  image-rendering: pixelated;
+}
+
+.world-portrait-figure rect {
+  shape-rendering: crispEdges;
+}
+
+.world-portrait-role {
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.world-portrait-room {
+  margin: 2px 0 6px;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.world-line {
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+
+.world-meta {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.world-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.world-section-label {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.world-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.world-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px var(--space-2);
+}
+
+.world-link-button {
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+.world-link-button:hover {
+  text-decoration-color: var(--ink-secondary);
+}
+
+.world-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.world-facts dt {
+  color: var(--ink-faint);
+}
+
+.world-facts dd {
+  margin: 0;
+  color: var(--ink-primary);
+  overflow-wrap: anywhere;
+}
+
+.world-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.world-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.world-state::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--ink-ghost);
+}
+
+.world-state-available::before { background: var(--success-ink); }
+.world-state-working::before,
+.world-state-elsewhere::before,
+.world-state-planning::before { background: var(--blue-ink); }
+.world-state-waiting { color: var(--red-ink); }
+.world-state-waiting::before { background: var(--red-ink); }
+.world-state-paused::before { background: var(--ink-faint); }
+
+/* The list view --------------------------------------------------------------- */
+
+.world-roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.world-roster-room {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.world-roster-name {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.world-roster-agent .world-meta {
+  flex-basis: 100%;
+}
+
+/* What changed, and what it all means ------------------------------------ */
+
+.world-log {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.world-log-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.world-log-list li {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.world-legend {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+}
+
+.world-legend summary {
+  cursor: pointer;
+  color: var(--ink-muted);
+}
+
+.world-legend ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-4);
+  line-height: var(--leading-snug);
+}
+
+.world-legend b {
+  color: var(--ink-primary);
+  font-weight: 500;
+}
+
+/* Tablets and phones: the inspector becomes a sheet over the map. ------ */
+
+@media (max-width: 960px) {
+  .world-body-inspecting {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .world-stage {
+    height: clamp(360px, 62vh, 620px);
+  }
+
+  .world-inspector {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: var(--z-overlay);
+    max-height: 64vh;
+    border-bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    box-shadow: var(--elev-3);
+  }
+}
+
+@media (max-width: 560px) {
+  .world-head {
+    align-items: flex-start;
+  }
+
+  .world-log-list li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .world-roster {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

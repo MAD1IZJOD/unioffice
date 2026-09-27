@@ -67,7 +67,10 @@ export type WorldMoment =
 /** One snapshot, and how the page came to have it. */
 export interface Reading {
   snapshot: WorldSnapshot;
-  /** When the page received it, by the page's clock. */
+  /**
+   * When it describes, in milliseconds. The page passes the server's own
+   * `generatedAt`, so two readings are measured by one clock.
+   */
   receivedAt: number;
   /** Whether the live channel was carrying events when it arrived. */
   live: boolean;

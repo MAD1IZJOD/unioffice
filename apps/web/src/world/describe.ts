@@ -1,4 +1,4 @@
-import { formatRelativeTime, type WorldAgent, type WorldHandoff, type WorldSnapshot } from "../lib/api";
+import { formatRelativeTime, type WorldAgent, type WorldHandoff, type WorldMission, type WorldSnapshot } from "../lib/api";
 import { PRESENCE } from "../lib/workforce";
 
 import type { WorldMoment } from "./moments";
@@ -135,5 +135,21 @@ export function momentAgentId(moment: WorldMoment): string | undefined {
       return moment.fromAgentId ?? moment.toAgentIds[0];
     default:
       return moment.agentId;
+  }
+}
+
+/** Where a mission on the board has got to, in words. */
+export function missionStatusWord(mission: WorldMission): string {
+  switch (mission.status) {
+    case "planning":
+      return "Being planned";
+    case "queued":
+      return mission.steps > 0 ? "Planned, not started" : "Waiting to be planned";
+    case "executing":
+      return "Running";
+    case "waiting_approval":
+      return "Waiting on a decision";
+    default:
+      return mission.status;
   }
 }
