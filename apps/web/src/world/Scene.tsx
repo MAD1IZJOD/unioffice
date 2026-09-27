@@ -542,7 +542,8 @@ function Route({
     >
       <path className="world-route-hit" d={d} />
       <path className="world-route-line" d={d} />
-      <g transform={`translate(${end.x - 18} ${end.y + 8})`}>
+      {/* Set down on the front of the receiving desk, clear of the name. */}
+      <g transform={`translate(${end.x - 7} ${end.y + 2})`}>
         <Parcel />
       </g>
     </g>
