@@ -20,7 +20,7 @@ import type {
   WorkId,
 } from "@unioffice/core";
 
-import { readNarrative } from "./mission-narrative-service.js";
+import { readHandoffs, readNarrative } from "./mission-narrative-service.js";
 
 /**
  * A mission read as an operation rather than as rows.
@@ -544,4 +544,21 @@ test("the same limitation across several steps is said once, naming all of them"
   assert.equal(narrative.outcome.limitations.length, 1, "one problem, not three");
   assert.deepEqual(narrative.outcome.limitations[0]!.steps, [1, 2, 3]);
   assert.match(narrative.outcome.summary, /1 thing limits/);
+});
+
+test("the handoffs read on their own are exactly the room's, from only names", () => {
+  const tasks = [
+    task("task-1", "Research the requirements", nova),
+    task("task-2", "Assess engineering impact", tony, { dependsOn: ["task-1"], status: "running", minutes: 5 }),
+    task("task-3", "Cost it", harvey, { dependsOn: ["task-2"], status: "pending", minutes: 6 }),
+  ];
+
+  const room = read({ tasks }).handoffs;
+  const alone = readHandoffs(
+    [...tasks].reverse(),
+    [nova, tony, harvey].map((member) => ({ id: member.id, name: member.name })),
+  );
+
+  assert.deepEqual(alone, room);
+  assert.equal(alone.length, 1, "only the finished step has changed hands so far");
 });

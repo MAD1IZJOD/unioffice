@@ -202,6 +202,23 @@ export function readNarrative(input: NarrativeInput): MissionNarrative {
   };
 }
 
+/**
+ * Only the handoffs, for a surface that shows where work changed hands across
+ * several missions at once. The same edges, numbering and sentences the room
+ * reads, from the same rows; nothing more is needed than who holds each step
+ * and what name to call them by.
+ */
+export function readHandoffs(
+  tasks: Task[],
+  agents: Array<Pick<Agent, "id" | "name">>,
+  artifacts: Artifact[] = [],
+): Handoff[] {
+  const ordered = [...tasks].sort(byCreation);
+  const numberOf = new Map(ordered.map((task, index) => [task.id, index + 1]));
+
+  return buildHandoffs(ordered, numberOf, new Map(agents.map((agent) => [agent.id, agent])), artifacts);
+}
+
 /* --------------------------------------------------------------------------
    Timeline
    -------------------------------------------------------------------------- */
@@ -319,7 +336,7 @@ function stateOfEvent(event: Event): TimelineState | undefined {
 function buildHandoffs(
   ordered: Task[],
   numberOf: Map<TaskId, number>,
-  agents: Map<AgentId, Agent>,
+  agents: Map<AgentId, Pick<Agent, "id" | "name">>,
   artifacts: Artifact[],
 ): Handoff[] {
   const byId = new Map(ordered.map((task) => [task.id, task]));
