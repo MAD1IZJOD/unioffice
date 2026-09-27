@@ -25,12 +25,15 @@ export const Desk = memo(function Desk({
   seat,
   roomName,
   selected,
+  flagged,
   onSelect,
 }: {
   agent: WorldAgent;
   seat: PlacedSeat;
   roomName?: string;
   selected: boolean;
+  /** Their last step could not finish, recently. */
+  flagged: boolean;
   onSelect: (agentId: string) => void;
 }) {
   const state = deskStateOf(agent);
@@ -52,7 +55,7 @@ export const Desk = memo(function Desk({
       transform={`translate(${seat.cell.x} ${seat.cell.y})`}
       role="button"
       tabIndex={0}
-      aria-label={agentLabel(agent, roomName)}
+      aria-label={agentLabel(agent, roomName, flagged)}
       aria-pressed={selected}
       data-agent-id={agent.id}
       onClick={choose}
@@ -70,6 +73,14 @@ export const Desk = memo(function Desk({
       </g>
 
       <Bubble state={state} />
+
+      {/* A red flag by the desk: the last step here could not finish. */}
+      {flagged && (
+        <g className="world-flag">
+          <rect className="world-flag-pole" x={1} y={6} width={1} height={16} />
+          <rect className="world-flag-cloth" x={2} y={6} width={5} height={4} />
+        </g>
+      )}
 
       {/* The desk. */}
       <rect className="world-desk-top" x={3} y={19} width={34} height={2} />

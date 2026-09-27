@@ -83,9 +83,28 @@ export function lastLine(agent: WorldAgent): string | undefined {
     : `Could not finish “${last.taskTitle}” ${formatRelativeTime(last.at)}.`;
 }
 
+/** How long a step that could not finish keeps its flag on the desk. */
+export const FAILURE_FLAG_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether the agent's last step could not finish, recently enough to still
+ * flag their desk. Measured against the snapshot's own time, so every viewer
+ * and every reload agrees on it.
+ */
+export function recentFailure(agent: WorldAgent, asOf: string): boolean {
+  const last = agent.lastOutcome;
+  if (!last || last.outcome !== "failed") return false;
+
+  const age = Date.parse(asOf) - Date.parse(last.at);
+  return Number.isNaN(age) || age <= FAILURE_FLAG_MS;
+}
+
 /** The label a screen reader hears for an agent on the map. */
-export function agentLabel(agent: WorldAgent, roomName: string | undefined): string {
-  return [agent.name, roomName, agentLine(agent)].filter(Boolean).join(". ");
+export function agentLabel(agent: WorldAgent, roomName: string | undefined, flagged = false): string {
+  const who = [agent.name, roomName].filter(Boolean).join(". ");
+  const what = [agentLine(agent), flagged ? lastLine(agent) : undefined].filter(Boolean).join(" ");
+
+  return `${who}. ${what}`;
 }
 
 export const HANDOFF_LABEL: Record<WorldHandoff["state"], string> = {

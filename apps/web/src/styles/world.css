@@ -321,6 +321,9 @@
   filter: grayscale(1);
 }
 
+.world-flag-pole { fill: var(--ink-muted); }
+.world-flag-cloth { fill: var(--red); }
+
 /* Bubbles over the head. */
 .world-bubble-waiting > rect:not(.world-bubble-glyph) { fill: var(--red); }
 .world-bubble-waiting .world-bubble-glyph { fill: #fff; }

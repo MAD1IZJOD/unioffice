@@ -278,6 +278,7 @@ export default function World() {
           <li><b>A red bubble</b> — held until a person decides.</li>
           <li><b>Three dots</b> — the planner writing a mission's plan.</li>
           <li><b>Zz and a dimmed figure</b> — paused; faded — unavailable.</li>
+          <li><b>A red flag by the desk</b> — the agent's last step could not finish, within the last day.</li>
           <li><b>A dashed route ending in a parcel</b> — one step's result became another agent's input, and that work is still in play.</li>
           <li><b>A parcel or slips crossing the floor</b> — a handoff, or a plan giving out steps, that happened while you watched. Agents never leave their desks.</li>
           <li>Nothing else moves. An idle agent sits still, and an empty room stays empty.</li>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { WorldAgent, WorldSnapshot } from "../lib/api";
 
-import { agentLine, deskStateOf, momentLine } from "./describe";
+import { agentLabel, agentLine, deskStateOf, momentLine, recentFailure } from "./describe";
 
 function agent(overrides: Partial<WorldAgent> = {}): WorldAgent {
   return {
@@ -88,5 +88,26 @@ describe("what the world says about a moment", () => {
     );
 
     expect(line).toBe("Tyrion's plan for “Launch” gave steps to Mike and Tony.");
+  });
+});
+
+describe("a step that could not finish", () => {
+  const failed = agent({
+    lastOutcome: { missionId: "m", missionName: "Launch", taskTitle: "Ship it", outcome: "failed", at: "2026-09-27T10:00:00.000Z" },
+  });
+
+  it("flags the desk for a day, by the snapshot's clock", () => {
+    expect(recentFailure(failed, "2026-09-27T12:00:00.000Z")).toBe(true);
+    expect(recentFailure(failed, "2026-09-28T10:00:01.000Z")).toBe(false);
+  });
+
+  it("never flags a step that finished", () => {
+    const done = agent({ lastOutcome: { ...failed.lastOutcome!, outcome: "completed" } });
+    expect(recentFailure(done, "2026-09-27T12:00:00.000Z")).toBe(false);
+  });
+
+  it("is said aloud along with the agent, when flagged", () => {
+    expect(agentLabel(failed, "Customer Success", true)).toMatch(/^Tony\. Customer Success\. Available\. Could not finish “Ship it”/);
+    expect(agentLabel(failed, "Customer Success")).toBe("Tony. Customer Success. Available.");
   });
 });

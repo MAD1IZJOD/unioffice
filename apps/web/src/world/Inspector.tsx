@@ -156,6 +156,11 @@ function AgentPanel({
             <ArrowRight size={13} />
           </Link>
         )}
+        {agent.lastOutcome?.outcome === "failed" && agent.lastOutcome.missionId !== missionId && (
+          <Link to={`/missions/${agent.lastOutcome.missionId}`} className="button-ghost">
+            See what stopped
+          </Link>
+        )}
         <Link to={`/workforce/${agent.id}`} className="button-ghost">
           Open profile
         </Link>

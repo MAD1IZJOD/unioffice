@@ -13,7 +13,7 @@ import { Maximize, Minus, Plus } from "lucide-react";
 
 import type { WorldHandoff, WorldMission, WorldSnapshot } from "../lib/api";
 
-import { HANDOFF_LABEL, missionStatusWord } from "./describe";
+import { HANDOFF_LABEL, missionStatusWord, recentFailure } from "./describe";
 import { Desk } from "./Desk";
 import { handoffKey } from "./moments";
 import { pathBetween, pathData, pathLength, TILE, type FloorPlan, type Point } from "./layout";
@@ -397,6 +397,7 @@ export function Scene({
                     seat={seat}
                     roomName={roomsById.get(placed.id)?.name}
                     selected={selection?.kind === "agent" && selection.id === agent.id}
+                    flagged={recentFailure(agent, snapshot.generatedAt)}
                     onSelect={(id) => onSelect({ kind: "agent", id })}
                   />
                 );
