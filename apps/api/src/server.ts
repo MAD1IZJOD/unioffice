@@ -137,6 +137,11 @@ import type {
   MissionIntelligenceService,
 } from "./mission-intelligence-service.js";
 
+import {
+  lifecycleStartability,
+  type Startability,
+} from "./mission-startability.js";
+
 import type {
   WorkspaceService,
 } from "./workspace-service.js";
@@ -258,7 +263,7 @@ export interface ApiServices {
    * What a mission was understood to be, whether it can run, and how. Optional
    * so the many route tests that never read one need not build it.
    */
-  missionIntelligenceService?: Pick<MissionIntelligenceService, "getIntelligence">;
+  missionIntelligenceService?: Pick<MissionIntelligenceService, "getIntelligence" | "startability">;
   /**
    * Missions that run on a schedule. Optional so the route tests that never
    * touch one need not build it.
@@ -794,8 +799,27 @@ export function buildApiServer(
       const workId = await authorizedWorkId(services, request);
       const room = await services.executionRoomService.getRoom(workId);
 
+      // Whether the room may offer to run it: the decision the brief and the
+      // execute route read too. Not worked out while a job is on the queue -
+      // the room shows that job instead, and the mission refreshes often
+      // enough while it runs that the reads would be wasted.
+      //
+      // Best-effort: the room is how a person follows the mission, and it
+      // stays readable if this cannot be answered. Without it the room offers
+      // no start, and the execute route still decides for itself.
+      let startability: Startability | undefined;
+
+      if (!room.executionJob) {
+        try {
+          startability = await startabilityFor(services, accessOf(request), room.work);
+        } catch (error) {
+          request.log.warn({ err: error }, "Could not decide whether the mission can be started.");
+        }
+      }
+
       return {
         ...room,
+        startability,
         agents: room.agents.map(publicAgent),
         orchestrator: room.orchestrator ? publicAgent(room.orchestrator) : undefined,
         cast: room.cast.map((member) => ({ ...member, agent: publicAgent(member.agent) })),
@@ -929,9 +953,22 @@ export function buildApiServer(
     // executes it, so the run no longer depends on this process staying
     // alive. Callers watch progress through /work/:id/detail, which reads the
     // same rows the worker is writing.
+    //
+    // A person pressing start is held to the same decision the brief and the
+    // room show: nothing finished, cancelled or failed is started again here,
+    // and nothing whose remaining steps are blocked. Approvals resuming a run,
+    // retries and schedules queue their work themselves and are not gated
+    // here. A mission already on the queue answers with its job, as before.
     instance.post("/work/:id/execute", async (request) => {
-      const workId = await operableWorkId(services, request);
-      return services.executionQueueService.enqueueWork(workId, "requested");
+      const work = await visibleWork(services, request);
+      const access = await confirmAllowed(services, request, "missions.operate", work.workspaceId);
+      const decision = await startabilityFor(services, access, work);
+
+      if (!decision.startable) {
+        throw new ApiError(409, decision.message);
+      }
+
+      return services.executionQueueService.enqueueWork(work.id, "requested");
     });
 
     instance.post("/work/:id/retry", async (request) => {
@@ -2593,6 +2630,25 @@ async function authorizedWorkId(
  * organization, and in a workspace they reach. A mission in a workspace they
  * were never given reads exactly like one that does not exist.
  */
+/**
+ * Whether this mission can be started now. The preflight's answer where the
+ * server has it; a server built without mission intelligence still refuses
+ * what the lifecycle alone rules out.
+ */
+async function startabilityFor(
+  services: ApiServices,
+  access: Access,
+  work: Work,
+): Promise<Startability> {
+  if (services.missionIntelligenceService) {
+    return services.missionIntelligenceService.startability(access, work);
+  }
+
+  const tasks = await services.workQueryService.getTasks(work.id);
+
+  return lifecycleStartability(work, tasks.length);
+}
+
 async function visibleWork(
   services: ApiServices,
   request: { params: unknown; access?: Access },

@@ -51,6 +51,8 @@ async function company(options: {
   planning?: Promise<void>;
   /** Cancels this mission the instant after it is read - the race a real cancel can win. */
   cancelAfterRead?: WorkId;
+  /** Missions with no steps yet. */
+  unplanned?: WorkId[];
 } = {}) {
   const members = new InMemoryMembershipRepository();
   const identities = new Map<string, Identity>();
@@ -99,6 +101,7 @@ async function company(options: {
   // Each harness gets its own copy, so a status one test changes does not
   // leak into the next.
   const missions = new Map([...works].map(([id, work]) => [id, { ...work }]));
+  const unplanned = new Set<WorkId>(options.unplanned ?? []);
 
   // The real launcher over the same stubs, so a launch is observable in `done`.
   const launches: Array<Promise<void>> = [];
@@ -127,9 +130,13 @@ async function company(options: {
         if (options.cancelAfterRead === id) missions.set(id, { ...work, status: "cancelled" });
         return seen;
       },
-      async getTasks() { return []; },
+      // Every mission here has one planned step, unless a test clears it -
+      // these tests are about who may start work, not whether it has a plan.
+      async getTasks(id: WorkId) { return unplanned.has(id) ? [] : [{ id: `step-${id}`, status: "pending", dependsOn: [] }]; },
     },
-    executionRoomService: { async getRoom(id: WorkId) { return { work: { id }, agents: [], cast: [] }; } },
+    executionRoomService: {
+      async getRoom(id: WorkId) { return { work: missions.get(id) ?? { id }, agents: [], cast: [], executionJob: null }; },
+    },
     workService: {
       async planWork(id: WorkId) { done.push(`plan:${id}`); return { id }; },
       // The same rule as the real one: only a waiting mission starts planning.
@@ -349,3 +356,41 @@ test("a cancel that lands between reading the mission and starting it wins", asy
   assert.equal(missions.get(companyWide)?.status, "cancelled", "and the cancellation is not overwritten");
 });
 
+
+test("run is refused for a mission that has finished, been cancelled or failed", async () => {
+  for (const status of ["completed", "cancelled", "failed"] as const) {
+    const { app, as, done, missions } = await company();
+    missions.set(companyWide, { ...missions.get(companyWide)!, status });
+
+    const response = await app.inject({ method: "POST", url: `/work/${companyWide}/execute`, headers: as("owner"), payload: {} });
+
+    assert.equal(response.statusCode, 409, status);
+    assert.deepEqual(done, [], `a ${status} mission is not put back on the queue`);
+  }
+});
+
+test("run is refused for a mission with no plan, and for one waiting on a decision", async () => {
+  const unplanned = await company({ unplanned: [companyWide] });
+  const first = await unplanned.app.inject({ method: "POST", url: `/work/${companyWide}/execute`, headers: unplanned.as("owner"), payload: {} });
+  assert.equal(first.statusCode, 409);
+  assert.match(first.json().error.message, /no plan yet/);
+  assert.deepEqual(unplanned.done, []);
+
+  const waiting = await company();
+  waiting.missions.set(companyWide, { ...waiting.missions.get(companyWide)!, status: "waiting_approval" });
+  const second = await waiting.app.inject({ method: "POST", url: `/work/${companyWide}/execute`, headers: waiting.as("owner"), payload: {} });
+  assert.equal(second.statusCode, 409);
+  assert.deepEqual(waiting.done, []);
+});
+
+test("the room carries the same start decision the execute route acts on", async () => {
+  const { app, as, missions } = await company();
+
+  const planned = await app.inject({ method: "GET", url: `/work/${companyWide}/room`, headers: as("owner") });
+  assert.deepEqual(planned.json().startability, { startable: true, mode: "start" });
+
+  missions.set(companyWide, { ...missions.get(companyWide)!, status: "completed" });
+  const finished = await app.inject({ method: "GET", url: `/work/${companyWide}/room`, headers: as("owner") });
+  assert.equal(finished.json().startability.startable, false);
+  assert.equal(finished.json().startability.reason, "completed");
+});
