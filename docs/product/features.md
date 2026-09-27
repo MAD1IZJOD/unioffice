@@ -13,7 +13,7 @@ web app builds its navigation, breadcrumb and command palette from it.
 | --- | --- |
 | Command | Command Center |
 | Work | Missions, Approvals, Artifacts |
-| Workforce | Agents, Skills, Tools |
+| Workforce | Agents, [World](world.md), Skills, Tools |
 | Knowledge | Company Brain, Activity |
 | Company | Organization, Members, Governance, Connections |
 

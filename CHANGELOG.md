@@ -1,5 +1,33 @@
 # Changelog
 
+## The world, and one decision about starting a mission
+
+### World
+
+- A new page under Workforce shows the company as a pixel-art office. Rooms
+  are the workspaces the viewer can reach, with a hall for agents who work
+  everywhere; live missions are pinned to a board at the entrance. See
+  [World](docs/product/world.md).
+- Desks show only what the server reports - on a step, held for a decision,
+  planning, paused, unavailable, a step that could not finish - and work
+  still changing hands is drawn as a route ending in a parcel.
+- Movement is only a change the page watched happen between two live
+  readings; opening the page or reconnecting replays nothing. Agents never
+  leave their desks.
+- `GET /world` is built from existing reads, narrowed to the viewer's
+  workspaces, and opens no new live connection. The page is a lazy chunk.
+
+### Starting a mission
+
+- The brief, the execution room and `POST /work/:id/execute` read one start
+  decision (`apps/api/src/mission-startability.ts`). The route refuses a
+  finished, cancelled or failed mission, one with no plan, one waiting on a
+  decision and one whose remaining steps are blocked; approvals, retries and
+  schedules are unchanged.
+- A capability an agent never had when a step was given to it is a
+  limitation, not a blocker; one it has lost since still blocks. Steps that
+  already finished no longer hold up resuming the rest.
+
 ## Organizational control
 
 Company work that keeps running on its own, under the company's rules, with
