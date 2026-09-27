@@ -36,6 +36,12 @@ import { canActIn, reaches, type Access } from "./access/permissions.js";
 import { readableRecallReasons } from "./knowledge-reasons.js";
 import { buildExecutionPlan, type ExecutionNode } from "./execution-plan.js";
 import { clip } from "./mission-reading.js";
+import {
+  lifecycleStartability,
+  startabilityOf,
+  type StartReadiness,
+  type Startability,
+} from "./mission-startability.js";
 import { publicFailureReason } from "./public-failure.js";
 
 /**
@@ -305,6 +311,12 @@ export interface MissionIntelligence {
   stage: MissionStage;
   brief: MissionBrief;
   preflight: MissionPreflight;
+  /**
+   * Whether the mission can be started now, whoever is asking - the same
+   * decision the execution room and the execute route read. Whether this
+   * person may start it is `preflight.canStart`.
+   */
+  startability: Startability;
   /** Absent until the planner has written the steps. */
   plan: MissionPlanView | null;
   /**
@@ -365,6 +377,8 @@ export class MissionIntelligenceService {
 
     const stage = stageOf(work, tasks);
     const read = tasks.length > 0 ? this.planOf(tasks, agents) : null;
+    const preflight = this.preflightOf(access, work, agents, enforced, stage, read);
+    const startability = startabilityOf(work, tasks.length, readinessOf(preflight));
 
     return {
       missionId: work.id,
@@ -372,10 +386,49 @@ export class MissionIntelligenceService {
       status: work.status,
       stage,
       brief: this.briefOf(work, tasks, agents, workspace, read?.view ?? null),
-      preflight: this.preflightOf(access, work, agents, enforced, stage, read),
+      preflight: { ...preflight, canStart: preflight.canStart && startability.startable },
+      startability,
       plan: read?.view ?? null,
       knowledge,
     };
+  }
+
+  /**
+   * Whether this mission can be started now - the one decision the brief,
+   * the execution room and the execute route share.
+   *
+   * The lifecycle answers first and needs only the step count, so a
+   * finished or cancelled mission costs one read. Otherwise the steps still
+   * to run go through the same preflight the brief shows. `work` has already
+   * been confirmed as one this caller may see.
+   */
+  async startability(access: Access, work: Work): Promise<Startability> {
+    const tasks = await this.deps.tasks.findByWork(work.id);
+    const lifecycle = lifecycleStartability(work, tasks.length);
+
+    if (!lifecycle.startable) return lifecycle;
+
+    const [allAgents, enforced] = await Promise.all([
+      this.deps.agents.findByOrganization(work.organizationId),
+      this.deps.policies.findEnforced(work.organizationId),
+    ]);
+
+    const agents = new Map(
+      allAgents
+        .filter((agent) => agent.organizationId === work.organizationId)
+        .map((agent) => [agent.id, agent]),
+    );
+
+    const preflight = this.preflightOf(
+      access,
+      work,
+      agents,
+      enforced,
+      stageOf(work, tasks),
+      this.planOf(tasks, agents),
+    );
+
+    return startabilityOf(work, tasks.length, readinessOf(preflight));
   }
 
   /* ------------------------------------------------------------------------
@@ -619,7 +672,13 @@ export class MissionIntelligenceService {
     // Each finding is worked out from the step's own task row, paired with it
     // when the plan was read - never looked up again by title, which two
     // steps can share.
-    const findings = read.entries.map((entry) =>
+    //
+    // Only the steps still to run are checked. A step that already finished
+    // cannot be held up by its agent being paused since, and a mission left
+    // part-way must not be refused a resume over work it has already done.
+    // When nothing is left to run the whole plan is read, for reference.
+    const unsettled = read.entries.filter((entry) => !isSettled(entry.task));
+    const findings = (unsettled.length > 0 ? unsettled : read.entries).map((entry) =>
       this.inspect(entry, agents, work.workspaceId, enforced, registered));
 
     const checks: PreflightCheck[] = [];
@@ -877,9 +936,27 @@ export class MissionIntelligenceService {
         .map((toolId) => this.toolName(toolId));
     }
 
-    finding.missingCapabilities = requiredCapabilities.filter(
+    const missingCapabilities = requiredCapabilities.filter(
       (capability) => !agent.capabilities.some((held) => held.toLocaleLowerCase() === capability.toLocaleLowerCase()),
     );
+
+    // A capability the agent never had when the step was given to it is a
+    // shortfall the delegator knowingly accepted - it was the closest match -
+    // so it limits the answer rather than stopping the work. Only one the
+    // agent has lost since is a reason the step can no longer be routed.
+    const knownShortfall = new Set(
+      stringsOf(delegationOf(task)?.unmatchedCapabilities).map((capability) => capability.toLocaleLowerCase()),
+    );
+
+    finding.missingCapabilities = missingCapabilities.filter(
+      (capability) => !knownShortfall.has(capability.toLocaleLowerCase()),
+    );
+
+    const accepted = missingCapabilities.filter((capability) => knownShortfall.has(capability.toLocaleLowerCase()));
+
+    if (accepted.length > 0 && finding.limitation === undefined) {
+      finding.limitation = `${agent.name} is the closest match for step ${step.number} but does not have ${readableList(accepted.map(readable))}.`;
+    }
 
     // An assignment that was valid when the plan was written can stop being
     // valid: the skill can be taken off the agent afterwards. The step still
@@ -1110,6 +1187,18 @@ function stageOf(work: Work, tasks: Task[]): MissionStage {
  */
 function byPlanOrder(left: ExecutionNode, right: ExecutionNode): number {
   return left.depth - right.depth;
+}
+
+/** What the preflight found, as the start decision reads it. */
+function readinessOf(preflight: MissionPreflight): StartReadiness {
+  return preflight.state === "blocked"
+    ? { blocked: true, summary: preflight.detail }
+    : { blocked: false };
+}
+
+/** A step that has run its course and will not run again on this plan. */
+function isSettled(task: Task | undefined): boolean {
+  return task?.status === "completed" || task?.status === "cancelled";
 }
 
 function routingOf(task: Task | undefined): Record<string, unknown> | undefined {

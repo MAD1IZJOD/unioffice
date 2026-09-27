@@ -461,6 +461,103 @@ test("steps that depend on each other in a circle are reported rather than paper
   assert.match(checkOf(result, "dependencies")!.summary, /circle/);
 });
 
+/* --------------------------------------------------------------------------
+   Whether it can be started
+   -------------------------------------------------------------------------- */
+
+test("a capability the agent never had when it was chosen limits the answer and does not block", async () => {
+  // Harvey was the closest match: the step asked for market research, which
+  // he did not have then and does not have now. Nothing changed since.
+  const stretched = [
+    task("task-1", "Size the market", "agent-harvey", {
+      requiredCapabilities: ["financial_analysis", "market_research"],
+      unmatchedCapabilities: ["market_research"],
+    }),
+  ];
+
+  const result = await service({ tasks: stretched }).getIntelligence(access(), work());
+
+  assert.equal(checkOf(result, "capabilities")!.state, "ok");
+  assert.equal(result.preflight.state, "partially_ready");
+  assert.match(checkOf(result, "inputs")!.summary, /Harvey is the closest match for step 1 but does not have market research/);
+  assert.equal(result.preflight.canStart, true);
+  assert.deepEqual(result.startability, { startable: true, mode: "start" });
+});
+
+test("a capability lost after planning still blocks, beside one that was never there", async () => {
+  const stretched = [
+    task("task-1", "Size the market", "agent-harvey", {
+      requiredCapabilities: ["financial_analysis", "market_research"],
+      unmatchedCapabilities: ["market_research"],
+    }),
+  ];
+
+  const result = await service({ tasks: stretched, agents: [agent("Harvey", { capabilities: ["calculation"] })] })
+    .getIntelligence(access(), work());
+
+  assert.equal(result.preflight.state, "blocked");
+  assert.equal(checkOf(result, "capabilities")!.summary, "Harvey no longer has financial analysis.");
+  assert.equal(result.startability.startable, false);
+  assert.equal(!result.startability.startable && result.startability.reason, "blocked");
+});
+
+test("a blocked mission cannot be started, and says why in the preflight's words", async () => {
+  const result = await service({ tasks: twoStepPlan, agents: [agent("Harvey", { status: "paused" })] })
+    .getIntelligence(access(), work());
+
+  assert.equal(result.preflight.canStart, false);
+  assert.deepEqual(result.startability, {
+    startable: false,
+    reason: "blocked",
+    message: result.preflight.detail,
+  });
+});
+
+test("a finished mission cannot be started again, however ready its steps look", async () => {
+  const done = twoStepPlan.map((step) => ({ ...step, status: "completed" as const }));
+
+  const result = await service({ tasks: done }).getIntelligence(access(), work({ status: "completed" }));
+
+  assert.equal(result.preflight.canStart, false);
+  assert.equal(!result.startability.startable && result.startability.reason, "completed");
+});
+
+test("a step already finished does not hold up resuming the rest", async () => {
+  // Step 1 was Harvey's and is done; Harvey has been paused since. Step 2 is
+  // Mike's, and Mike is still here to run it.
+  const partWay = [
+    { ...task("task-1", "Work out the total cost", "agent-harvey"), status: "completed" as const },
+    task("task-2", "Write the recommendation", "agent-mike", { dependsOn: ["task-1"] }),
+  ];
+
+  const result = await service({
+    tasks: partWay,
+    agents: [agent("Harvey", { status: "paused" }), agent("Mike")],
+  }).getIntelligence(access(), work({ status: "executing" }));
+
+  assert.equal(checkOf(result, "workforce")!.state, "ok");
+  assert.deepEqual(result.startability, { startable: true, mode: "resume" });
+});
+
+test("the start decision on its own is the one the brief shows", async () => {
+  const cases = [
+    service({ tasks: twoStepPlan }),
+    service({ tasks: twoStepPlan, agents: [agent("Harvey", { toolIds: [] })] }),
+    service({ tasks: [] }),
+  ];
+
+  for (const subject of cases) {
+    const whole = await subject.getIntelligence(access(), work());
+    assert.deepEqual(await subject.startability(access(), work()), whole.startability);
+  }
+});
+
+test("a mission waiting on a decision is not started from here; the decision resumes it", async () => {
+  const decision = await service({ tasks: twoStepPlan }).startability(access(), work({ status: "waiting_approval" }));
+
+  assert.equal(!decision.startable && decision.reason, "waiting_approval");
+});
+
 test("readiness is never claimed while the plan is still being written", async () => {
   const result = await service({ tasks: [] }).getIntelligence(access(), work({ status: "planning" }));
 
