@@ -2323,4 +2323,127 @@ Never fake agent activity.
 
 This is the authoritative transfer context to carry forward.
 
+image.png
+
+# 74. AUTHORITATIVE AGENT RENAMING
+
+IMPORTANT: The agent names in the current codebase evolved during development.
+
+Earlier in the project, agents had role-based names such as:
+
+- Atlas
+- Forge
+- Ledger
+- Nova
+- Kindred
+- Relay
+
+Those names are now OUTDATED for the user-facing agent identities.
+
+The agents were subsequently renamed to more human/common names, and then renamed again.
+
+The CURRENT canonical names are the names shown in the latest UNIOFFICE World design:
+
+- Company Hall:
+  - Tyrion
+  - Jamie
+  - Peter
+
+- Customer Success:
+  - Rhea
+
+- Engineering:
+  - Dana
+  - Tony
+
+- Finance:
+  - Harvey
+
+- Operations:
+  - currently no agent shown
+
+- Research:
+  - Mike
+
+These are the CURRENT USER-FACING AGENT NAMES.
+
+## Important distinction
+
+The old names such as:
+
+Atlas
+Forge
+Ledger
+Nova
+Kindred
+Relay
+
+should NOT continue appearing in the user-facing product simply because they existed in earlier architecture/design documents.
+
+They represent the earlier role/agent naming system.
+
+The current World/UI identity should use the latest names:
+
+Tyrion
+Jamie
+Peter
+Rhea
+Dana
+Tony
+Harvey
+Mike
+
+Do NOT rename these back to Atlas, Forge, Ledger, Nova, Kindred, Relay.
+
+Do NOT invent new human names.
+
+Do NOT replace them with generic labels such as:
+- Engineering Agent
+- Finance Agent
+- Research Agent
+
+unless a UI context specifically requires the role/department label.
+
+The intended model is:
+
+Agent identity = human-style name
+Agent role = department/function
+
+For example:
+
+Harvey
+Finance
+
+Mike
+Research
+
+Dana
+Engineering
+
+Tony
+Engineering
+
+Rhea
+Customer Success
+
+The World screenshot is therefore the latest visual reference for agent identity.
+
+## Migration requirement
+
+When implementing UNIOFFICE World, inspect the existing agent definitions, seed data, fixtures, UI references, and mock data.
+
+Where the old names are still being used as actual user-facing agent names, migrate them to the current canonical names above.
+
+Preserve the underlying agent identity/database relationships and functionality.
+
+Do NOT create duplicate agents merely because their names changed.
+
+Do NOT change agent IDs solely because the display name changed.
+
+The rename should be treated as a display/identity naming evolution unless the existing architecture explicitly requires otherwise.
+
+Most importantly:
+
+The World should display the current names shown above, not the historical Atlas/Forge/Ledger/Nova/Kindred/Relay names.
+
 "this context is of till 28 september 2026 17:02 last shipped feature was gamifeid interface for agents "
