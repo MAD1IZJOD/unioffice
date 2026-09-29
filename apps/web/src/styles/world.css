@@ -907,9 +907,71 @@
     align-items: flex-start;
   }
 
+  /* Phones: the head gives the map the first screen. The shell's own bar
+     already says where you are, so the page's eyebrow goes; search has a
+     row to itself, and every other control shares one below it. */
+  .world {
+    gap: var(--space-3);
+  }
+
+  .world-head {
+    gap: var(--space-3);
+  }
+
+  .world-head .t-eyebrow {
+    display: none;
+  }
+
+  .world-title {
+    font-size: var(--text-xl);
+  }
+
+  .world-summary {
+    margin-top: var(--space-1);
+    font-size: var(--text-sm);
+  }
+
+  .world-controls {
+    gap: var(--space-2);
+  }
+
+  .world-toggle button,
+  .world-switch {
+    padding: 0 var(--space-2);
+  }
+
+  .world-find {
+    flex-basis: 100%;
+  }
+
   .world-find,
   .world-find-field input {
     width: 100%;
+  }
+
+  /* Every filter stays one tap away, on a single row that scrolls
+     sideways, instead of four rows pushing the map off the screen. */
+  /* A grid item, so it would otherwise grow to fit the row it scrolls. */
+  .world-filters {
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .world-filter-group {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .world-filter-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .world-filter {
+    flex: none;
   }
 
   .world-log-list li {
