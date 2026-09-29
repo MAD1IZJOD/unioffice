@@ -82,7 +82,7 @@ function open(role: OrganizationRole = "owner", data: WorldSnapshot = snapshot()
   return calls;
 }
 
-function page(role: OrganizationRole = "owner") {
+function page(role: OrganizationRole = "owner", path = "/world") {
   const router = createMemoryRouter(
     [
       {
@@ -95,7 +95,7 @@ function page(role: OrganizationRole = "owner") {
       },
       { path: "*", element: <p>Somewhere else</p> },
     ],
-    { initialEntries: ["/world"] },
+    { initialEntries: [path] },
   );
 
   return render(<RouterProvider router={router} />);
@@ -368,6 +368,93 @@ describe("the world", () => {
       delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
       delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
     }
+  });
+
+  describe("opened on one mission", () => {
+    function openAt(path: string, data: WorldSnapshot = snapshot()) {
+      const calls = stubNetwork((call) =>
+        call.url.pathname.endsWith("/world") ? json(200, data) : json(404, { error: { message: "Not here." } }));
+      const view = page("owner", path);
+      return { calls, ...view };
+    }
+
+    it("chooses the mission, says so, and leaves out only who is not on it", async () => {
+      openAt("/world?mission=launch");
+
+      expect(await screen.findByText(/Showing “Launch”\./)).toBeDefined();
+      expect(screen.getByRole("complementary", { name: "Details: Launch" })).toBeDefined();
+
+      await asList();
+      expect(within(screen.getByRole("region", { name: "Engineering" })).getByRole("button", { name: "Tony" })).toBeDefined();
+      expect(within(screen.getByRole("region", { name: "Company hall" })).getByText("Nobody here is on this mission.")).toBeDefined();
+
+      await userEvent.click(screen.getByRole("button", { name: "Show the whole office" }));
+      expect(screen.queryByText(/Showing “Launch”/)).toBeNull();
+      expect(within(screen.getByRole("region", { name: "Company hall" })).getByRole("button", { name: "Tyrion" })).toBeDefined();
+    });
+
+    it("brings every agent on a mission into view together, and quietens nobody on it", async () => {
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1200 });
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 800 });
+
+      try {
+        const data = snapshot();
+        data.missions[0]!.agentIds = ["mike", "tony"];
+        const { container } = openAt("/world?mission=launch", data);
+        await waitFor(() => expect(container.querySelectorAll(".world-desk")).toHaveLength(3));
+
+        const faded = [...container.querySelectorAll(".world-desk")]
+          .map((desk) => [desk.querySelector(".world-name")?.textContent, desk.classList.contains("world-desk-faded")]);
+        expect(Object.fromEntries(faded)).toEqual({ Tyrion: true, Mike: false, Tony: false });
+
+        const plan = planFloor(data.rooms.map((room) => ({ id: room.id, agentIds: room.agentIds })));
+        const [, x, y, k] = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/
+          .exec(container.querySelector(".world-svg > g")!.getAttribute("transform")!)!.map(Number);
+        for (const id of ["mike", "tony"]) {
+          const at = plan.seats.get(id)!.at;
+          const onStage = { x: x! + at.x * k!, y: y! + at.y * k! };
+          expect(onStage.x).toBeGreaterThanOrEqual(0);
+          expect(onStage.x).toBeLessThanOrEqual(1200);
+          expect(onStage.y).toBeGreaterThanOrEqual(0);
+          expect(onStage.y).toBeLessThanOrEqual(800);
+        }
+      } finally {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+        delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+      }
+    });
+
+    it("shows the whole office, with one plain note, for a mission not in view", async () => {
+      openAt("/world?mission=no-such-mission");
+
+      expect(await screen.findByText(/That mission is not under way in your view of the company/)).toBeDefined();
+      expect(screen.queryByRole("complementary")).toBeNull();
+
+      await asList();
+      expect(within(screen.getByRole("region", { name: "Company hall" })).getByRole("button", { name: "Tyrion" })).toBeDefined();
+
+      await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+      expect(screen.queryByText(/not under way in your view/)).toBeNull();
+    });
+
+    it("tells another company's mission apart from a missing one by nothing, and asks nobody about it", async () => {
+      const foreign = "7d1c2a9e-0b44-4f7e-9d61-2f6a3c8b5e10";
+      const { calls } = openAt(`/world?mission=${foreign}`);
+
+      const note = await screen.findByText(/That mission is not under way in your view of the company/);
+      expect(note.textContent).toBe("That mission is not under way in your view of the company, so the whole office is shown. Dismiss");
+      expect(calls.every((call) => call.url.pathname.endsWith("/world"))).toBe(true);
+      expect(calls.some((call) => call.url.href.includes(foreign))).toBe(false);
+    });
+
+    it("opens as usual without one", async () => {
+      openAt("/world");
+
+      expect(await screen.findByText(/3 agents in 3 rooms/)).toBeDefined();
+      expect(screen.queryByText(/Showing “/)).toBeNull();
+      expect(screen.queryByText(/not under way in your view/)).toBeNull();
+      expect(screen.queryByRole("complementary")).toBeNull();
+    });
   });
 
   it("replays nothing on opening: the office is shown as it is", async () => {

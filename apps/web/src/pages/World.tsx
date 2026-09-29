@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
   fetchWorld,
@@ -19,6 +19,7 @@ import { filterCounts, keeps, type AgentFilter } from "../world/filters";
 import { Find } from "../world/Find";
 import { Inspector, StatePill } from "../world/Inspector";
 import { planFloor } from "../world/layout";
+import { agentsOn, missionInView, missionTarget } from "../world/missionFocus";
 import { handoffKey, momentsBetween, type Reading, type WorldMoment } from "../world/moments";
 import { Scene, type WorldSelection } from "../world/Scene";
 import type { SearchHit } from "../world/search";
@@ -60,6 +61,8 @@ export default function World() {
   const [filters, setFilters] = useState<ReadonlySet<AgentFilter>>(() => new Set());
   const [selection, setSelection] = useState<WorldSelection>();
   const [focus, setFocus] = useState<{ target: FocusTarget; nonce: number }>();
+  const [params, setParams] = useSearchParams();
+  const [openedOn, setOpenedOn] = useState<string>();
 
   /* Readings, and what changed between them -------------------------------- */
   //
@@ -197,7 +200,34 @@ export default function World() {
   const inPlay = snapshot.handoffs.filter((handoff) => handoff.state !== "delivered");
 
   // Who the filters leave out. Only what is shown changes; nobody's state does.
-  const faded = new Set(snapshot.agents.filter((agent) => !keeps(agent, filters, snapshot.generatedAt)).map((agent) => agent.id));
+  // Opened on one mission - `?mission=<id>` - honoured only when this
+  // viewer's snapshot holds it. Chosen and brought into view once per
+  // mission the link names, as a click would; the viewer is free to look
+  // anywhere afterwards. Nobody off the mission is moved or changed, only
+  // drawn quieter.
+  const asked = params.get("mission");
+  const mission = missionInView(snapshot, asked);
+  const onMission = mission ? new Set(agentsOn(snapshot, mission)) : undefined;
+
+  if (mission && openedOn !== mission.id) {
+    setOpenedOn(mission.id);
+    setSelection({ kind: "mission", id: mission.id });
+    const target = missionTarget(snapshot, mission);
+    if (target) bringIntoView(target);
+  }
+
+  const leaveMission = () => {
+    setOpenedOn(undefined);
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("mission");
+      return next;
+    }, { replace: true });
+  };
+
+  const faded = new Set(snapshot.agents
+    .filter((agent) => !keeps(agent, filters, snapshot.generatedAt) || (onMission !== undefined && !onMission.has(agent.id)))
+    .map((agent) => agent.id));
   const toggleFilter = (filter: AgentFilter) =>
     setFilters((current) => {
       const next = new Set(current);
@@ -246,6 +276,23 @@ export default function World() {
         </div>
       </header>
 
+      {mission && (
+        <p className="world-notice world-notice-focus">
+          Showing “{mission.name}”. Everyone on it is drawn in full; the rest of the office is quieter.{" "}
+          <button type="button" className="world-link-button" onClick={leaveMission}>Show the whole office</button>
+        </p>
+      )}
+
+      {/* The same words for a mission that does not exist, is another
+          company's, is not this viewer's to open or has finished: nothing
+          here can tell them apart, and nothing should. */}
+      {asked && !mission && (
+        <p className="world-notice">
+          That mission is not under way in your view of the company, so the whole office is shown.{" "}
+          <button type="button" className="world-link-button" onClick={leaveMission}>Dismiss</button>
+        </p>
+      )}
+
       {world.status === "offline" && (
         <p className="world-notice" role="status">
           Not live right now. This is the office as it was {formatRelativeTime(snapshot.generatedAt)}; it will
@@ -283,7 +330,12 @@ export default function World() {
                 faded={faded}
               />
             ) : (
-              <Roster snapshot={snapshot} onSelect={setSelection} faded={faded} />
+              <Roster
+                snapshot={snapshot}
+                onSelect={setSelection}
+                faded={faded}
+                leftOut={mission && filters.size === 0 ? "Nobody here is on this mission." : "Nobody here is in that state."}
+              />
             )}
 
             {selection && (
@@ -356,11 +408,14 @@ function Roster({
   snapshot,
   onSelect,
   faded,
+  leftOut,
 }: {
   snapshot: WorldSnapshot;
   onSelect: (selection: WorldSelection) => void;
-  /** Agents the viewer's filters leave out of the list. */
+  /** Agents left out of the list - by the filters, or by a mission in focus. */
   faded: ReadonlySet<string>;
+  /** What to say for a room whose people are all left out. */
+  leftOut: string;
 }) {
   const inPlay = snapshot.handoffs.filter((handoff) => handoff.state !== "delivered");
 
@@ -379,7 +434,7 @@ function Roster({
             {room.agentIds.length === 0 ? (
               <p className="world-meta">Nobody works here.</p>
             ) : shown.length === 0 ? (
-              <p className="world-meta">Nobody here is in that state.</p>
+              <p className="world-meta">{leftOut}</p>
             ) : (
               <ul className="world-list">
                 {shown.map((id) => {

@@ -264,6 +264,12 @@
   line-height: var(--leading-snug);
 }
 
+/* Opened on one mission: blue, because it is live work being looked at. */
+.world-notice-focus {
+  border-left-color: var(--blue-line);
+  background: var(--blue-soft);
+}
+
 /* The stage and the inspector beside it --------------------------------- */
 
 .world-body {
