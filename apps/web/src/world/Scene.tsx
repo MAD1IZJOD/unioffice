@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
@@ -152,6 +153,30 @@ export function Scene({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+
+  // Where the stage starts on the page, so it can take what is left of the
+  // first screen below it rather than a fixed share of a window whose top
+  // it cannot see. Measured after every commit - a note or a filter line
+  // above it moves it - when the window changes size, and once the page's
+  // arrival has settled.
+  const [top, setTop] = useState<number>();
+  const measureTop = useCallback(() => {
+    const element = stage.current;
+    if (!element) return;
+    const next = Math.round(element.getBoundingClientRect().top + window.scrollY);
+    setTop((current) => (current === next ? current : next));
+  }, []);
+
+  useLayoutEffect(measureTop);
+
+  useEffect(() => {
+    window.addEventListener("resize", measureTop);
+    document.addEventListener("animationend", measureTop, true);
+    return () => {
+      window.removeEventListener("resize", measureTop);
+      document.removeEventListener("animationend", measureTop, true);
+    };
+  }, [measureTop]);
 
   // What can be seen of the stage, worked out while something is held in
   // view: when it is chosen, when the stage changes size, and when the sheet
@@ -405,6 +430,7 @@ export function Scene({
     <div
       ref={stage}
       className="world-stage"
+      style={top === undefined ? undefined : ({ "--world-stage-top": `${top}px` } as CSSProperties)}
       tabIndex={0}
       role="group"
       aria-label="Office map. Drag or use the arrow keys to move the view; plus and minus, or Ctrl and the wheel, zoom; zero fits the whole office. Tab moves between rooms and agents."

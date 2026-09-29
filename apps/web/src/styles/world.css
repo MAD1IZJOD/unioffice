@@ -290,7 +290,9 @@
 
 .world-stage {
   position: relative;
-  height: clamp(440px, 70vh, 780px);
+  /* What is left of the first screen below where the stage starts (set by
+     the stage itself), within bounds; a share of the window until known. */
+  height: clamp(360px, calc(100dvh - var(--world-stage-top, 30vh) - var(--space-4)), 780px);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -885,7 +887,7 @@
   }
 
   .world-stage {
-    height: clamp(360px, 62vh, 620px);
+    height: clamp(320px, calc(100dvh - var(--world-stage-top, 38vh) - var(--space-3)), 620px);
   }
 
   .world-inspector {
