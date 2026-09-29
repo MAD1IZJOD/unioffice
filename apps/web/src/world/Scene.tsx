@@ -7,6 +7,7 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
   type SetStateAction,
 } from "react";
 
@@ -33,6 +34,62 @@ export type WorldSelection =
 const MIN_ZOOM_OF_FIT = 0.75;
 const MAX_ZOOM = 7;
 
+/** A horizontal band of the stage, in stage pixels from its top. */
+interface Band {
+  top: number;
+  height: number;
+}
+
+/** Stage pixels a band may miss at either edge and still count as all of it. */
+const BAND_SLACK = 4;
+/** Less than this much map in sight is not somewhere to aim; aim at all of it instead. */
+const MIN_BAND = 64;
+
+/**
+ * The part of the stage a person can actually see, found by asking the page
+ * what is on top down the middle of the stage: below a bar over its top,
+ * above a sheet over its bottom, inside the window. Nothing when it cannot
+ * be told - no layout to ask, as in a test - or when all of it is in sight.
+ */
+function visibleBand(element: HTMLElement): Band | undefined {
+  if (typeof document.elementFromPoint !== "function") return undefined;
+
+  const box = element.getBoundingClientRect();
+  if (box.width === 0 || box.height === 0) return undefined;
+
+  const x = Math.min(Math.max(box.left + box.width / 2, 0), window.innerWidth - 1);
+  const from = Math.max(box.top, 0);
+  const to = Math.min(box.bottom, window.innerHeight);
+
+  let best: Band | undefined;
+  let start: number | undefined;
+
+  for (let y = from; y <= to; y += BAND_SLACK) {
+    const seen = y < to && element.contains(document.elementFromPoint(x, y));
+
+    if (seen && start === undefined) start = y;
+    if (!seen && start !== undefined) {
+      if (!best || y - start > best.height) best = { top: start - box.top, height: y - start };
+      start = undefined;
+    }
+  }
+
+  if (!best || best.height < MIN_BAND) return undefined;
+  if (best.top <= BAND_SLACK && best.top + best.height >= box.height - BAND_SLACK) return undefined;
+  return best;
+}
+
+function sameBand(a: Band | undefined, b: Band | undefined): boolean {
+  return a === b || (a !== undefined && b !== undefined && a.top === b.top && a.height === b.height);
+}
+
+/** Where to bring things into view on a stage: the band of it in sight, or all of it. */
+function areaOf(size: { width: number; height: number }, band: Band | undefined) {
+  return band
+    ? { width: size.width, height: band.height, top: band.top }
+    : { width: size.width, height: size.height, top: 0 };
+}
+
 export function Scene({
   snapshot,
   plan,
@@ -42,6 +99,7 @@ export function Scene({
   onTravelled,
   focus,
   faded,
+  cover,
 }: {
   snapshot: WorldSnapshot;
   plan: FloorPlan;
@@ -53,9 +111,19 @@ export function Scene({
   focus?: { target: FocusTarget; nonce: number };
   /** Agents the viewer's filters leave out: drawn, but quieter. */
   faded?: ReadonlySet<string>;
+  /**
+   * Something that may lie over the stage - the details, which on a phone
+   * are a sheet across the bottom of the screen. What it covers is not
+   * somewhere to bring anything into view.
+   */
+  cover?: RefObject<HTMLElement | null>;
 }) {
   const stage = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  // The part of the stage that can actually be seen, when that is less than
+  // all of it: below whatever bar is over its top, above the sheet over its
+  // bottom, inside the window.
+  const [band, setBand] = useState<Band>();
   const [camera, setCamera] = useState<Camera>();
   // What the camera was last fitted to: the office's shape, and the stage it was on.
   const [fitted, setFitted] = useState<{ office: string; stage: { width: number; height: number } }>();
@@ -85,6 +153,28 @@ export function Scene({
     return () => observer.disconnect();
   }, []);
 
+  // What can be seen of the stage, worked out while something is held in
+  // view: when it is chosen, when the stage changes size, and when the sheet
+  // over it opens or grows as its details arrive.
+  const selected = selection !== undefined;
+  useLayoutEffect(() => {
+    const element = stage.current;
+    if (!element || !held) return;
+
+    const measure = () => {
+      const next = visibleBand(element);
+      setBand((current) => (sameBand(current, next) ? current : next));
+    };
+    measure();
+
+    const sheet = cover?.current;
+    if (!sheet || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(sheet);
+    return () => observer.disconnect();
+  }, [cover, held, selected, size]);
+
   const fit = useMemo<Camera | undefined>(() => {
     if (size.width === 0 || size.height === 0) return undefined;
 
@@ -112,22 +202,31 @@ export function Scene({
     };
   }, [fit, plan.height, plan.width, size.height, size.width]);
 
+  // Where on the stage to bring things into view: the part that can be seen.
+  const area = areaOf(size, band);
+  const areaKey = `${area.width}x${area.height}+${area.top}`;
+  const aim = (target: FocusTarget, current?: number) => {
+    if (!fit) return undefined;
+    const aimed = cameraOn(plan, target, area, { fit: fit.k, current, maxZoom: MAX_ZOOM });
+    return aimed && { ...aimed, y: aimed.y + area.top };
+  };
+
   // A new office - the first measurement, a room added - starts from the
   // opening view. A stage that only changed size - the details panel opening
-  // or closing beside it - keeps the view: whatever is held in view is
-  // brought into view again at the new size, and otherwise whatever was in
-  // the middle stays in the middle. Never on a mere refresh, which would
-  // throw away where someone had looked.
+  // or closing beside it - keeps the view: whatever was in the middle stays
+  // in the middle, unless something is held in view (below). Never on a mere
+  // refresh, which would throw away where someone had looked.
   const office = `${plan.width}x${plan.height}`;
+  let reset = false;
   if (opening && fit) {
     if (fitted?.office !== office) {
+      reset = true;
       setFitted({ office, stage: size });
       setHeld(undefined);
       setCamera(opening);
     } else if (fitted.stage.width !== size.width || fitted.stage.height !== size.height) {
       setFitted({ office, stage: size });
-      const again = held ? cameraOn(plan, held, size, { fit: fit.k, current: camera?.k, maxZoom: MAX_ZOOM }) : undefined;
-      setCamera(again ?? (camera ? keepCentre(camera, fitted.stage, size) : opening));
+      if (!held) setCamera(camera ? keepCentre(camera, fitted.stage, size) : opening);
     }
   }
 
@@ -190,15 +289,25 @@ export function Scene({
   // only once it is on the floor. Adjusted while rendering, like the fit
   // above, rather than from an effect. Panning and zooming carry on from
   // there as usual.
+  //
+  // What is held in view is aimed again whenever the part of the stage that
+  // can be seen changes - the stage resized, the sheet opened or grew over
+  // it - so it never ends up under the details or off the map.
   const [focused, setFocused] = useState<number>();
-  const inFocus = focus && fit && focus.nonce !== focused
-    ? cameraOn(plan, focus.target, size, { fit: fit.k, current: view?.k, maxZoom: MAX_ZOOM })
-    : undefined;
+  const [aimed, setAimed] = useState<string>();
+  const inFocus = focus && focus.nonce !== focused ? aim(focus.target, view?.k) : undefined;
 
   if (focus && inFocus) {
     setFocused(focus.nonce);
     setHeld(focus.target);
+    setAimed(areaKey);
     setCamera(inFocus);
+  } else if (held && !reset && aimed !== areaKey) {
+    const again = aim(held, camera?.k);
+    if (again) {
+      setAimed(areaKey);
+      setCamera(again);
+    }
   }
 
   /* Dragging and pinching ------------------------------------------------- */

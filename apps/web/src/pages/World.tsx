@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import {
@@ -63,6 +63,8 @@ export default function World() {
   const [focus, setFocus] = useState<{ target: FocusTarget; nonce: number }>();
   const [params, setParams] = useSearchParams();
   const [openedOn, setOpenedOn] = useState<string>();
+  // The details, which on a phone lie over the map as a sheet.
+  const details = useRef<HTMLElement>(null);
 
   /* Readings, and what changed between them -------------------------------- */
   //
@@ -328,6 +330,7 @@ export default function World() {
                 onTravelled={travelled}
                 focus={focus}
                 faded={faded}
+                cover={details}
               />
             ) : (
               <Roster
@@ -345,6 +348,7 @@ export default function World() {
                 onSelect={choose}
                 onClose={() => setSelection(undefined)}
                 onCenter={center}
+                ref={details}
               />
             )}
           </div>

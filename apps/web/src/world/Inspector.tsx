@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, type Ref } from "react";
 
 import { ArrowRight, Crosshair, X } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -30,12 +30,15 @@ export function Inspector({
   onSelect,
   onClose,
   onCenter,
+  ref,
 }: {
   snapshot: WorldSnapshot;
   selection: WorldSelection;
   onSelect: (selection: WorldSelection) => void;
   onClose: () => void;
   onCenter: (agentId: string) => void;
+  /** The panel itself, so the map can keep what it shows clear of it. */
+  ref?: Ref<HTMLElement>;
 }) {
   let body: React.ReactNode = null;
   let title = "";
@@ -67,7 +70,7 @@ export function Inspector({
   }
 
   return (
-    <aside className="world-inspector" aria-label={`Details: ${title}`}>
+    <aside ref={ref} className="world-inspector" aria-label={`Details: ${title}`}>
       <header className="world-inspector-head">
         <h3 className="world-inspector-title">{title}</h3>
         <button type="button" className="button-quiet world-inspector-close" onClick={onClose} aria-label="Close details">

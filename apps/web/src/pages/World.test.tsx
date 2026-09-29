@@ -513,6 +513,88 @@ describe("the world", () => {
     });
   });
 
+  describe("on a phone, with the details as a sheet over the map", () => {
+    // A 390×700 phone: the map's stage sits from y=120 to y=554, and the
+    // details, once open, are a sheet over the bottom of the screen from
+    // y=380 - which grows to y=330 when the agent's tools arrive.
+    const STAGE = { left: 18, top: 120, width: 354, height: 434 };
+    let sheetTop = 380;
+    let observers: Array<() => void> = [];
+
+    beforeEach(() => {
+      sheetTop = 380;
+      observers = [];
+      vi.stubGlobal("innerWidth", 390);
+      vi.stubGlobal("innerHeight", 700);
+      vi.stubGlobal("ResizeObserver", class {
+        constructor(callback: () => void) {
+          observers.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      });
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        configurable: true,
+        get(this: HTMLElement) { return this.classList.contains("world-stage") ? STAGE.width : 390; },
+      });
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+        configurable: true,
+        get(this: HTMLElement) { return this.classList.contains("world-stage") ? STAGE.height : 700; },
+      });
+
+      const real = HTMLElement.prototype.getBoundingClientRect;
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+        if (!this.classList.contains("world-stage")) return real.call(this);
+        return DOMRect.fromRect({ x: STAGE.left, y: STAGE.top, width: STAGE.width, height: STAGE.height });
+      });
+
+      // What is on top at a point: the sheet over the bottom while it is
+      // open, the map inside the stage, the page anywhere else.
+      document.elementFromPoint = (x: number, y: number) => {
+        const sheet = document.querySelector(".world-inspector");
+        if (sheet && y >= sheetTop) return sheet;
+        const inStage = x >= STAGE.left && x < STAGE.left + STAGE.width && y >= STAGE.top && y < STAGE.top + STAGE.height;
+        return inStage ? document.querySelector(".world-svg") : document.body;
+      };
+    });
+
+    afterEach(() => {
+      delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+      delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+    });
+
+    const drawnAt = (container: HTMLElement, point: { x: number; y: number }) => {
+      const [, x, y, k] = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/
+        .exec(container.querySelector(".world-svg > g")!.getAttribute("transform")!)!.map(Number);
+      return { x: x! + point.x * k!, y: y! + point.y * k! };
+    };
+
+    it("brings a chosen agent into view above the sheet, and again as the sheet grows", async () => {
+      stubNetwork((call) => (call.url.pathname.endsWith("/world") ? json(200, snapshot()) : json(404, { error: { message: "Not here." } })));
+      const { container } = page();
+      await waitFor(() => expect(container.querySelectorAll(".world-desk")).toHaveLength(3));
+
+      const plan = planFloor(snapshot().rooms.map((room) => ({ id: room.id, agentIds: room.agentIds })));
+      const tony = plan.seats.get("tony")!.at;
+      const desk = [...container.querySelectorAll(".world-desk")].find((entry) => entry.querySelector(".world-name")?.textContent === "Tony")!;
+
+      await userEvent.click(desk);
+      expect(screen.getByRole("complementary", { name: "Details: Tony" })).toBeDefined();
+
+      // In the middle of the map left above the sheet - stage y 0 to 260 -
+      // not the middle of the whole stage, which the sheet covers.
+      const seen = (sheet: number) => (sheet - STAGE.top) / 2;
+      expect(drawnAt(container, tony).x).toBeCloseTo(STAGE.width / 2);
+      expect(Math.abs(drawnAt(container, tony).y - seen(380))).toBeLessThanOrEqual(4);
+
+      // The tools arrive and the sheet grows: Tony moves up with it.
+      sheetTop = 330;
+      act(() => observers.forEach((callback) => callback()));
+      expect(Math.abs(drawnAt(container, tony).y - seen(330))).toBeLessThanOrEqual(4);
+    });
+  });
+
   describe("opened on one mission", () => {
     function openAt(path: string, data: WorldSnapshot = snapshot()) {
       const calls = stubNetwork((call) =>
