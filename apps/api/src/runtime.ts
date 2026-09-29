@@ -516,6 +516,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     reads: operationalReads,
     tasks: taskRepository,
     workspaces: workspaceRepository,
+    artifacts: artifactRepository,
   });
 
   // Standing instructions and their runs. A run is an ordinary mission on the
