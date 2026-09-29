@@ -31,6 +31,13 @@ export type Travel =
       /** Desk to desk, one way. The walk back retraces it. */
       points: Point[];
       delay: number;
+      /**
+       * When the walk before it ended, on the page's clock, for a walk that
+       * waited its turn. It sets off from then rather than from when it was
+       * first drawn, so a queue left while the page could not draw is not
+       * replayed late.
+       */
+      after?: number;
     }
   | {
       key: string;
@@ -85,4 +92,18 @@ export function underway(travels: Travel[]): Travel[] {
     walking.add(travel.agentId);
     return true;
   });
+}
+
+/**
+ * The trips left once one is over. A finished walk hands its end time to
+ * the same agent's next walk, which sets off from there. No other trip is
+ * touched, so nothing under way is restarted or cut short.
+ */
+export function finish(travels: Travel[], key: string, endedAt: number): Travel[] {
+  const done = travels.find((travel) => travel.key === key);
+  const rest = travels.filter((travel) => travel.key !== key);
+  if (done?.kind !== "walk") return rest;
+
+  const next = rest.findIndex((travel) => travel.kind === "walk" && travel.agentId === done.agentId);
+  return rest.map((travel, index) => (index === next ? { ...travel, after: endedAt } : travel));
 }

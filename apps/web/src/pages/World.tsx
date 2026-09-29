@@ -17,7 +17,7 @@ import { Inspector, StatePill } from "../world/Inspector";
 import { planFloor } from "../world/layout";
 import { handoffKey, momentsBetween, type Reading, type WorldMoment } from "../world/moments";
 import { Scene, type WorldSelection } from "../world/Scene";
-import { travelsOf, type Travel } from "../world/travels";
+import { finish, travelsOf, type Travel } from "../world/travels";
 
 import "../styles/world.css";
 
@@ -36,7 +36,6 @@ import "../styles/world.css";
  */
 
 const MAX_LOG = 20;
-const MAX_TRAVELS = 8;
 const MOTION_KEY = "unioffice.world.motion";
 
 interface LogEntry {
@@ -105,8 +104,10 @@ export default function World() {
       setLog((current) => [...moments.map((moment) => entryOf(moment, snapshot)).reverse(), ...current].slice(0, MAX_LOG));
       setAnnouncement(moments.map((moment) => momentLine(moment, snapshot)).join(" "));
 
+      // Never trimmed: every trip ends on its own clock, so dropping one
+      // would only cut a real handoff short mid-walk.
       if (motion) {
-        setTravels((current) => [...current, ...travelsOf(moments, plan)].slice(-MAX_TRAVELS));
+        setTravels((current) => [...current, ...travelsOf(moments, plan)]);
       }
 
       const followed = moments.map(momentAgentId).find((id) => id !== undefined);
@@ -114,8 +115,8 @@ export default function World() {
     }
   }
 
-  const travelled = useCallback((key: string) => {
-    setTravels((current) => current.filter((travel) => travel.key !== key));
+  const travelled = useCallback((key: string, endedAt: number) => {
+    setTravels((current) => finish(current, key, endedAt));
   }, []);
 
   const toggleMotion = () => {

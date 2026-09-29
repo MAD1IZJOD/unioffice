@@ -4,7 +4,7 @@ import type { WorldHandoff } from "../lib/api";
 
 import { pathBetween, planFloor } from "./layout";
 import type { WorldMoment } from "./moments";
-import { travelsOf, underway, walkersOf } from "./travels";
+import { finish, travelsOf, underway, walkersOf } from "./travels";
 
 const plan = planFloor([
   { id: "hall", agentIds: ["tyrion"] },
@@ -97,6 +97,29 @@ describe("what crosses the floor", () => {
 
     // Both walks are done: Mike is back at the desk.
     expect(walkersOf(rest.filter((trip) => trip.kind !== "walk")).size).toBe(0);
+  });
+
+  it("sends an agent's next walk off from where the last one ended, and touches nothing else", () => {
+    const toTony = { ...handoff, to: { id: "tony", name: "Tony" }, toStep: { number: 3, title: "Write it up" } };
+    const fromTony = { ...handoff, from: { id: "tony", name: "Tony" }, fromStep: { number: 4, title: "Test it" }, toStep: { number: 5, title: "Ship it" } };
+    const trips = travelsOf([
+      { kind: "handoff", key: "h:1>2", handoff },
+      { kind: "assigned", key: "a", missionId: "launch", missionName: "Launch", fromAgentId: "tyrion", toAgentIds: ["dana"] },
+      { kind: "handoff", key: "h:4>5", handoff: fromTony },
+      { kind: "handoff", key: "h:1>3", handoff: toTony },
+    ], plan);
+
+    const left = finish(trips, "h:1>2", 5_000);
+
+    expect(left.map((trip) => trip.key)).toEqual(["a:dana", "h:4>5", "h:1>3"]);
+    expect(left[2]).toEqual({ ...trips[3], after: 5_000 });
+    // Everything else is the very same trip, so nothing under way restarts.
+    expect(left[0]).toBe(trips[1]);
+    expect(left[1]).toBe(trips[2]);
+
+    // A slip, or a walk with nobody queued behind it, is simply over.
+    expect(finish(left, "a:dana", 6_000).map((trip) => trip.key)).toEqual(["h:4>5", "h:1>3"]);
+    expect(finish([trips[2]!], "h:4>5", 6_000)).toEqual([]);
   });
 
   it("makes no trip at all when nothing happened", () => {

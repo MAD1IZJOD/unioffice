@@ -51,7 +51,7 @@ export function Scene({
   selection?: WorldSelection;
   onSelect: (selection: WorldSelection) => void;
   travels: Travel[];
-  onTravelled: (key: string) => void;
+  onTravelled: (key: string, endedAt: number) => void;
   /** An agent to bring into view, and a nonce to do it again. */
   focus?: { agentId: string; nonce: number };
 }) {
@@ -606,7 +606,8 @@ function Traveller({
   travel: Travel;
   /** The agent walking, for a walk. */
   walker?: WorldAgent;
-  onDone: (key: string) => void;
+  /** Called once, with when the trip ended on the page's clock. */
+  onDone: (key: string, endedAt: number) => void;
 }) {
   const element = useRef<SVGGElement>(null);
   const strides = useRef<[SVGGElement | null, SVGGElement | null]>([null, null]);
@@ -620,7 +621,7 @@ function Traveller({
       ? clamp((length / WALK_SPEED) * 1000, WALK_MIN_MS, WALK_MAX_MS)
       : Math.max(700, (length / TRAVEL_SPEED) * 1000);
     const duration = walking ? leg * 2 + HANDOVER_MS : leg;
-    const begin = performance.now() + travel.delay;
+    const begin = (travel.kind === "walk" ? travel.after : undefined) ?? performance.now() + travel.delay;
     let frame = 0;
     let lastX = travel.points[0]?.x ?? 0;
     let facing = 1;
@@ -669,7 +670,7 @@ function Traveller({
       const elapsed = now - begin;
 
       if (elapsed >= duration) {
-        onDone(travel.key);
+        onDone(travel.key, begin + duration);
         return;
       }
 

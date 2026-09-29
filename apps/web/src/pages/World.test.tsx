@@ -375,18 +375,18 @@ describe("the world, watched as work changes hands", () => {
     othersMoved: boolean;
   }
 
+  function whereIs(walker: Element): NonNullable<Seen["walker"]> {
+    const [, x, y, facing] = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+) 1\)/.exec(walker.getAttribute("transform")!)!.map(Number);
+    const parcel = walker.querySelector(".world-parcel-sprite")!.parentElement!;
+    return { x: x! + (facing! * FIGURE_WIDTH) / 2, y: y!, carrying: parcel.getAttribute("display") !== "none" };
+  }
+
   function see(container: HTMLElement): Seen {
     const walkers = [...container.querySelectorAll<SVGGElement>('.world-traveller[data-walker="mike"]')];
     const shown = walkers.find((walker) => walker.getAttribute("opacity") === "1");
     const mikeSeated = seated(container, "Mike");
 
-    let walker: Seen["walker"];
-    if (shown) {
-      const [, x, y, facing] = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+) 1\)/.exec(shown.getAttribute("transform")!)!.map(Number);
-      const parcel = shown.querySelector(".world-parcel-sprite")!.parentElement!;
-      walker = { x: x! + (facing! * FIGURE_WIDTH) / 2, y: y!, carrying: parcel.getAttribute("display") !== "none" };
-    }
-
+    const walker = shown ? whereIs(shown) : undefined;
     const strangers = container.querySelectorAll('.world-traveller:not([data-walker="mike"])').length;
     const othersMoved = strangers > 0 || !["Tony", "Dana", "Tyrion"].every((name) => seated(container, name));
 
@@ -470,6 +470,97 @@ describe("the world, watched as work changes hands", () => {
 
     expect(frames.at(-1)!.mikeSeated).toBe(true);
     expect(frames.every((frame) => !frame.othersMoved)).toBe(true);
+  });
+
+  it("carries a walk under way to its end when a burst of other handoffs arrives", async () => {
+    const LATER = "2026-09-29T10:00:10.000Z";
+    const helpers = ["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"];
+    const crowd = (generatedAt: string, handoffs: WorldHandoff[]): WorldSnapshot => {
+      const base = office(generatedAt, handoffs);
+      return {
+        ...base,
+        rooms: base.rooms.map((room) => (room.id === "hall" ? { ...room, agentIds: [...room.agentIds, ...helpers] } : room)),
+        agents: [...base.agents, ...helpers.map((id, index) => agent(id, { seat: index + 2 }))],
+      };
+    };
+    const crowdSeats = planFloor(crowd(BEFORE, []).rooms.map((room) => ({ id: room.id, agentIds: room.agentIds }))).seats;
+    const toTony = passedTo("tony", "Tony", 2);
+    const burst = helpers.map((id, index): WorldHandoff => ({
+      ...passedTo("dana", "Dana", 30 + index),
+      from: { id, name: id.toUpperCase() },
+      fromStep: { number: 10 + index, title: `Part ${index + 1}` },
+    }));
+
+    const { container, deliver } = await watch(crowd(BEFORE, []));
+    await deliver(crowd(AFTER, [toTony]));
+    await waitFor(() => expect(container.querySelector('[data-walker="mike"]')).not.toBeNull());
+
+    // Mike sets off with the result and is part of the way to Tony's desk.
+    frameAt(0);
+    const lift = crowdSeats.get("mike")!.at.y - see(container).walker!.y;
+    for (let now = 20; now <= 600; now += 20) frameAt(now);
+    const midway = see(container).walker;
+    expect(midway?.carrying).toBe(true);
+
+    // Eight more results change hands at once: nine trips, none of them dropped.
+    await deliver(crowd(LATER, [toTony, ...burst]));
+    await waitFor(() => expect(container.querySelectorAll(".world-traveller")).toHaveLength(9));
+
+    // Mike has not snapped back, nor started over: same place, result still in hand.
+    expect(see(container).walker).toEqual(midway);
+    expect(seated(container, "Mike")).toBe(false);
+
+    // Each desk is looked up once: the map keeps drawing the same ones.
+    const everyone = [["mike", "Mike"], ...helpers.map((id) => [id, id.toUpperCase()])] as const;
+    const desks = everyone.map(([id, name]) => [id, deskOf(container, name)] as const);
+    const walking: Array<NonNullable<Seen["walker"]>> = [];
+
+    for (let now = 620; ; now += 20) {
+      if (now > 60_000) throw new Error("Still walking after a minute.");
+      frameAt(now);
+
+      const travellers = [...container.querySelectorAll(".world-traveller")];
+      if (travellers.length === 0) break;
+
+      // One of everybody, at every moment: in the chair or on the floor.
+      const figures = desks.map(([id, desk]) =>
+        travellers.filter((traveller) => traveller.getAttribute("data-walker") === id).length +
+        (desk.querySelector(".world-figure") ? 1 : 0));
+      expect(figures).toEqual(everyone.map(() => 1));
+
+      const mike = travellers.find((traveller) => traveller.getAttribute("data-walker") === "mike");
+      if (mike) walking.push(whereIs(mike));
+    }
+
+    // Mike's own walk ran its whole course: set down at Tony's desk, then back.
+    const setDown = walking.findIndex((frame, index) => index > 0 && walking[index - 1]!.carrying && !frame.carrying);
+    expect(distance(walking[setDown]!, crowdSeats.get("tony")!.at, lift)).toBeLessThan(0.5);
+    expect(distance(walking.at(-1)!, crowdSeats.get("mike")!.at, lift)).toBeLessThan(2);
+
+    for (const [, name] of everyone) expect(seated(container, name)).toBe(true);
+    // Nine walkers checked every frame is heavy under jsdom; a ceiling, not a wait.
+  }, 15_000);
+
+  it("does not replay queued walks late when the page could not draw for a while", async () => {
+    const { container, deliver } = await watch(office(BEFORE));
+
+    await deliver(office(AFTER, [passedTo("tony", "Tony", 2), passedTo("dana", "Dana", 3)]));
+    await waitFor(() => expect(container.querySelector('[data-walker="mike"]')).not.toBeNull());
+
+    frameAt(0);
+    expect(see(container).walker?.carrying).toBe(true);
+
+    // The tab was in the background for ten minutes, then looked at again.
+    // Both walks are long over: they finish now, one frame each, rather
+    // than the second one starting its whole walk ten minutes late.
+    const back = 10 * 60_000;
+    for (const now of [back, back + 20]) {
+      frameAt(now);
+      expect(see(container).mikes).toBe(1);
+    }
+
+    expect(container.querySelectorAll(".world-traveller")).toHaveLength(0);
+    expect(seated(container, "Mike")).toBe(true);
   });
 
   it("tells the handoff but walks nobody when the viewer asked for reduced motion", async () => {
