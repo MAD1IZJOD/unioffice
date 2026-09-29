@@ -1,11 +1,38 @@
 # World
 
 The workforce as an office. A second way into the same company - not a game,
-and not a second company. Every desk, lit screen and parcel is a fact the
-server reported, and everything that moves is a change the page watched
-happen.
+not a simulation and not a second company. Every desk, lit screen and parcel
+is a fact the server reported, and everything that moves is a change the page
+watched happen.
 
-Open it from **Workforce → World** (`/world`).
+Open it from **Workforce → World** (`/world`), or from a mission's room with
+**View in World** (`/world?mission=<id>`).
+
+## What it is, and what it is not
+
+World is a **view**. It projects what UNIOFFICE is already doing:
+
+```
+backend execution  ->  GET /world (one read-only projection)  ->  the page's renderer
+(tasks, missions,      apps/api/src/world-service.ts              apps/web/src/pages/World.tsx
+ agents, results)                                                  apps/web/src/world/*
+```
+
+It never adds to that. There are no simulated employees, conversations,
+tasks, progress or wandering, no timers that make anything happen, and no
+state the client makes up and presents as the server's. If the server has
+not recorded something, World does not show it - it shows less, and says so.
+
+Why this is a hard rule: people use World to see what their company is
+doing. An office that looks busy when it is not, or shows a person working
+who is not, is worse than no office - it teaches people to distrust every
+other surface that reads the same data. So anything decorative that moves is
+a defect, and the tests treat it as one.
+
+**Mission Control stays the operational surface.** World starts, approves,
+retries and changes nothing. Every action in it is a link into the page that
+owns it - the mission room, approvals, the agent's profile, the workspace -
+where the server checks the person's role again.
 
 ## What it shows
 
@@ -23,72 +50,211 @@ Open it from **Workforce → World** (`/world`).
 | Dashed route ending in a parcel | One step's finished result is another agent's input, still in play | the same handoffs the execution room reads |
 | Mission board | Live missions the viewer may open, with progress | work summaries and task rows |
 
-Movement happens only for:
+### Agent states
 
-- **a parcel crossing the corridor** - a handoff that appeared between two
-  readings the page watched;
-- **slips going out from the planner** - a plan handing out its steps.
+One function, `deskStateOf` (`apps/web/src/world/describe.ts`), turns the
+server's fields into the state the desk draws. It reads only `status`,
+`presence`, `workingElsewhere` and `planning`:
 
-Agents never leave their desks. There is no wandering, no conversation, no
-score. An idle agent sits still and an empty room stays empty.
+| State | When |
+| --- | --- |
+| unavailable | the agent is disabled, or its presence is unavailable |
+| paused | the agent is paused |
+| waiting | a step of theirs is held for a decision |
+| working / elsewhere | on a running step - in a mission the viewer can open, or one they cannot |
+| planning | the planner writing a plan |
+| available | none of the above |
 
-## How it stays honest
+There is no "blocked" agent state, because nothing records one: a blocker
+belongs to a mission's steps, and the mission brief is where it is shown.
 
-- **One read.** `GET /world` (`apps/api/src/world-service.ts`) is built only
-  from reads that already exist: the workforce read, work summaries, the task
-  rows of at most eight live missions, and the workspaces. It writes nothing,
-  starts nothing and calls no model.
-- **Movement is a difference between readings.** `apps/web/src/world/moments.ts`
-  compares two consecutive snapshots. They count as consecutive only when the
-  live channel carried both, on one unbroken connection, no more than 90
-  seconds apart by the server's clock. The first reading, one after a
-  reconnect and one after a gap are starting points: the office is drawn as
-  it is, and nothing is replayed.
-- **Deterministic places.** Rooms come in the server's order (hall first,
-  then workspaces by name) and seats in a stable order (whoever plans first,
-  then by name). `apps/web/src/world/layout.ts` is a pure function of that, so
-  every reload and every tab puts everyone in the same place. Paths between
-  desks go through doors and the corridor, never through walls.
-- **Nothing leaks.** What the viewer cannot open is left out rather than
-  greyed out: agents in workspaces they were not given, missions they cannot
-  see, and handoffs in those missions. An agent busy on such a mission shows
-  as working without saying on what.
-- **Clicks authorize nothing.** The details panel links into the pages that
-  own each action - the mission room, approvals, the agent's profile - where
-  the server checks the person's role again. The decision link is offered
-  only to roles that can decide.
+### Rooms
 
-## Transport and cost
+Rooms are the server's rooms, in the server's order: the hall first, then
+workspaces by name. A room's id is its workspace's id, so a mission's
+`workspaceId` names its room. Choosing a room - on the map, in the list, in
+the details or from search - opens what the snapshot says about it: who
+works there, what each of them is doing, and the live missions in it.
+
+## Movement
+
+Only two things ever move, and each tells a moment the page watched happen
+between two consecutive live readings (`apps/web/src/world/moments.ts`):
+
+- **An agent walking to another desk** - a handoff: one step's result became
+  another agent's step's input. The agent who finished gets up (their chair
+  stands empty), carries the result to the other desk, sets it down, and
+  walks back the same way. The walk is how the office shows a fact the task
+  rows record; it is not a meeting.
+- **Slips going out from the planner** - a plan handing out its steps.
+
+Nothing else produces a trip. An agent starting, finishing or being held
+changes their desk, never their place (`apps/web/src/world/travels.ts`).
+
+The rules a walk keeps:
+
+- **Two readings count as consecutive** only when the live channel carried
+  both, on one unbroken connection, no more than 90 seconds apart by the
+  server's clock. The first reading, one after a reconnect and one after a
+  gap are starting points: the office is drawn as it is, and nothing is
+  replayed.
+- **A handoff walks once** - when it first appears. The same handoff changing
+  state is news for the log, not a second trip.
+- **Both ends must be on this floor.** A handoff whose sender or receiver the
+  viewer cannot see draws no route, no parcel and no walk.
+- **One figure per agent.** A result that feeds several steps is carried to
+  each desk in turn: the agent makes one walk after another and their chair
+  stays empty until the last one is done.
+- **Nothing is cut short.** There is no limit on trips in flight; each ends
+  on its own clock. A walk that waited its turn starts from when the one
+  before it ended, so a tab that was in the background catches up in a frame
+  instead of replaying stale walks.
+- **Timed by the clock, not by frames.** Walks cover about 64 floor units a
+  second, each way taking between 1.2 and 4.5 seconds, with 0.6 seconds at the
+  other desk. The same moments on the same floor always make the same trips;
+  there is no randomness anywhere.
+
+### Reduced motion
+
+**Motion off** - the default under the system's reduced-motion setting -
+makes no trips at all and stops every animation. The same facts stay on the
+page: routes and parcels still show handoffs in play, each change is still
+written to *Seen while you watched*, and it is announced to screen readers.
+Turning motion off clears any trip in flight; the agent is simply at their
+desk.
+
+## Finding things
+
+**Search** (the field in the page's head, `apps/web/src/world/search.ts`)
+looks only through the snapshot already on screen - no index, no request -
+so it can never turn up something the map could not show. It finds:
+
+- agents, by name, and by the step and mission they are on right now (only
+  when the viewer may see that work);
+- rooms, by name;
+- live missions on the board, by name;
+- work that changed hands, by the stored result's name, or by the steps on
+  either side.
+
+Matching ignores case. A whole match ranks above one that starts the name,
+then one where a word starts with it, then one that merely contains it; a
+match on what someone is doing ranks below a match on a name. Each hit says
+what kind of thing it is. Picking one - click, or Enter for the first - does
+what clicking the thing would: selects it and brings it into view. Escape
+clears the search.
+
+**Filters** (`apps/web/src/world/filters.ts`) answer "show me only the
+agents doing X", using the states above in the workforce's own words:
+Working, Waiting on a decision, Writing a plan, Available, Paused or
+unavailable, and Last step failed (within the last day). Each shows how many
+agents are in it now. Several at once keep an agent in any of them; none
+keeps everyone. On the map a left-out desk is drawn quieter, never removed,
+so the office keeps its true shape; in the list it is left out and the page
+says how many are shown. Filters change what is shown, never anyone's state.
+Search is not narrowed by filters.
+
+## Details
+
+Choosing an agent shows their room, state, what they are doing and since
+when, their last outcome, the work changing hands with them, what they can
+do, and - read from their profile (`GET /workforce/:id`, the same read and
+the same access as the profile page) - their tools, with whether each is
+allowed, needs approval or is denied, and their skills, with whether each can
+be used. Names only: internal ids stay out of it, and the policy behind each
+tool is on the profile. A role that can decide is offered the pending
+decision.
+
+## Camera
+
+`apps/web/src/world/camera.ts` is a pure function from the floor plan, the
+stage and a request to a view:
+
+- one agent is centred, a little closer than the whole office and never
+  further out than the view already was;
+- a room, or a group of agents, is framed whole at a whole-number zoom so the
+  pixel art stays crisp;
+- **Fit** (or the `0` key) shows the whole office again.
+
+Choosing an agent or a room brings it into view on the map. Dragging, the
+arrow keys, the zoom buttons, the plus and minus keys and Ctrl + wheel carry
+on from wherever the camera lands.
+
+## A mission in focus
+
+`/world?mission=<id>` opens the office on one mission. The id in the address
+is never trusted on its own: it is only looked up in the snapshot the server
+already built for this viewer (`apps/web/src/world/missionFocus.ts`).
+
+- **In view:** the mission is chosen, the camera frames everyone on it - who
+  holds one of its steps, and the planner if it is writing the plan (its
+  room, while nobody holds a step) - and everyone else is drawn quieter. A
+  note says so, with **Show the whole office**. Nobody is moved, and nobody
+  off the mission gets any activity.
+- **Not in view:** a mission that does not exist, belongs to another company,
+  is not this viewer's to open or has finished are all treated the same -
+  the whole office, one plain note, and no further request. Nothing on the
+  page can tell them apart.
+
+## Security and data isolation
+
+- **One read.** `GET /world` is built only from reads that already exist:
+  the workforce read, work summaries, the task rows of at most eight live
+  missions, and the workspaces. It writes nothing, starts nothing and calls
+  no model.
+- **Narrowed on the server.** The read is scoped to the viewer's organization
+  and the workspaces they reach. What the viewer cannot open is left out
+  rather than greyed out: agents in workspaces they were not given, missions
+  they cannot see, and handoffs in those missions. An agent busy on such a
+  mission shows as working without saying on what.
+- **Nothing on the client widens it.** Search, filters and mission focus work
+  on that snapshot and nothing else. The details panel's one extra read is
+  the agent's profile, which the server narrows the same way.
+- **Clicks authorize nothing.** Every action is a link into the page that
+  owns it, where the server checks the person's role again. The decision link
+  is offered only to roles that can decide.
+
+## Performance
 
 - The page reads the shell's existing company-wide live channel, so watching
   the office opens no new connection. It re-reads `/world` when events
   arrive (coalesced) and every 30 seconds as a safety net.
-- The page, its art and its stylesheet are a lazy chunk (about 43 kB of
-  script, 12.5 kB gzipped, and 13 kB of CSS). Other pages pay only for the
-  navigation entry - under 1 kB.
+- The page, its art and its stylesheet are a lazy chunk - about 56 kB of
+  script (16 kB gzipped) and 15 kB of CSS (3.5 kB gzipped). Other pages pay
+  only for the navigation entry.
 - The characters are drawn from pixel maps in code
   (`apps/web/src/world/sprites.ts`); there are no image assets.
+- A walk writes its position straight onto its element each frame rather than
+  through React state, so a trip costs only its own element. Desks are
+  memoised. Nothing runs between trips: no timers, no animation frames.
+- Search runs in memory over the snapshot and shows at most eight hits.
 
-## Accessibility and motion
+## Accessibility
 
 - Every room, desk, route and mission card is a keyboard-focusable button
   with a spoken label that says the same thing the drawing shows.
-- The map pans with drag or the arrow keys and zooms with the buttons, the
-  plus and minus keys, or Ctrl + wheel (a trackpad pinch); a plain wheel
-  scrolls the page.
-- **List** shows the same office as rooms, people and handoffs in text.
-- **Motion off** (the default under the system's reduced-motion setting)
-  stops every animation; the same facts stay on the page, and each change is
-  still written to *Seen while you watched* and announced to screen readers.
+- **List** shows the same office as rooms, people and handoffs in text, and
+  honours the same filters and mission focus.
 - On phones and tablets the details open as a sheet at the bottom of the
   screen.
+
+## What holds it to this
+
+- `apps/web/src/pages/World.test.tsx` - the page over the real client, with
+  only the network (and, for movement, the live channel and the animation
+  clock) scripted. It includes the handoff walk frame by frame, fan-out,
+  bursts of handoffs, a hidden tab, reduced motion, and the guards: no reading
+  means no movement, non-handoff changes move nobody, an off-floor sender
+  draws no parcel, and no random number is ever drawn.
+- `apps/web/src/world/*.test.ts` - moments, travels, layout, camera, search,
+  filters and mission focus, as pure functions.
 
 ## Known gaps
 
 - There is no record of agents talking to each other, so the world never
   shows it. A handoff is one step's result becoming another's input.
-- A step's skill is not in the snapshot, so the details panel does not name
-  it; the mission room does.
-- The mission brief's rules check projects tool-level policies only. A policy
-  that refuses a whole step (for example by capability) is not foreseen by
-  the brief and is enforced when the step runs.
+- A step's skill is not in the snapshot, so the details name an agent's
+  skills but not which one a step is using; the mission room does.
+- Within one room a walk goes straight from desk to desk.
+- Two readings can only name a handoff once. If one vanished from a reading
+  and came back while its walk was still under way, the page would draw a
+  second walk under the same name.

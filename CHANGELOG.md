@@ -1,5 +1,22 @@
 # Changelog
 
+## The world: handoffs, finding things, and a mission in focus
+
+- A handoff the page watched happen is now told by the agent who finished
+  walking the result to the next desk and back, their chair empty meanwhile.
+  One result feeding several steps is carried to each in turn; no trip is
+  ever dropped, and a background tab catches up instead of replaying.
+- Search finds agents, rooms, live missions and delivered results in the
+  snapshot on screen; filters show only the agents in a state the server
+  records. Neither asks the server anything new.
+- Choosing a room or an agent brings it into view. The details show an
+  agent's tools and skills from their profile, under the same access.
+- `/world?mission=<id>` opens the office on one mission, and the mission room
+  links there. An id that is not in the viewer's snapshot is treated the same
+  whatever the reason, with no further request.
+- Tests now hold the world to moving only for real handoffs. See
+  [World](docs/product/world.md).
+
 ## The world, and one decision about starting a mission
 
 ### World
