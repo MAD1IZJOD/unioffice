@@ -34,6 +34,11 @@
 /* The page's head ------------------------------------------------------- */
 
 .world-head {
+  /* The entrance animation leaves a transform on the head, which makes it
+     a stacking context of its own: without a place above the map, the
+     search's hits would be painted over by the stage beneath them. */
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
