@@ -285,6 +285,12 @@ function HandoffPanel({
         <dd>{HANDOFF_LABEL[handoff.state]}</dd>
         <dt>Mission</dt>
         <dd>{handoff.missionName}</dd>
+        {handoff.delivered && (
+          <>
+            <dt>Result</dt>
+            <dd>{handoff.delivered.name}</dd>
+          </>
+        )}
       </dl>
 
       <p className="world-meta">
@@ -294,7 +300,18 @@ function HandoffPanel({
       </p>
 
       <div className="world-actions">
-        <Link to={`/missions/${handoff.missionId}`} className="button-primary">
+        {/* The result opens in the mission room's own sheet, which reads it
+            again under the viewer's access - nothing is shown from here. */}
+        {handoff.delivered && (
+          <Link
+            to={`/missions/${handoff.missionId}?artifact=${encodeURIComponent(handoff.delivered.artifactId)}`}
+            className="button-primary"
+          >
+            Open the result
+            <ArrowRight size={13} />
+          </Link>
+        )}
+        <Link to={`/missions/${handoff.missionId}`} className={handoff.delivered ? "button-ghost" : "button-primary"}>
           Open the mission record
           <ArrowRight size={13} />
         </Link>

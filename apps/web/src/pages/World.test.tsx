@@ -157,6 +157,28 @@ describe("the world", () => {
     expect(within(details).getByRole("link", { name: /Open the mission record/ }).getAttribute("href")).toBe("/missions/launch");
   });
 
+  it("names the result a handoff delivered and opens it in the mission's own room", async () => {
+    const data = snapshot();
+    data.handoffs[0]!.delivered = { artifactId: "result-1", name: "Market notes" };
+    open("owner", data);
+    await asList();
+    await userEvent.click(screen.getByRole("button", { name: "Mike → Tony" }));
+
+    const details = screen.getByRole("complementary", { name: "Details: Work changing hands" });
+    expect(within(details).getByText("Market notes")).toBeDefined();
+    expect(within(details).getByRole("link", { name: /Open the result/ }).getAttribute("href"))
+      .toBe("/missions/launch?artifact=result-1");
+  });
+
+  it("offers no result to open when the step stored none", async () => {
+    open();
+    await asList();
+    await userEvent.click(screen.getByRole("button", { name: "Mike → Tony" }));
+
+    const details = screen.getByRole("complementary", { name: "Details: Work changing hands" });
+    expect(within(details).queryByRole("link", { name: /Open the result/ })).toBeNull();
+  });
+
   it("replays nothing on opening: the office is shown as it is", async () => {
     open();
 
