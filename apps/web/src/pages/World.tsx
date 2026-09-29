@@ -13,10 +13,12 @@ import { useLiveResource } from "../lib/live";
 import { Connecting, Failure, Quiet } from "../components/primitives";
 
 import { agentLine, deskStateOf, HANDOFF_LABEL, momentAgentId, momentLine } from "../world/describe";
+import { Find } from "../world/Find";
 import { Inspector, StatePill } from "../world/Inspector";
 import { planFloor } from "../world/layout";
 import { handoffKey, momentsBetween, type Reading, type WorldMoment } from "../world/moments";
 import { Scene, type WorldSelection } from "../world/Scene";
+import type { SearchHit } from "../world/search";
 import { finish, travelsOf, type Travel } from "../world/travels";
 
 import "../styles/world.css";
@@ -136,6 +138,14 @@ export default function World() {
     setFocus((current) => ({ agentId, nonce: (current?.nonce ?? 0) + 1 }));
   };
 
+  // A hit is picked as though it had been clicked: selected, and on the map
+  // brought into view. The list stays the list.
+  const found = (hit: SearchHit) => {
+    setSelection(hit.select);
+    const agentId = hit.agentId;
+    if (agentId && view === "map") setFocus((current) => ({ agentId, nonce: (current?.nonce ?? 0) + 1 }));
+  };
+
   /* States of the page ------------------------------------------------------ */
   if (world.loading && !snapshot) {
     return (
@@ -189,6 +199,8 @@ export default function World() {
         </div>
 
         <div className="world-controls">
+          <Find snapshot={snapshot} onPick={found} />
+
           <LiveMark status={world.status} generatedAt={snapshot.generatedAt} />
 
           <div className="world-toggle" role="group" aria-label="View">

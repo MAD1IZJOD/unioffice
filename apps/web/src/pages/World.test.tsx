@@ -185,6 +185,46 @@ describe("the world", () => {
     expect(within(details).queryByRole("link", { name: /Open the result/ })).toBeNull();
   });
 
+  it("finds an agent by name, says what was found, and opens it when picked", async () => {
+    open();
+    const search = await screen.findByRole("searchbox", { name: "Find in the office" });
+
+    await userEvent.type(search, "TON");
+    const matches = screen.getByRole("list", { name: "Matches" });
+    const hit = within(matches).getByRole("button", { name: /^Agent Tony/ });
+
+    await userEvent.click(hit);
+    expect(screen.getByRole("complementary", { name: "Details: Tony" })).toBeDefined();
+    expect(screen.queryByRole("list", { name: "Matches" })).toBeNull();
+    expect((search as HTMLInputElement).value).toBe("");
+  });
+
+  it("finds the step someone is on and a result that changed hands, and picks the first with Enter", async () => {
+    const data = snapshot();
+    data.handoffs[0]!.delivered = { artifactId: "result-1", name: "Market notes" };
+    open("owner", data);
+    const search = await screen.findByRole("searchbox", { name: "Find in the office" });
+
+    await userEvent.type(search, "ship the");
+    expect(within(screen.getByRole("list", { name: "Matches" })).getAllByRole("button")[0]!.textContent).toMatch(/^Agent Tony/);
+
+    await userEvent.clear(search);
+    await userEvent.type(search, "market{Enter}");
+    expect(screen.getByRole("complementary", { name: "Details: Work changing hands" })).toBeDefined();
+  });
+
+  it("says plainly when nothing matches, and Escape clears the search", async () => {
+    open();
+    const search = await screen.findByRole("searchbox", { name: "Find in the office" });
+
+    await userEvent.type(search, "dana");
+    expect(screen.getByRole("status").textContent).toBe("Nothing in the office matches “dana”.");
+
+    await userEvent.keyboard("{Escape}");
+    expect((search as HTMLInputElement).value).toBe("");
+    expect(screen.queryByText(/Nothing in the office matches/)).toBeNull();
+  });
+
   it("replays nothing on opening: the office is shown as it is", async () => {
     open();
 

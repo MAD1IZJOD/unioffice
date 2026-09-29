@@ -107,6 +107,105 @@
   color: var(--ink-primary);
 }
 
+/* Finding something by name. The hits sit over the page, below the field. */
+
+.world-find {
+  position: relative;
+}
+
+.world-find-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--ink-faint);
+}
+
+.world-find-field:focus-within {
+  border-color: var(--blue-line);
+}
+
+.world-find-field input {
+  width: 17rem;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.world-find-field input::placeholder {
+  color: var(--ink-faint);
+}
+
+.world-find-hits {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: var(--z-overlay);
+  display: grid;
+  width: max(100%, 24rem);
+  max-width: calc(100vw - 2 * var(--space-4));
+  max-height: 22rem;
+  margin: 0;
+  padding: var(--space-1);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: var(--elev-2);
+  list-style: none;
+}
+
+.world-find-empty {
+  padding: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.world-find-hits button {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 2px var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.world-find-hits button:hover,
+.world-find-hits button:focus-visible {
+  background: var(--surface-4);
+}
+
+.world-find-kind {
+  grid-row: span 2;
+  color: var(--ink-faint);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  line-height: 1.9;
+}
+
+.world-find-label {
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+}
+
+.world-find-detail {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .world-notice {
   margin: 0;
   padding: var(--space-3) var(--space-4);
@@ -747,6 +846,11 @@
 @media (max-width: 560px) {
   .world-head {
     align-items: flex-start;
+  }
+
+  .world-find,
+  .world-find-field input {
+    width: 100%;
   }
 
   .world-log-list li {
