@@ -14,9 +14,10 @@ import { Connecting, Failure, Quiet } from "../components/primitives";
 
 import { agentLine, deskStateOf, HANDOFF_LABEL, momentAgentId, momentLine } from "../world/describe";
 import { Inspector, StatePill } from "../world/Inspector";
-import { planFloor, pathBetween } from "../world/layout";
+import { planFloor } from "../world/layout";
 import { handoffKey, momentsBetween, type Reading, type WorldMoment } from "../world/moments";
-import { Scene, type Travel, type WorldSelection } from "../world/Scene";
+import { Scene, type WorldSelection } from "../world/Scene";
+import { travelsOf, type Travel } from "../world/travels";
 
 import "../styles/world.css";
 
@@ -283,8 +284,9 @@ export default function World() {
           <li><b>Zz and a dimmed figure</b> — paused; faded — unavailable.</li>
           <li><b>A red flag by the desk</b> — the agent's last step could not finish, within the last day.</li>
           <li><b>A dashed route ending in a parcel</b> — one step's result became another agent's input, and that work is still in play.</li>
-          <li><b>A parcel or slips crossing the floor</b> — a handoff, or a plan giving out steps, that happened while you watched. Agents never leave their desks.</li>
-          <li>Nothing else moves. An idle agent sits still, and an empty room stays empty.</li>
+          <li><b>An agent walking to another desk</b> — a step of theirs finished and another agent&apos;s step is using the result, and it happened while you watched. They carry it over, set it down and walk back.</li>
+          <li><b>Slips crossing the floor</b> — a plan giving out its steps, while you watched.</li>
+          <li>Nothing else moves. Nobody wanders or visits for any other reason; an idle agent sits still, and an empty room stays empty.</li>
         </ul>
       </details>
     </div>
@@ -390,27 +392,6 @@ function entryOf(moment: WorldMoment, snapshot: WorldSnapshot): LogEntry {
         : { kind: "agent", id: moment.agentId };
 
   return { key: moment.key, line: momentLine(moment, snapshot), at: snapshot.generatedAt, select };
-}
-
-/** The trips a set of moments makes across the floor. Only handoffs and plans travel. */
-function travelsOf(moments: WorldMoment[], plan: ReturnType<typeof planFloor>): Travel[] {
-  const trips: Travel[] = [];
-
-  for (const moment of moments) {
-    if (moment.kind === "handoff") {
-      const points = pathBetween(plan, moment.handoff.from.id, moment.handoff.to.id);
-      if (points) trips.push({ key: moment.key, kind: "parcel", points, delay: 0 });
-    }
-
-    if (moment.kind === "assigned" && moment.fromAgentId) {
-      moment.toAgentIds.forEach((agentId, index) => {
-        const points = pathBetween(plan, moment.fromAgentId!, agentId);
-        if (points) trips.push({ key: `${moment.key}:${agentId}`, kind: "slip", points, delay: index * 220 });
-      });
-    }
-  }
-
-  return trips;
 }
 
 function initialMotion(): boolean {

@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { DISCIPLINE_ORDER } from "../lib/workforce";
 
-import { deskItemRuns, figureRuns, FIGURE_HEIGHT, FIGURE_WIDTH, lookOf, OUTFIT, stableHash } from "./sprites";
+import {
+  deskItemRuns,
+  figureRuns,
+  FIGURE_HEIGHT,
+  FIGURE_WIDTH,
+  lookOf,
+  OUTFIT,
+  stableHash,
+  STANDING_HEIGHT,
+  walkingRuns,
+} from "./sprites";
 
 const cells = (runs: ReturnType<typeof figureRuns>) =>
   new Set(runs.flatMap((run) => Array.from({ length: run.width }, (_, offset) => `${run.x + offset},${run.y}`)));
@@ -45,6 +55,27 @@ describe("the cast", () => {
       expect([outfit.shirt, outfit.shade, outfit.accent]).not.toContain("#3b82f6");
       expect([outfit.shirt, outfit.shade, outfit.accent]).not.toContain("#e5484d");
     }
+  });
+
+  it("stands up as the same person, with two strides that differ only below the waist", () => {
+    const look = lookOf("dana", "engineering");
+    const seated = cells(figureRuns(look));
+    const strides = [walkingRuns(look, 0), walkingRuns(look, 1)];
+
+    for (const runs of strides) {
+      const drawn = cells(runs);
+      expect([...seated].filter((cell) => !drawn.has(cell))).toEqual([]);
+
+      for (const run of runs) {
+        expect(run.x).toBeGreaterThanOrEqual(0);
+        expect(run.x + run.width).toBeLessThanOrEqual(FIGURE_WIDTH);
+        expect(run.y).toBeLessThan(STANDING_HEIGHT);
+      }
+    }
+
+    const upper = (runs: ReturnType<typeof figureRuns>) => runs.filter((run) => run.y < FIGURE_HEIGHT);
+    expect(upper(strides[0]!)).toEqual(upper(strides[1]!));
+    expect(strides[0]).not.toEqual(strides[1]);
   });
 
   it("tells two agents of one discipline apart by more than their name", () => {

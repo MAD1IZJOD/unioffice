@@ -11,12 +11,15 @@ import {
 
 import { Maximize, Minus, Plus } from "lucide-react";
 
-import type { WorldHandoff, WorldMission, WorldSnapshot } from "../lib/api";
+import type { WorldAgent, WorldHandoff, WorldMission, WorldSnapshot } from "../lib/api";
+import { disciplineOf } from "../lib/workforce";
 
 import { HANDOFF_LABEL, missionStatusWord, recentFailure } from "./describe";
-import { Desk } from "./Desk";
+import { Desk, Runs } from "./Desk";
 import { handoffKey } from "./moments";
 import { pathBetween, pathData, pathLength, TILE, type FloorPlan, type Point } from "./layout";
+import { FIGURE_WIDTH, lookOf, STANDING_HEIGHT, walkingRuns } from "./sprites";
+import { underway, walkersOf, type Travel } from "./travels";
 
 /** What is selected on the map. */
 export type WorldSelection =
@@ -24,19 +27,6 @@ export type WorldSelection =
   | { kind: "room"; id: string }
   | { kind: "handoff"; key: string }
   | { kind: "mission"; id: string };
-
-/**
- * Something crossing the office once: a parcel for work changing hands, or
- * a slip for a step a plan gave out. Always the telling of a moment the page
- * saw happen; never ambient.
- */
-export interface Travel {
-  key: string;
-  kind: "parcel" | "slip";
-  points: Point[];
-  /** Milliseconds before it sets off, so several slips leave one by one. */
-  delay: number;
-}
 
 interface Camera {
   x: number;
@@ -276,6 +266,8 @@ export function Scene({
   const roomsById = useMemo(() => new Map(snapshot.rooms.map((room) => [room.id, room])), [snapshot.rooms]);
 
   const open = snapshot.handoffs.filter((handoff) => handoff.state !== "delivered");
+  const away = useMemo(() => walkersOf(travels), [travels]);
+  const moving = useMemo(() => underway(travels), [travels]);
 
   return (
     <div
@@ -398,13 +390,19 @@ export function Scene({
                     roomName={roomsById.get(placed.id)?.name}
                     selected={selection?.kind === "agent" && selection.id === agent.id}
                     flagged={recentFailure(agent, snapshot.generatedAt)}
+                    away={away.has(agent.id)}
                     onSelect={(id) => onSelect({ kind: "agent", id })}
                   />
                 );
               }))}
 
-            {travels.map((travel) => (
-              <Traveller key={travel.key} travel={travel} onDone={onTravelled} />
+            {moving.map((travel) => (
+              <Traveller
+                key={travel.key}
+                travel={travel}
+                walker={travel.kind === "walk" ? agentsById.get(travel.agentId) : undefined}
+                onDone={onTravelled}
+              />
             ))}
           </g>
         )}
@@ -572,45 +570,112 @@ function Slip() {
   );
 }
 
-/** Pixels per second a parcel travels at: brisk, but readable. */
+/** Pixels per second a slip travels at: brisk, but readable. */
 const TRAVEL_SPEED = 140;
 
+/** Pixels per second an agent walks at, and the bounds of one leg of a walk. */
+const WALK_SPEED = 64;
+const WALK_MIN_MS = 1_200;
+const WALK_MAX_MS = 4_500;
+
+/** How long the walker stands at the other desk, setting the result down. */
+const HANDOVER_MS = 600;
+
+/** Art pixels per stride: the walking frames change with distance, not time. */
+const STRIDE = 3;
+
 /**
- * Carries a parcel or a slip along its path once, then says it is done.
+ * Carries a slip, or walks an agent, along a path once, then says it is done.
  *
  * Moved by writing a transform straight onto the element each frame rather
- * than through React state, so a parcel crossing the office costs nothing
+ * than through React state, so something crossing the office costs nothing
  * but its own element. Timed by the clock, not by frames: a tab that was in
  * the background finishes the trip the moment it is looked at again instead
  * of replaying it late.
+ *
+ * A walk goes out carrying the result, stands at the other desk for a
+ * moment while it is set down, and comes back empty-handed along the same
+ * way. The strides alternate with the distance covered, and the figure
+ * faces the way it is going.
  */
-function Traveller({ travel, onDone }: { travel: Travel; onDone: (key: string) => void }) {
+function Traveller({
+  travel,
+  walker,
+  onDone,
+}: {
+  travel: Travel;
+  /** The agent walking, for a walk. */
+  walker?: WorldAgent;
+  onDone: (key: string) => void;
+}) {
   const element = useRef<SVGGElement>(null);
+  const strides = useRef<[SVGGElement | null, SVGGElement | null]>([null, null]);
+  const carried = useRef<SVGGElement>(null);
+  const look = walker ? lookOf(walker.id, disciplineOf(walker)) : undefined;
 
   useEffect(() => {
     const length = pathLength(travel.points);
-    const duration = Math.max(700, (length / TRAVEL_SPEED) * 1000);
+    const walking = travel.kind === "walk";
+    const leg = walking
+      ? clamp((length / WALK_SPEED) * 1000, WALK_MIN_MS, WALK_MAX_MS)
+      : Math.max(700, (length / TRAVEL_SPEED) * 1000);
+    const duration = walking ? leg * 2 + HANDOVER_MS : leg;
     const begin = performance.now() + travel.delay;
     let frame = 0;
+    let lastX = travel.points[0]?.x ?? 0;
+    let facing = 1;
 
-    const place = (progress: number) => {
-      const at = pointAlong(travel.points, length * progress);
-      element.current?.setAttribute("transform", `translate(${at.x - 4} ${at.y - 4})`);
+    // Where along the path, how far walked in all, and whether the result
+    // is still in hand, for a moment into the trip.
+    const stateAt = (elapsed: number) => {
+      if (!walking) return { along: length * (elapsed / leg), walked: 0, carrying: false };
+      if (elapsed < leg) {
+        const along = length * (elapsed / leg);
+        return { along, walked: along, carrying: true };
+      }
+      if (elapsed < leg + HANDOVER_MS) return { along: length, walked: length, carrying: false };
+
+      const back = length * ((elapsed - leg - HANDOVER_MS) / leg);
+      return { along: length - back, walked: length + back, carrying: false };
+    };
+
+    const place = (elapsed: number) => {
+      const { along, walked, carrying } = stateAt(elapsed);
+      const at = pointAlong(travel.points, along);
+
+      if (!walking) {
+        element.current?.setAttribute("transform", `translate(${at.x - 4} ${at.y - 4})`);
+        return;
+      }
+
+      if (at.x < lastX - 0.01) facing = -1;
+      else if (at.x > lastX + 0.01) facing = 1;
+      lastX = at.x;
+
+      // Feet on the point walked, the figure centred over it.
+      const x = at.x - (facing * FIGURE_WIDTH) / 2;
+      element.current?.setAttribute("transform", `translate(${x} ${at.y + 4 - STANDING_HEIGHT}) scale(${facing} 1)`);
+
+      const standing = elapsed >= leg && elapsed < leg + HANDOVER_MS;
+      const stride = standing ? 1 : Math.floor(walked / STRIDE) % 2;
+      strides.current[0]?.setAttribute("display", stride === 0 ? "inline" : "none");
+      strides.current[1]?.setAttribute("display", stride === 1 ? "inline" : "none");
+      carried.current?.setAttribute("display", carrying ? "inline" : "none");
     };
 
     place(0);
 
     const tick = (now: number) => {
-      const progress = (now - begin) / duration;
+      const elapsed = now - begin;
 
-      if (progress >= 1) {
+      if (elapsed >= duration) {
         onDone(travel.key);
         return;
       }
 
-      if (progress >= 0) {
+      if (elapsed >= 0) {
         element.current?.setAttribute("opacity", "1");
-        place(progress);
+        place(elapsed);
       }
 
       frame = requestAnimationFrame(tick);
@@ -621,8 +686,31 @@ function Traveller({ travel, onDone }: { travel: Travel; onDone: (key: string) =
   }, [onDone, travel]);
 
   return (
-    <g ref={element} className={`world-traveller world-traveller-${travel.kind}`} opacity={0} aria-hidden="true">
-      {travel.kind === "parcel" ? <Parcel /> : <Slip />}
+    <g
+      ref={element}
+      className={`world-traveller world-traveller-${travel.kind}`}
+      opacity={0}
+      aria-hidden="true"
+      data-walker={walker?.id}
+    >
+      {travel.kind === "walk" ? (
+        look && (
+          <>
+            <g ref={(node) => { strides.current[0] = node; }}>
+              <Runs runs={walkingRuns(look, 0)} />
+            </g>
+            <g ref={(node) => { strides.current[1] = node; }} display="none">
+              <Runs runs={walkingRuns(look, 1)} />
+            </g>
+            {/* The result, held at the hip on the way out. */}
+            <g ref={carried} transform="translate(8 9) scale(0.75)">
+              <Parcel />
+            </g>
+          </>
+        )
+      ) : (
+        <Slip />
+      )}
     </g>
   );
 }

@@ -26,6 +26,7 @@ export const Desk = memo(function Desk({
   roomName,
   selected,
   flagged,
+  away = false,
   onSelect,
 }: {
   agent: WorldAgent;
@@ -34,6 +35,12 @@ export const Desk = memo(function Desk({
   selected: boolean;
   /** Their last step could not finish, recently. */
   flagged: boolean;
+  /**
+   * Up and carrying a result to another desk - a handoff the page watched
+   * happen. The chair stands empty until they are back; the desk still says
+   * what the server said about them.
+   */
+  away?: boolean;
   onSelect: (agentId: string) => void;
 }) {
   const state = deskStateOf(agent);
@@ -51,7 +58,7 @@ export const Desk = memo(function Desk({
 
   return (
     <g
-      className={`world-desk world-desk-${state}${selected ? " world-desk-selected" : ""}`}
+      className={`world-desk world-desk-${state}${selected ? " world-desk-selected" : ""}${away ? " world-desk-away" : ""}`}
       transform={`translate(${seat.cell.x} ${seat.cell.y})`}
       role="button"
       tabIndex={0}
@@ -68,9 +75,11 @@ export const Desk = memo(function Desk({
       <rect className="world-chair" x={11} y={8} width={18} height={12} />
       <rect className="world-chair-top" x={11} y={8} width={18} height={1} />
 
-      <g className="world-figure" transform="translate(14 7)">
-        <Runs runs={figure} />
-      </g>
+      {!away && (
+        <g className="world-figure" transform="translate(14 7)">
+          <Runs runs={figure} />
+        </g>
+      )}
 
       <Bubble state={state} />
 
@@ -90,8 +99,12 @@ export const Desk = memo(function Desk({
       <rect className="world-lamp" x={6} y={24} width={3} height={3} />
 
       {/* Hands on the desk; they type only while a step is running. */}
-      <rect className="world-hand world-hand-left" x={16} y={18} width={2} height={1} />
-      <rect className="world-hand world-hand-right" x={22} y={18} width={2} height={1} />
+      {!away && (
+        <>
+          <rect className="world-hand world-hand-left" x={16} y={18} width={2} height={1} />
+          <rect className="world-hand world-hand-right" x={22} y={18} width={2} height={1} />
+        </>
+      )}
 
       <g transform="translate(4 11)">
         <Runs runs={item} />

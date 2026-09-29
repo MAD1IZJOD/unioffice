@@ -237,6 +237,37 @@ export function figureRuns(look: Look): PixelRun[] {
   return runsOf(rows.map((row) => row.join("")), palette(look));
 }
 
+/**
+ * Below the seated figure, when an agent stands up to carry work across the
+ * floor: hips, then legs in one of two strides. Keys: k trousers, o outline
+ * and shoes. Two frames and nothing more - the step reads at this size, and
+ * a walk is only ever drawn while real work is being carried.
+ */
+const LEGS: readonly [readonly string[], readonly string[]] = [
+  [
+    "..okkkkkko..",
+    "..okko.okko.",
+    ".ooo....ooo.",
+  ],
+  [
+    "..okkkkkko..",
+    "...okkkko...",
+    "...oooooo...",
+  ],
+];
+
+export const STANDING_HEIGHT = FIGURE_HEIGHT + LEGS[0].length;
+
+/**
+ * The same figure on its feet, in one of the two walking frames. Everything
+ * above the waist is exactly the seated figure, so the agent who stands up
+ * is recognisably the one who was sitting.
+ */
+export function walkingRuns(look: Look, frame: 0 | 1): PixelRun[] {
+  const legs = runsOf([...LEGS[frame]], palette(look)).map((run) => ({ ...run, y: run.y + FIGURE_HEIGHT }));
+  return [...figureRuns(look), ...legs];
+}
+
 /** The item on their desk, as runs of colour. */
 export function deskItemRuns(look: Look): PixelRun[] {
   return runsOf(DESK_ITEMS[look.discipline], palette(look));
