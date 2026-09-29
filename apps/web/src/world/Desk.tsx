@@ -27,6 +27,7 @@ export const Desk = memo(function Desk({
   selected,
   flagged,
   away = false,
+  faded = false,
   onSelect,
 }: {
   agent: WorldAgent;
@@ -41,6 +42,8 @@ export const Desk = memo(function Desk({
    * what the server said about them.
    */
   away?: boolean;
+  /** Not among the states the viewer asked to see. Still drawn, just quieter. */
+  faded?: boolean;
   onSelect: (agentId: string) => void;
 }) {
   const state = deskStateOf(agent);
@@ -58,7 +61,7 @@ export const Desk = memo(function Desk({
 
   return (
     <g
-      className={`world-desk world-desk-${state}${selected ? " world-desk-selected" : ""}${away ? " world-desk-away" : ""}`}
+      className={`world-desk world-desk-${state}${selected ? " world-desk-selected" : ""}${away ? " world-desk-away" : ""}${faded ? " world-desk-faded" : ""}`}
       transform={`translate(${seat.cell.x} ${seat.cell.y})`}
       role="button"
       tabIndex={0}

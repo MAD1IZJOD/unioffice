@@ -45,6 +45,7 @@ export function Scene({
   travels,
   onTravelled,
   focus,
+  faded,
 }: {
   snapshot: WorldSnapshot;
   plan: FloorPlan;
@@ -54,6 +55,8 @@ export function Scene({
   onTravelled: (key: string, endedAt: number) => void;
   /** An agent to bring into view, and a nonce to do it again. */
   focus?: { agentId: string; nonce: number };
+  /** Agents the viewer's filters leave out: drawn, but quieter. */
+  faded?: ReadonlySet<string>;
 }) {
   const stage = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -391,6 +394,7 @@ export function Scene({
                     selected={selection?.kind === "agent" && selection.id === agent.id}
                     flagged={recentFailure(agent, snapshot.generatedAt)}
                     away={away.has(agent.id)}
+                    faded={faded?.has(agent.id)}
                     onSelect={(id) => onSelect({ kind: "agent", id })}
                   />
                 );

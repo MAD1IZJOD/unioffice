@@ -225,6 +225,66 @@ describe("the world", () => {
     expect(screen.queryByText(/Nothing in the office matches/)).toBeNull();
   });
 
+  it("shows only the agents in a state, with how many are in each", async () => {
+    open();
+    await asList();
+
+    await userEvent.click(screen.getByRole("button", { name: "Waiting on a decision 1" }));
+
+    expect(screen.getByRole("status").textContent).toBe("Showing 1 of 3 agents.");
+    expect(within(screen.getByRole("region", { name: "Engineering" })).getByRole("button", { name: "Tony" })).toBeDefined();
+    expect(within(screen.getByRole("region", { name: "Company hall" })).getByText("Nobody here is in that state.")).toBeDefined();
+  });
+
+  it("keeps agents in any of several states, and Everyone brings the rest back", async () => {
+    open();
+    await asList();
+
+    await userEvent.click(screen.getByRole("button", { name: "Working 1" }));
+    await userEvent.click(screen.getByRole("button", { name: "Waiting on a decision 1" }));
+
+    expect(screen.getByRole("status").textContent).toBe("Showing 2 of 3 agents.");
+    const hall = screen.getByRole("region", { name: "Company hall" });
+    expect(within(hall).getByRole("button", { name: "Mike" })).toBeDefined();
+    expect(within(hall).queryByRole("button", { name: "Tyrion" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Everyone 3" }));
+    expect(screen.getByRole("button", { name: "Everyone 3" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(hall).getByRole("button", { name: "Tyrion" })).toBeDefined();
+    expect(screen.queryByText(/Showing \d+ of/)).toBeNull();
+  });
+
+  it("says so when nobody is in a state, rather than showing an empty office as though it were real", async () => {
+    open();
+    await asList();
+
+    await userEvent.click(screen.getByRole("button", { name: "Writing a plan 0" }));
+
+    expect(screen.getByRole("status").textContent).toBe("Nobody is in that state right now.");
+    expect(within(screen.getByRole("region", { name: "Engineering" })).getByText("Nobody here is in that state.")).toBeDefined();
+  });
+
+  it("quietens the desks a filter leaves out on the map, and draws every one of them", async () => {
+    // The map is only drawn once its stage has a size, which jsdom never lays out.
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1200 });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 800 });
+
+    try {
+      stubNetwork((call) => (call.url.pathname.endsWith("/world") ? json(200, snapshot()) : json(404, { error: { message: "Not here." } })));
+      const { container } = page();
+      await waitFor(() => expect(container.querySelectorAll(".world-desk")).toHaveLength(3));
+
+      await userEvent.click(screen.getByRole("button", { name: "Waiting on a decision 1" }));
+
+      const faded = [...container.querySelectorAll(".world-desk")]
+        .map((desk) => [desk.querySelector(".world-name")?.textContent, desk.classList.contains("world-desk-faded")]);
+      expect(Object.fromEntries(faded)).toEqual({ Tyrion: true, Mike: true, Tony: false });
+    } finally {
+      delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+    }
+  });
+
   it("replays nothing on opening: the office is shown as it is", async () => {
     open();
 

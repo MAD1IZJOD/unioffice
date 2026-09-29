@@ -13,6 +13,8 @@ import { useLiveResource } from "../lib/live";
 import { Connecting, Failure, Quiet } from "../components/primitives";
 
 import { agentLine, deskStateOf, HANDOFF_LABEL, momentAgentId, momentLine } from "../world/describe";
+import { FilterBar } from "../world/FilterBar";
+import { filterCounts, keeps, type AgentFilter } from "../world/filters";
 import { Find } from "../world/Find";
 import { Inspector, StatePill } from "../world/Inspector";
 import { planFloor } from "../world/layout";
@@ -54,6 +56,7 @@ export default function World() {
   const [view, setView] = useState<"map" | "list">("map");
   const [motion, setMotion] = useState(initialMotion);
   const [follow, setFollow] = useState(false);
+  const [filters, setFilters] = useState<ReadonlySet<AgentFilter>>(() => new Set());
   const [selection, setSelection] = useState<WorldSelection>();
   const [focus, setFocus] = useState<{ agentId: string; nonce: number }>();
 
@@ -177,6 +180,15 @@ export default function World() {
   const waiting = count((agent) => agent.presence === "waiting");
   const inPlay = snapshot.handoffs.filter((handoff) => handoff.state !== "delivered");
 
+  // Who the filters leave out. Only what is shown changes; nobody's state does.
+  const faded = new Set(snapshot.agents.filter((agent) => !keeps(agent, filters, snapshot.generatedAt)).map((agent) => agent.id));
+  const toggleFilter = (filter: AgentFilter) =>
+    setFilters((current) => {
+      const next = new Set(current);
+      if (!next.delete(filter)) next.add(filter);
+      return next;
+    });
+
   return (
     // Only the head fades in. The entrance leaves a transform on whatever it
     // animates, and on the page itself that would pin the phone's details
@@ -232,31 +244,43 @@ export default function World() {
           action={canConfigure ? <Link to="/workforce" className="button-ghost">The workforce</Link> : undefined}
         />
       ) : (
-        <div className={`world-body${selection ? " world-body-inspecting" : ""}`}>
-          {view === "map" ? (
-            <Scene
-              snapshot={snapshot}
-              plan={plan}
-              selection={selection}
-              onSelect={setSelection}
-              travels={travels}
-              onTravelled={travelled}
-              focus={focus}
-            />
-          ) : (
-            <Roster snapshot={snapshot} onSelect={setSelection} />
-          )}
+        <>
+          <FilterBar
+            counts={filterCounts(snapshot)}
+            picked={filters}
+            total={snapshot.agents.length}
+            shown={snapshot.agents.length - faded.size}
+            onToggle={toggleFilter}
+            onClear={() => setFilters(new Set())}
+          />
 
-          {selection && (
-            <Inspector
-              snapshot={snapshot}
-              selection={selection}
-              onSelect={setSelection}
-              onClose={() => setSelection(undefined)}
-              onCenter={center}
-            />
-          )}
-        </div>
+          <div className={`world-body${selection ? " world-body-inspecting" : ""}`}>
+            {view === "map" ? (
+              <Scene
+                snapshot={snapshot}
+                plan={plan}
+                selection={selection}
+                onSelect={setSelection}
+                travels={travels}
+                onTravelled={travelled}
+                focus={focus}
+                faded={faded}
+              />
+            ) : (
+              <Roster snapshot={snapshot} onSelect={setSelection} faded={faded} />
+            )}
+
+            {selection && (
+              <Inspector
+                snapshot={snapshot}
+                selection={selection}
+                onSelect={setSelection}
+                onClose={() => setSelection(undefined)}
+                onCenter={center}
+              />
+            )}
+          </div>
+        </>
       )}
 
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -312,40 +336,55 @@ export default function World() {
  * here, so someone who does not use the map - or does not want motion - is
  * told everything it would have shown.
  */
-function Roster({ snapshot, onSelect }: { snapshot: WorldSnapshot; onSelect: (selection: WorldSelection) => void }) {
+function Roster({
+  snapshot,
+  onSelect,
+  faded,
+}: {
+  snapshot: WorldSnapshot;
+  onSelect: (selection: WorldSelection) => void;
+  /** Agents the viewer's filters leave out of the list. */
+  faded: ReadonlySet<string>;
+}) {
   const inPlay = snapshot.handoffs.filter((handoff) => handoff.state !== "delivered");
 
   return (
     <div className="world-roster">
-      {snapshot.rooms.map((room) => (
-        <section key={room.id} className="world-roster-room" aria-label={room.name}>
-          <h4 className="world-roster-name">
-            <button type="button" className="world-link-button" onClick={() => onSelect({ kind: "room", id: room.id })}>
-              {room.name}
-            </button>
-          </h4>
-          {room.agentIds.length === 0 ? (
-            <p className="world-meta">Nobody works here.</p>
-          ) : (
-            <ul className="world-list">
-              {room.agentIds.map((id) => {
-                const agent = snapshot.agents.find((entry) => entry.id === id);
-                if (!agent) return null;
+      {snapshot.rooms.map((room) => {
+        const shown = room.agentIds.filter((id) => !faded.has(id));
 
-                return (
-                  <li key={agent.id} className="world-roster-agent">
-                    <button type="button" className="world-link-button" onClick={() => onSelect({ kind: "agent", id: agent.id })}>
-                      {agent.name}
-                    </button>
-                    <StatePill state={deskStateOf(agent)} />
-                    <span className="world-meta">{agentLine(agent)}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-      ))}
+        return (
+          <section key={room.id} className="world-roster-room" aria-label={room.name}>
+            <h4 className="world-roster-name">
+              <button type="button" className="world-link-button" onClick={() => onSelect({ kind: "room", id: room.id })}>
+                {room.name}
+              </button>
+            </h4>
+            {room.agentIds.length === 0 ? (
+              <p className="world-meta">Nobody works here.</p>
+            ) : shown.length === 0 ? (
+              <p className="world-meta">Nobody here is in that state.</p>
+            ) : (
+              <ul className="world-list">
+                {shown.map((id) => {
+                  const agent = snapshot.agents.find((entry) => entry.id === id);
+                  if (!agent) return null;
+
+                  return (
+                    <li key={agent.id} className="world-roster-agent">
+                      <button type="button" className="world-link-button" onClick={() => onSelect({ kind: "agent", id: agent.id })}>
+                        {agent.name}
+                      </button>
+                      <StatePill state={deskStateOf(agent)} />
+                      <span className="world-meta">{agentLine(agent)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        );
+      })}
 
       <section className="world-roster-room" aria-label="Work changing hands">
         <h4 className="world-roster-name">Work changing hands</h4>
