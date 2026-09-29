@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { boxOf, cameraOn, type Camera } from "./camera";
+import { boxOf, cameraOn, keepCentre, type Camera } from "./camera";
 import { planFloor } from "./layout";
 
 const plan = planFloor([
@@ -79,6 +79,18 @@ describe("bringing something into view", () => {
 
   it("goes nowhere until the stage has a size", () => {
     expect(cameraOn(plan, { kind: "room", id: "hall" }, { width: 0, height: 0 }, options)).toBeUndefined();
+  });
+
+  it("keeps whatever was in the middle in the middle when the stage changes size", () => {
+    const camera = { x: -300, y: -120, k: 3 };
+    const wide = { width: 992, height: 520 };
+    const narrow = { width: 636, height: 520 };
+    const middle = { x: (496 + 300) / 3, y: (260 + 120) / 3 };
+
+    const kept = keepCentre(camera, wide, narrow);
+    expect(kept.k).toBe(3);
+    expect(onStage(kept, middle).x).toBeCloseTo(318);
+    expect(onStage(kept, middle).y).toBeCloseTo(260);
   });
 
   it("gives the same view for the same request, every time", () => {

@@ -7,6 +7,7 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type SetStateAction,
 } from "react";
 
 import { Maximize, Minus, Plus } from "lucide-react";
@@ -14,7 +15,7 @@ import { Maximize, Minus, Plus } from "lucide-react";
 import type { WorldAgent, WorldHandoff, WorldMission, WorldSnapshot } from "../lib/api";
 import { disciplineOf } from "../lib/workforce";
 
-import { cameraOn, type Camera, type FocusTarget } from "./camera";
+import { cameraOn, keepCentre, type Camera, type FocusTarget } from "./camera";
 import { HANDOFF_LABEL, missionStatusWord, recentFailure } from "./describe";
 import { Desk, Runs } from "./Desk";
 import { handoffKey } from "./moments";
@@ -56,7 +57,17 @@ export function Scene({
   const stage = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [camera, setCamera] = useState<Camera>();
-  const [fitted, setFitted] = useState("");
+  // What the camera was last fitted to: the office's shape, and the stage it was on.
+  const [fitted, setFitted] = useState<{ office: string; stage: { width: number; height: number } }>();
+  // What was brought into view and is still held there, until the viewer
+  // pans, zooms or fits away from it.
+  const [held, setHeld] = useState<FocusTarget>();
+
+  // A camera move the viewer made: it lets go of whatever was held in view.
+  const moveCamera = useCallback((next: SetStateAction<Camera | undefined>) => {
+    setHeld(undefined);
+    setCamera(next);
+  }, []);
 
   // The stage's size, kept current. The camera is in screen pixels, so it
   // has to know how big the screen is.
@@ -84,9 +95,7 @@ export function Scene({
   // The first view: a whole-number zoom of two or more, so every art pixel
   // is a crisp block and a figure is big enough to read. If the office does
   // not fit at that size it opens at its top-left corner, to be panned; the
-  // fit button shows all of it. Worked out again whenever the office changes
-  // shape - a room added, a stage resized - but not on every refresh, which
-  // would throw away where someone had panned to.
+  // fit button shows all of it.
   const opening = useMemo<Camera | undefined>(() => {
     if (!fit) return undefined;
 
@@ -103,10 +112,23 @@ export function Scene({
     };
   }, [fit, plan.height, plan.width, size.height, size.width]);
 
-  const shape = `${plan.width}x${plan.height}@${size.width}x${size.height}`;
-  if (opening && fitted !== shape) {
-    setFitted(shape);
-    setCamera(opening);
+  // A new office - the first measurement, a room added - starts from the
+  // opening view. A stage that only changed size - the details panel opening
+  // or closing beside it - keeps the view: whatever is held in view is
+  // brought into view again at the new size, and otherwise whatever was in
+  // the middle stays in the middle. Never on a mere refresh, which would
+  // throw away where someone had looked.
+  const office = `${plan.width}x${plan.height}`;
+  if (opening && fit) {
+    if (fitted?.office !== office) {
+      setFitted({ office, stage: size });
+      setHeld(undefined);
+      setCamera(opening);
+    } else if (fitted.stage.width !== size.width || fitted.stage.height !== size.height) {
+      setFitted({ office, stage: size });
+      const again = held ? cameraOn(plan, held, size, { fit: fit.k, current: camera?.k, maxZoom: MAX_ZOOM }) : undefined;
+      setCamera(again ?? (camera ? keepCentre(camera, fitted.stage, size) : opening));
+    }
   }
 
   const view = camera ?? opening;
@@ -123,14 +145,14 @@ export function Scene({
       const point = { x: size.width / 2, y: size.height / 2 };
       const ratio = k / base.k;
 
-      setCamera({ k, x: point.x - (point.x - base.x) * ratio, y: point.y - (point.y - base.y) * ratio });
+      moveCamera({ k, x: point.x - (point.x - base.x) * ratio, y: point.y - (point.y - base.y) * ratio });
     },
-    [camera, fit, opening, size.height, size.width],
+    [camera, fit, moveCamera, opening, size.height, size.width],
   );
 
   const zoomAt = useCallback(
     (factor: number, at?: { x: number; y: number }) => {
-      setCamera((current) => {
+      moveCamera((current) => {
         const base = current ?? fit;
         if (!base || !fit) return current;
 
@@ -141,7 +163,7 @@ export function Scene({
         return { k, x: point.x - (point.x - base.x) * ratio, y: point.y - (point.y - base.y) * ratio };
       });
     },
-    [fit, size.height, size.width],
+    [fit, moveCamera, size.height, size.width],
   );
 
   // Zooming with the wheel takes a held Ctrl or Cmd - which is also what a
@@ -175,6 +197,7 @@ export function Scene({
 
   if (focus && inFocus) {
     setFocused(focus.nonce);
+    setHeld(focus.target);
     setCamera(inFocus);
   }
 
@@ -221,7 +244,7 @@ export function Scene({
 
     if (!dragged.current) stage.current?.setPointerCapture(event.pointerId);
     dragged.current = true;
-    setCamera((current) => (current ? { ...current, x: current.x + dx, y: current.y + dy } : current));
+    moveCamera((current) => (current ? { ...current, x: current.x + dx, y: current.y + dy } : current));
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -243,7 +266,7 @@ export function Scene({
 
     const step = 48;
     const pan = (dx: number, dy: number) =>
-      setCamera((current) => (current ? { ...current, x: current.x + dx, y: current.y + dy } : current));
+      moveCamera((current) => (current ? { ...current, x: current.x + dx, y: current.y + dy } : current));
 
     switch (event.key) {
       case "ArrowLeft": pan(step, 0); break;
@@ -254,7 +277,7 @@ export function Scene({
       case "=": zoomStep(1); break;
       case "-":
       case "_": zoomStep(-1); break;
-      case "0": setCamera(fit); break;
+      case "0": moveCamera(fit); break;
       default: return;
     }
 
@@ -416,7 +439,7 @@ export function Scene({
         <button type="button" className="world-zoom-button" onClick={() => zoomStep(-1)} aria-label="Zoom out">
           <Minus size={14} />
         </button>
-        <button type="button" className="world-zoom-button" onClick={() => setCamera(fit)} aria-label="Fit the whole office">
+        <button type="button" className="world-zoom-button" onClick={() => moveCamera(fit)} aria-label="Fit the whole office">
           <Maximize size={13} />
         </button>
       </div>

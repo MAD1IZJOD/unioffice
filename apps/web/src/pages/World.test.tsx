@@ -370,6 +370,149 @@ describe("the world", () => {
     }
   });
 
+  describe("keeping what was chosen in view while the details panel opens and closes", () => {
+    const WIDE = 992;
+    const NARROW = 636;
+    const TALL = 520;
+    let observers: Array<() => void> = [];
+
+    // A stage jsdom can lay out the way the browser does: as wide as the page
+    // leaves it, narrower while the details panel sits beside it, and told
+    // when that changes, as ResizeObserver tells the real one.
+    beforeEach(() => {
+      observers = [];
+      vi.stubGlobal("ResizeObserver", class {
+        constructor(callback: () => void) {
+          observers.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      });
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        configurable: true,
+        get(this: HTMLElement) {
+          return this.classList.contains("world-stage") && document.querySelector(".world-inspector") ? NARROW : WIDE;
+        },
+      });
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => TALL });
+    });
+
+    afterEach(() => {
+      delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+    });
+
+    const resized = () => act(() => observers.forEach((callback) => callback()));
+    const plan = planFloor(snapshot().rooms.map((room) => ({ id: room.id, agentIds: room.agentIds })));
+
+    async function openMap() {
+      stubNetwork((call) => (call.url.pathname.endsWith("/world") ? json(200, snapshot()) : json(404, { error: { message: "Not here." } })));
+      const view = page();
+      await waitFor(() => expect(view.container.querySelectorAll(".world-desk")).toHaveLength(3));
+      return view.container;
+    }
+
+    /** Where a floor point is drawn on the stage, under the camera as it is now. */
+    const drawnAt = (container: HTMLElement, point: { x: number; y: number }) => {
+      const [, x, y, k] = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/
+        .exec(container.querySelector(".world-svg > g")!.getAttribute("transform")!)!.map(Number);
+      return { x: x! + point.x * k!, y: y! + point.y * k!, k: k! };
+    };
+
+    const expectCentred = (container: HTMLElement, point: { x: number; y: number }, width: number) => {
+      const at = drawnAt(container, point);
+      expect(at.x).toBeCloseTo(width / 2);
+      expect(at.y).toBeCloseTo(TALL / 2);
+    };
+
+    const tony = plan.seats.get("tony")!.at;
+    const engineering = plan.rooms.find((room) => room.id === "eng")!.rect;
+    const engineeringMiddle = { x: engineering.x + engineering.width / 2, y: engineering.y + engineering.height / 2 };
+    const deskOf = (container: HTMLElement, name: string) =>
+      [...container.querySelectorAll(".world-desk")].find((desk) => desk.querySelector(".world-name")?.textContent === name)!;
+
+    it("keeps an agent chosen on the map in the middle once the panel narrows the map", async () => {
+      const container = await openMap();
+
+      await userEvent.click(deskOf(container, "Tony"));
+      resized();
+
+      expect(screen.getByRole("complementary", { name: "Details: Tony" })).toBeDefined();
+      expectCentred(container, tony, NARROW);
+    });
+
+    it("keeps a room chosen on the map in the middle once the panel narrows the map", async () => {
+      const container = await openMap();
+
+      await userEvent.click(screen.getByRole("button", { name: "Engineering. 1 agent." }));
+      resized();
+
+      expect(screen.getByRole("complementary", { name: "Details: Engineering" })).toBeDefined();
+      expectCentred(container, engineeringMiddle, NARROW);
+    });
+
+    it("keeps a search pick in the middle once the panel narrows the map", async () => {
+      const container = await openMap();
+
+      await userEvent.type(screen.getByRole("searchbox", { name: "Find in the office" }), "tony{Enter}");
+      resized();
+
+      expect(screen.getByRole("complementary", { name: "Details: Tony" })).toBeDefined();
+      expectCentred(container, tony, NARROW);
+    });
+
+    it("keeps them in the middle when the panel closes and the map widens again", async () => {
+      const container = await openMap();
+
+      await userEvent.click(deskOf(container, "Tony"));
+      resized();
+      await userEvent.click(screen.getByRole("button", { name: "Close details" }));
+      resized();
+
+      expect(screen.queryByRole("complementary")).toBeNull();
+      expectCentred(container, tony, WIDE);
+    });
+
+    it("lets go once the viewer looks elsewhere: Fit shows the whole office and a later resize keeps it", async () => {
+      const container = await openMap();
+
+      await userEvent.click(deskOf(container, "Tony"));
+      resized();
+      await userEvent.click(screen.getByRole("button", { name: "Fit the whole office" }));
+
+      const fitted = Math.min(NARROW / plan.width, TALL / plan.height);
+      expect(drawnAt(container, tony).k).toBeCloseTo(fitted);
+
+      // Closing the panel does not pull the camera back onto Tony; the whole
+      // office stays where Fit put it, in the middle of the wider map.
+      await userEvent.click(screen.getByRole("button", { name: "Close details" }));
+      resized();
+
+      expect(drawnAt(container, tony).k).toBeCloseTo(fitted);
+      expectCentred(container, { x: plan.width / 2, y: plan.height / 2 }, WIDE);
+    });
+
+    it("lets go once the viewer pans: a resize keeps what they panned to, not what was chosen", async () => {
+      const container = await openMap();
+
+      await userEvent.click(deskOf(container, "Tony"));
+      resized();
+
+      const stage = container.querySelector<HTMLElement>(".world-stage")!;
+      stage.focus();
+      await userEvent.keyboard("{ArrowLeft}");
+      const panned = drawnAt(container, tony);
+      expect(panned.x).toBeCloseTo(NARROW / 2 + 48);
+
+      await userEvent.click(screen.getByRole("button", { name: "Close details" }));
+      resized();
+
+      // The same floor point is in the middle as before the resize: Tony
+      // stays 48 pixels right of it, where the viewer put him.
+      expect(drawnAt(container, tony).x).toBeCloseTo(WIDE / 2 + 48);
+    });
+  });
+
   describe("opened on one mission", () => {
     function openAt(path: string, data: WorldSnapshot = snapshot()) {
       const calls = stubNetwork((call) =>

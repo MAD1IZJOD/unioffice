@@ -34,6 +34,20 @@ const MARGIN = 24;
 /** Closer than the whole office by at least this much when bringing one agent into view. */
 const AGENT_ZOOM_OF_FIT = 1.6;
 
+/**
+ * The same view on a stage that changed size - the details panel opening
+ * beside it, say: whatever was in the middle of the stage stays in the
+ * middle, at the same zoom.
+ */
+export function keepCentre(
+  camera: Camera,
+  from: { width: number; height: number },
+  to: { width: number; height: number },
+): Camera {
+  const centre = { x: (from.width / 2 - camera.x) / camera.k, y: (from.height / 2 - camera.y) / camera.k };
+  return { k: camera.k, x: to.width / 2 - centre.x * camera.k, y: to.height / 2 - centre.y * camera.k };
+}
+
 /** The floor area a target covers, or nothing when none of it is on this floor. */
 export function boxOf(plan: FloorPlan, target: FocusTarget): Box | undefined {
   if (target.kind === "room") {
