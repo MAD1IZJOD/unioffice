@@ -285,6 +285,45 @@ describe("the world", () => {
     }
   });
 
+  it("shows an agent's tools and skills from their profile, by name, without internal ids", async () => {
+    const profile = {
+      governance: {
+        tools: [
+          { toolId: "tool-7f3a9c", name: "Deploy", access: "requires_approval", risk: "high", policyNames: [], explanation: "" },
+          { toolId: "tool-02bd41", name: "Read the repository", access: "allowed", risk: "low", policyNames: [], explanation: "" },
+        ],
+        policies: [],
+      },
+      skills: [{ slug: "release-notes", name: "Release notes", category: null, scope: null, approval: null, usable: true, note: "" }],
+    };
+    const calls = stubNetwork((call) =>
+      call.url.pathname.endsWith("/world") ? json(200, snapshot())
+        : call.url.pathname.endsWith("/workforce/tony") ? json(200, profile)
+          : json(404, { error: { message: "Not here." } }));
+    page();
+    await asList();
+    await userEvent.click(screen.getByRole("button", { name: "Tony" }));
+
+    const details = screen.getByRole("complementary", { name: "Details: Tony" });
+    const tools = await within(details).findByRole("list", { name: "Tools" });
+    expect(within(tools).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["DeployNeeds approval", "Read the repositoryAllowed"]);
+    expect(within(within(details).getByRole("list", { name: "Skills" })).getByText("Release notes")).toBeDefined();
+    expect(details.textContent).not.toMatch(/tool-7f3a9c|tool-02bd41|release-notes/);
+
+    // The same read as the profile page, for this agent only.
+    expect(calls.filter((call) => call.url.pathname.includes("/workforce/")).map((call) => call.url.pathname.split("/").at(-1))).toEqual(["tony"]);
+  });
+
+  it("says so when an agent's tools cannot be read, and shows nothing it does not know", async () => {
+    open();
+    await asList();
+    await userEvent.click(screen.getByRole("button", { name: "Tony" }));
+
+    const details = screen.getByRole("complementary", { name: "Details: Tony" });
+    expect(await within(details).findByText("Tools and skills could not be read. The profile has them.")).toBeDefined();
+    expect(within(details).queryByRole("list", { name: "Tools" })).toBeNull();
+  });
+
   it("replays nothing on opening: the office is shown as it is", async () => {
     open();
 

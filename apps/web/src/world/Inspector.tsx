@@ -1,8 +1,11 @@
+import { useCallback } from "react";
+
 import { ArrowRight, Crosshair, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { formatRelativeTime, type WorldAgent, type WorldSnapshot } from "../lib/api";
+import { fetchAgentProfile, formatRelativeTime, type AgentProfile, type WorldAgent, type WorldSnapshot } from "../lib/api";
 import { useCan } from "../lib/access";
+import { useResource } from "../lib/useResource";
 import { capabilityLabel, disciplineOf, profileOf } from "../lib/workforce";
 
 import { agentLine, DESK_LABEL, deskStateOf, HANDOFF_LABEL, lastLine, missionStatusWord, type DeskState } from "./describe";
@@ -143,6 +146,9 @@ function AgentPanel({
         </div>
       )}
 
+      {/* Keyed, so one agent's tools are never shown under another's name while the next are read. */}
+      <Equipment key={agent.id} agentId={agent.id} />
+
       <div className="world-actions">
         {state === "waiting" && missionId && canDecide && (
           <Link to="/approvals" className="button-primary">
@@ -173,6 +179,65 @@ function AgentPanel({
       {state === "waiting" && missionId && !canDecide && (
         <p className="world-meta">Your role can follow this decision but not make it.</p>
       )}
+    </>
+  );
+}
+
+const TOOL_ACCESS: Record<AgentProfile["governance"]["tools"][number]["access"], string> = {
+  allowed: "Allowed",
+  requires_approval: "Needs approval",
+  denied: "Denied",
+};
+
+/**
+ * What the agent may use and knows how to do.
+ *
+ * Read from the agent's profile - the same read, under the same access, as
+ * the profile page - because the world's snapshot carries only what the
+ * office draws. Names and plain answers only; the policy behind each tool
+ * is on the profile.
+ */
+function Equipment({ agentId }: { agentId: string }) {
+  const profile = useResource<AgentProfile>(useCallback(() => fetchAgentProfile(agentId), [agentId]));
+
+  if (profile.loading) return <p className="world-meta">Reading tools and skills…</p>;
+  if (!profile.data) return <p className="world-meta">Tools and skills could not be read. The profile has them.</p>;
+
+  const { governance, skills } = profile.data;
+
+  return (
+    <>
+      <div className="world-section">
+        <div className="world-section-label">Tools</div>
+        {governance.tools.length === 0 ? (
+          <p className="world-meta">Holds no tools, so it is never given a step that needs one.</p>
+        ) : (
+          <ul className="world-list" aria-label="Tools">
+            {governance.tools.map((tool) => (
+              <li key={tool.toolId}>
+                <span className="world-line">{tool.name}</span>
+                <span className="world-meta">{TOOL_ACCESS[tool.access]}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="world-section">
+        <div className="world-section-label">Skills</div>
+        {skills.length === 0 ? (
+          <p className="world-meta">Holds no skills.</p>
+        ) : (
+          <ul className="world-list" aria-label="Skills">
+            {skills.map((skill) => (
+              <li key={skill.slug}>
+                <span className="world-line">{skill.name}</span>
+                <span className="world-meta">{skill.usable ? "Can use" : "Cannot use yet"}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </>
   );
 }
