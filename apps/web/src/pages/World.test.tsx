@@ -835,6 +835,100 @@ describe("the world, watched as work changes hands", () => {
     expect(seated(container, "Mike")).toBe(true);
   });
 
+  /* Nothing is made up ------------------------------------------------------
+     The office moves only to tell a handoff the page watched happen. These
+     hold it to that: no reading, no movement; a change that is not a handoff,
+     no movement; a handoff whose sender is not on this floor, no parcel; and
+     never a random number anywhere on the way. */
+
+  /** Every desk's place on the floor, so a test can say none of them moved. */
+  const places = (container: HTMLElement) =>
+    Object.fromEntries([...container.querySelectorAll(".world-desk")].map((desk) => [
+      desk.querySelector(".world-name")?.textContent,
+      desk.getAttribute("transform"),
+    ]));
+
+  /** Steps the clock for a while, checking every frame that the office is still. */
+  function expectStill(container: HTMLElement, until: number) {
+    const before = places(container);
+
+    for (let now = 0; now <= until; now += 250) {
+      frameAt(now);
+      expect(container.querySelectorAll(".world-traveller")).toHaveLength(0);
+      expect(["Mike", "Tony", "Dana", "Tyrion"].every((name) => seated(container, name))).toBe(true);
+    }
+
+    expect(places(container)).toEqual(before);
+  }
+
+  it("moves nobody while no new reading arrives, however long it is watched", async () => {
+    const random = vi.spyOn(Math, "random");
+    const { container, deliver } = await watch(office(BEFORE));
+
+    expectStill(container, 60_000);
+
+    // A reading that says nothing new is not a reason to move either.
+    await deliver(office(AFTER));
+    expectStill(container, 10_000);
+
+    expect(random).not.toHaveBeenCalled();
+  });
+
+  it("moves nobody for changes that are not work changing hands", async () => {
+    const random = vi.spyOn(Math, "random");
+    const { container, deliver } = await watch(office(BEFORE));
+
+    // Mike finishes, Tony starts, Dana is held for a decision and Tyrion
+    // starts a plan - all real, all told in the log, none of them a trip.
+    const changed = office(AFTER);
+    changed.agents = changed.agents.map((entry) => {
+      switch (entry.id) {
+        case "mike":
+          return { ...entry, presence: "available", current: undefined, lastOutcome: { missionId: "launch", missionName: "Launch", taskTitle: "Research it", outcome: "completed", at: AFTER } };
+        case "tony":
+          return { ...entry, presence: "working", current: { missionId: "launch", missionName: "Launch", taskTitle: "Build it", state: "working" } };
+        case "dana":
+          return { ...entry, presence: "waiting", current: { missionId: "launch", missionName: "Launch", taskTitle: "Design it", state: "waiting" } };
+        case "tyrion":
+          return { ...entry, planning: { missionId: "next", missionName: "Next" } };
+        default:
+          return entry;
+      }
+    });
+
+    await deliver(changed);
+    const log = screen.getByRole("region", { name: "Seen while you watched" });
+    await waitFor(() => expect(within(log).getAllByRole("listitem").length).toBeGreaterThanOrEqual(4));
+
+    expectStill(container, 10_000);
+    expect(random).not.toHaveBeenCalled();
+  });
+
+  it("draws no parcel and walks nobody for a handoff from someone not on this floor", async () => {
+    const { container, deliver } = await watch(office(BEFORE));
+
+    const phantom = { ...passedTo("tony", "Tony", 2), from: { id: "someone-elsewhere", name: "Someone" } };
+    await deliver(office(AFTER, [phantom]));
+    await waitFor(() => expect(screen.getByText(/1 handoff in play/)).toBeDefined());
+
+    expect(container.querySelectorAll(".world-route")).toHaveLength(0);
+    expectStill(container, 10_000);
+  });
+
+  it("walks once for a new handoff, and never again for the same one changing state", async () => {
+    const LATER = "2026-09-29T10:00:10.000Z";
+    const { container, deliver } = await watch(office(BEFORE));
+
+    await deliver(office(AFTER, [passedTo("tony", "Tony", 2)]));
+    await waitFor(() => expect(container.querySelectorAll(".world-traveller")).toHaveLength(1));
+    watchFrames(container);
+
+    // The same handoff, now held for a decision: news for the log, not a second trip.
+    await deliver(office(LATER, [{ ...passedTo("tony", "Tony", 2), state: "waiting" }]));
+    await waitFor(() => expect(screen.getByText(/1 handoff in play/)).toBeDefined());
+    expectStill(container, 10_000);
+  });
+
   it("tells the handoff but walks nobody when the viewer asked for reduced motion", async () => {
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: query.includes("prefers-reduced-motion: reduce"),
