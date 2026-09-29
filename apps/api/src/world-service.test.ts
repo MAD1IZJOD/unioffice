@@ -4,6 +4,7 @@ import test from "node:test";
 import type {
   Agent,
   AgentId,
+  Artifact,
   OrganizationId,
   Task,
   TaskId,
@@ -95,7 +96,7 @@ function workspace(id: WorkspaceId, name: string, overrides: Partial<Workspace> 
   return { id, organizationId: orgA, name, slug: name.toLowerCase(), status: "active", createdAt: ago(1), updatedAt: ago(1), metadata: {}, ...overrides };
 }
 
-function world(input: { agents: Agent[]; works?: Work[]; tasks?: Task[]; workspaces?: Workspace[] }) {
+function world(input: { agents: Agent[]; works?: Work[]; tasks?: Task[]; workspaces?: Workspace[]; artifacts?: Artifact[] }) {
   const reads = new InMemoryOperationalReadRepository(input.works ?? [], input.tasks ?? []);
   const workspaces = input.workspaces ?? [
     workspace(engineering, "Engineering"),
@@ -129,7 +130,28 @@ function world(input: { agents: Agent[]; works?: Work[]; tasks?: Task[]; workspa
       },
     },
     workspaces: workspaceRepository,
+    artifacts: {
+      async findByWork(workId) {
+        return (input.artifacts ?? []).filter((entry) => entry.workId === workId);
+      },
+    },
   });
+}
+
+function artifact(id: string, workId: string, taskId: string, overrides: Partial<Artifact> = {}): Artifact {
+  return {
+    id: id as Artifact["id"],
+    organizationId: orgA,
+    workId: workId as WorkId,
+    taskId: taskId as TaskId,
+    name: `Result ${id}`,
+    type: "report",
+    version: 1,
+    createdAt: ago(10),
+    updatedAt: ago(10),
+    metadata: { content: "The confidential body of the result." },
+    ...overrides,
+  } as Artifact;
 }
 
 const roster = [
@@ -306,4 +328,34 @@ test("nothing an agent was told or produced leaves the server", async () => {
 
   const text = JSON.stringify(snapshot);
   assert.doesNotMatch(text, /secret prompt|confidential/);
+});
+
+test("a handoff names the result that changed hands, and nothing of what is in it", async () => {
+  const snapshot = await world({
+    agents: roster,
+    works: [work("launch", { metadata: { missionName: "Launch Product X" } })],
+    tasks: [
+      task("t1", "launch", "mike", "completed", { title: "Research the market", createdAt: ago(40) }),
+      task("t2", "launch", "tony", "running", { title: "Build it", dependsOn: ["t1" as TaskId], createdAt: ago(39) }),
+    ],
+    artifacts: [artifact("r1", "launch", "t1", { name: "Market research notes" })],
+  }).getWorld(orgA);
+
+  assert.deepEqual(snapshot.handoffs[0]?.delivered, { artifactId: "r1", name: "Market research notes" });
+  assert.doesNotMatch(JSON.stringify(snapshot), /confidential body/);
+});
+
+test("a result filed under another organization is never named, whatever mission it claims", async () => {
+  const snapshot = await world({
+    agents: roster,
+    works: [work("launch")],
+    tasks: [
+      task("t1", "launch", "mike", "completed", { createdAt: ago(40) }),
+      task("t2", "launch", "tony", "running", { dependsOn: ["t1" as TaskId], createdAt: ago(39) }),
+    ],
+    artifacts: [artifact("theirs", "launch", "t1", { organizationId: orgB, name: "Their private report" })],
+  }).getWorld(orgA);
+
+  assert.equal(snapshot.handoffs[0]?.delivered, undefined);
+  assert.doesNotMatch(JSON.stringify(snapshot), /Their private report/);
 });

@@ -1,6 +1,7 @@
 import type {
   Agent,
   AgentId,
+  Artifact,
   OrganizationId,
   Task,
   WorkId,
@@ -9,6 +10,7 @@ import type {
 } from "@unioffice/core";
 
 import type {
+  ArtifactRepository,
   OperationalReadRepository,
   TaskRepository,
   WorkSummary,
@@ -40,7 +42,8 @@ import type {
  *              order, so a reload puts everybody back where they were.
  *   missions   the live missions the caller may open, with who holds them.
  *   handoffs   where one agent's finished step has become another's input,
- *              read exactly as the execution room reads them.
+ *              read exactly as the execution room reads them, naming the
+ *              result that changed hands when the step stored one.
  *
  * It records nothing and decides nothing. Movement on the page is the page
  * comparing two of these; this says only where things stand.
@@ -116,6 +119,13 @@ export interface WorldDependencies {
   reads: Pick<OperationalReadRepository, "findWorkSummaries">;
   tasks: Pick<TaskRepository, "findByWork">;
   workspaces: Pick<WorkspaceRepository, "findByOrganization">;
+  /**
+   * The results the live missions' steps stored, so a handoff can name the
+   * one that changed hands and the page can open it. Only its id and name
+   * are passed on. Optional: without it a handoff says only which step fed
+   * which.
+   */
+  artifacts?: Pick<ArtifactRepository, "findByWork">;
   now?: () => Date;
 }
 
@@ -154,9 +164,12 @@ export class WorldService {
     const visibleLive = live.filter((work) => sees(work.workspaceId));
     const read = visibleLive.slice(0, LIVE_MISSIONS);
 
-    const stepsByMission = new Map<WorkId, Task[]>(
-      await Promise.all(read.map(async (work) => [work.id, await this.deps.tasks.findByWork(work.id)] as const)),
-    );
+    const [stepsByMission, resultsByMission] = await Promise.all([
+      Promise.all(read.map(async (work) => [work.id, await this.deps.tasks.findByWork(work.id)] as const))
+        .then((entries) => new Map<WorkId, Task[]>(entries)),
+      Promise.all(read.map(async (work) => [work.id, await this.resultsOf(organizationId, work.id)] as const))
+        .then((entries) => new Map<WorkId, Artifact[]>(entries)),
+    ]);
 
     const members = workforce.members;
     const visibleAgents = new Set(members.map((member) => member.id));
@@ -210,7 +223,7 @@ export class WorldService {
     });
 
     const handoffs: WorldHandoff[] = read.flatMap((work) =>
-      readHandoffs(stepsByMission.get(work.id) ?? [], names)
+      readHandoffs(stepsByMission.get(work.id) ?? [], names, resultsByMission.get(work.id) ?? [])
         // Both ends have to be someone the caller can see. The names come only
         // from the visible roster, so an unseen agent never gets this far -
         // this says so rather than relying on it.
@@ -225,6 +238,14 @@ export class WorldService {
       missions,
       handoffs,
     };
+  }
+
+  /** A mission's stored results, kept to this organization's own rows. */
+  private async resultsOf(organizationId: OrganizationId, workId: WorkId): Promise<Artifact[]> {
+    if (!this.deps.artifacts) return [];
+
+    const artifacts = await this.deps.artifacts.findByWork(workId);
+    return artifacts.filter((artifact) => artifact.organizationId === organizationId);
   }
 }
 
