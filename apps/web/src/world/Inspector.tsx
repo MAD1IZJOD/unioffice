@@ -280,6 +280,7 @@ function RoomPanel({
                   {agent.name}
                 </button>
                 <StatePill state={deskStateOf(agent)} />
+                <span className="world-meta">{agentLine(agent)}</span>
               </li>
             ))}
           </ul>

@@ -12,6 +12,7 @@ import { useLiveResource } from "../lib/live";
 
 import { Connecting, Failure, Quiet } from "../components/primitives";
 
+import type { FocusTarget } from "../world/camera";
 import { agentLine, deskStateOf, HANDOFF_LABEL, momentAgentId, momentLine } from "../world/describe";
 import { FilterBar } from "../world/FilterBar";
 import { filterCounts, keeps, type AgentFilter } from "../world/filters";
@@ -58,7 +59,7 @@ export default function World() {
   const [follow, setFollow] = useState(false);
   const [filters, setFilters] = useState<ReadonlySet<AgentFilter>>(() => new Set());
   const [selection, setSelection] = useState<WorldSelection>();
-  const [focus, setFocus] = useState<{ agentId: string; nonce: number }>();
+  const [focus, setFocus] = useState<{ target: FocusTarget; nonce: number }>();
 
   /* Readings, and what changed between them -------------------------------- */
   //
@@ -116,7 +117,7 @@ export default function World() {
       }
 
       const followed = moments.map(momentAgentId).find((id) => id !== undefined);
-      if (follow && followed) setFocus((current) => ({ agentId: followed, nonce: (current?.nonce ?? 0) + 1 }));
+      if (follow && followed) setFocus((current) => ({ target: { kind: "agent", id: followed }, nonce: (current?.nonce ?? 0) + 1 }));
     }
   }
 
@@ -136,17 +137,32 @@ export default function World() {
     }
   };
 
+  const bringIntoView = (target: FocusTarget) => setFocus((current) => ({ target, nonce: (current?.nonce ?? 0) + 1 }));
+
   const center = (agentId: string) => {
     setView("map");
-    setFocus((current) => ({ agentId, nonce: (current?.nonce ?? 0) + 1 }));
+    bringIntoView({ kind: "agent", id: agentId });
   };
 
-  // A hit is picked as though it had been clicked: selected, and on the map
-  // brought into view. The list stays the list.
+  // Choosing an agent or a room - on the map, in the details or in the log -
+  // brings it into view on the map. The list stays the list, and panning and
+  // zooming carry on from wherever the camera lands.
+  const choose = (next: WorldSelection) => {
+    setSelection(next);
+    const target = placeOf(next);
+    if (target && view === "map") bringIntoView(target);
+  };
+
+  // A hit is picked as though it had been clicked, and brings its agent or
+  // room into view when it is neither itself.
   const found = (hit: SearchHit) => {
     setSelection(hit.select);
-    const agentId = hit.agentId;
-    if (agentId && view === "map") setFocus((current) => ({ agentId, nonce: (current?.nonce ?? 0) + 1 }));
+    if (view !== "map") return;
+
+    const target: FocusTarget | undefined =
+      placeOf(hit.select) ??
+      (hit.agentId ? { kind: "agent", id: hit.agentId } : hit.roomId ? { kind: "room", id: hit.roomId } : undefined);
+    if (target) bringIntoView(target);
   };
 
   /* States of the page ------------------------------------------------------ */
@@ -260,7 +276,7 @@ export default function World() {
                 snapshot={snapshot}
                 plan={plan}
                 selection={selection}
-                onSelect={setSelection}
+                onSelect={choose}
                 travels={travels}
                 onTravelled={travelled}
                 focus={focus}
@@ -274,7 +290,7 @@ export default function World() {
               <Inspector
                 snapshot={snapshot}
                 selection={selection}
-                onSelect={setSelection}
+                onSelect={choose}
                 onClose={() => setSelection(undefined)}
                 onCenter={center}
               />
@@ -295,15 +311,15 @@ export default function World() {
           </p>
         ) : (
           <ol className="world-log-list">
-            {log.map((entry) => (
-              <li key={entry.key}>
-                <time className="world-meta" dateTime={entry.at}>{formatRelativeTime(entry.at)}</time>
-                {entry.select ? (
-                  <button type="button" className="world-link-button" onClick={() => setSelection(entry.select)}>
-                    {entry.line}
+            {log.map(({ key, at, line, select }) => (
+              <li key={key}>
+                <time className="world-meta" dateTime={at}>{formatRelativeTime(at)}</time>
+                {select ? (
+                  <button type="button" className="world-link-button" onClick={() => choose(select)}>
+                    {line}
                   </button>
                 ) : (
-                  <span>{entry.line}</span>
+                  <span>{line}</span>
                 )}
               </li>
             ))}
@@ -433,6 +449,13 @@ function LiveMark({ status, generatedAt }: { status: "connecting" | "live" | "of
       {status === "live" ? "Live" : status === "connecting" ? "Connecting" : "Not live"}
     </span>
   );
+}
+
+/** Where on the floor a selection is, when it is one place: an agent's desk or a room. */
+function placeOf(selection: WorldSelection): FocusTarget | undefined {
+  if (selection.kind === "agent") return { kind: "agent", id: selection.id };
+  if (selection.kind === "room") return { kind: "room", id: selection.id };
+  return undefined;
 }
 
 function entryOf(moment: WorldMoment, snapshot: WorldSnapshot): LogEntry {

@@ -324,6 +324,52 @@ describe("the world", () => {
     expect(within(details).queryByRole("list", { name: "Tools" })).toBeNull();
   });
 
+  it("brings a chosen room or agent into view, says what the room is doing, and Fit shows the whole office again", async () => {
+    // The map is only drawn once its stage has a size, which jsdom never lays out.
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1200 });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 800 });
+
+    try {
+      stubNetwork((call) => (call.url.pathname.endsWith("/world") ? json(200, snapshot()) : json(404, { error: { message: "Not here." } })));
+      const { container } = page();
+      await waitFor(() => expect(container.querySelectorAll(".world-desk")).toHaveLength(3));
+
+      const plan = planFloor(snapshot().rooms.map((room) => ({ id: room.id, agentIds: room.agentIds })));
+      const view = () => {
+        const [, x, y, k] = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/
+          .exec(container.querySelector(".world-svg > g")!.getAttribute("transform")!)!.map(Number);
+        return { x: x!, y: y!, k: k! };
+      };
+      const centreOf = (point: { x: number; y: number }) => {
+        const camera = view();
+        return { x: camera.x + point.x * camera.k, y: camera.y + point.y * camera.k };
+      };
+
+      // A room, chosen on the map: centred, and its people and what they are doing.
+      await userEvent.click(screen.getByRole("button", { name: "Engineering. 1 agent." }));
+      const room = plan.rooms.find((entry) => entry.id === "eng")!.rect;
+      const middle = centreOf({ x: room.x + room.width / 2, y: room.y + room.height / 2 });
+      expect(middle.x).toBeCloseTo(600);
+      expect(middle.y).toBeCloseTo(400);
+
+      const details = screen.getByRole("complementary", { name: "Details: Engineering" });
+      expect(within(details).getByText("Held on “Ship the build” until someone decides.")).toBeDefined();
+
+      // Someone in it, chosen from the details: now they are in the middle.
+      await userEvent.click(within(details).getByRole("button", { name: "Tony" }));
+      const tony = centreOf(plan.seats.get("tony")!.at);
+      expect(tony.x).toBeCloseTo(600);
+      expect(tony.y).toBeCloseTo(400);
+
+      // And back to the whole office.
+      await userEvent.click(screen.getByRole("button", { name: "Fit the whole office" }));
+      expect(view().k).toBeCloseTo(Math.min(1200 / plan.width, 800 / plan.height));
+    } finally {
+      delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+    }
+  });
+
   it("replays nothing on opening: the office is shown as it is", async () => {
     open();
 

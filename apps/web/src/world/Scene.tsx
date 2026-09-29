@@ -14,6 +14,7 @@ import { Maximize, Minus, Plus } from "lucide-react";
 import type { WorldAgent, WorldHandoff, WorldMission, WorldSnapshot } from "../lib/api";
 import { disciplineOf } from "../lib/workforce";
 
+import { cameraOn, type Camera, type FocusTarget } from "./camera";
 import { HANDOFF_LABEL, missionStatusWord, recentFailure } from "./describe";
 import { Desk, Runs } from "./Desk";
 import { handoffKey } from "./moments";
@@ -27,12 +28,6 @@ export type WorldSelection =
   | { kind: "room"; id: string }
   | { kind: "handoff"; key: string }
   | { kind: "mission"; id: string };
-
-interface Camera {
-  x: number;
-  y: number;
-  k: number;
-}
 
 const MIN_ZOOM_OF_FIT = 0.75;
 const MAX_ZOOM = 7;
@@ -53,8 +48,8 @@ export function Scene({
   onSelect: (selection: WorldSelection) => void;
   travels: Travel[];
   onTravelled: (key: string, endedAt: number) => void;
-  /** An agent to bring into view, and a nonce to do it again. */
-  focus?: { agentId: string; nonce: number };
+  /** Something to bring into view, and a nonce to do it again. */
+  focus?: { target: FocusTarget; nonce: number };
   /** Agents the viewer's filters leave out: drawn, but quieter. */
   faded?: ReadonlySet<string>;
 }) {
@@ -169,16 +164,18 @@ export function Scene({
     return () => element.removeEventListener("wheel", onWheel);
   }, [zoomAt]);
 
-  // Bringing an agent into view, once per request. Adjusted while
-  // rendering, like the fit above, rather than from an effect.
+  // Bringing an agent, a room or a group into view, once per request - and
+  // only once it is on the floor. Adjusted while rendering, like the fit
+  // above, rather than from an effect. Panning and zooming carry on from
+  // there as usual.
   const [focused, setFocused] = useState<number>();
-  const seatInFocus = focus ? plan.seats.get(focus.agentId) : undefined;
+  const inFocus = focus && fit && focus.nonce !== focused
+    ? cameraOn(plan, focus.target, size, { fit: fit.k, current: view?.k, maxZoom: MAX_ZOOM })
+    : undefined;
 
-  if (focus && fit && seatInFocus && focus.nonce !== focused) {
+  if (focus && inFocus) {
     setFocused(focus.nonce);
-
-    const k = Math.max(view?.k ?? fit.k, fit.k * 1.6);
-    setCamera({ k, x: size.width / 2 - seatInFocus.at.x * k, y: size.height / 2 - seatInFocus.at.y * k });
+    setCamera(inFocus);
   }
 
   /* Dragging and pinching ------------------------------------------------- */
