@@ -132,6 +132,22 @@ export default function Room() {
 
   const { reload } = room;
 
+  // A link can name one of this mission's results - the world does, from a
+  // handoff that delivered it - and the room opens it once, in the same sheet
+  // a click on its tile would. Only a result this read returned for this
+  // mission is opened; any other id is ignored.
+  const requestedArtifact = new URLSearchParams(location.search).get("artifact") ?? undefined;
+  const [openedFromLink, setOpenedFromLink] = useState<string>();
+
+  if (requestedArtifact && requestedArtifact !== openedFromLink && room.data) {
+    const linked = room.data.artifacts.find((artifact) => artifact.id === requestedArtifact);
+
+    if (linked) {
+      setOpenedFromLink(requestedArtifact);
+      setOpenArtifact(linked);
+    }
+  }
+
   const status = room.data?.work.status;
 
   if (status !== lastStatus) {

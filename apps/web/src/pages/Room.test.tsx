@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type {
   AgentSummary,
+  ArtifactItem,
   ExecutionNode,
   ExecutionRoom,
   OrganizationRole,
@@ -117,7 +118,7 @@ function room(overrides: Partial<ExecutionRoom> = {}): ExecutionRoom {
   };
 }
 
-function open(data: ExecutionRoom, role: OrganizationRole = "owner") {
+function open(data: ExecutionRoom, role: OrganizationRole = "owner", search = "") {
   stubNetwork((call) => {
     if (call.url.pathname.endsWith("/room")) return json(200, data);
     if (call.url.pathname.endsWith("/knowledge")) return json(200, { review: [], learned: [], used: [] });
@@ -136,7 +137,7 @@ function open(data: ExecutionRoom, role: OrganizationRole = "owner") {
       },
       { path: "*", element: <p>Somewhere else</p> },
     ],
-    { initialEntries: [`/missions/${MISSION}`] },
+    { initialEntries: [`/missions/${MISSION}${search}`] },
   );
 
   render(<RouterProvider router={router} />);
@@ -225,5 +226,32 @@ describe("the execution room's start", () => {
     open(room());
 
     expect(await screen.findByRole("button", { name: /Run it/ })).toBeDefined();
+  });
+});
+
+describe("a link to one of the mission's results", () => {
+  const result: ArtifactItem = {
+    id: "artifact-1",
+    workId: MISSION,
+    taskId: task.id,
+    createdByAgentId: harvey.id,
+    name: "Laptop cost breakdown",
+    type: "report",
+    version: 1,
+    createdAt: now,
+    metadata: { content: "Twelve laptops at 1,100 each." },
+  };
+
+  it("opens that result in the room's own sheet", async () => {
+    open(room({ artifacts: [result] }), "owner", `?artifact=${result.id}`);
+
+    expect(await screen.findByRole("dialog", { name: "Laptop cost breakdown" })).toBeDefined();
+  });
+
+  it("opens nothing for an id that is not one of this mission's results", async () => {
+    open(room({ artifacts: [result] }), "owner", "?artifact=someone-elses");
+
+    await screen.findAllByText("Decide whether the laptop upgrade is worth it.");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
