@@ -482,6 +482,18 @@ export default function Room() {
                 </button>
               )}
 
+            {/* A run that is allowed but will be limited, or will stop for a
+                person, says so beside the button - the same words the brief
+                uses - so nobody presses it expecting something else. */}
+            {canOperate &&
+              !opening &&
+              !executionJob &&
+              startability?.startable &&
+              (startability.state === "limited" || startability.state === "approval_required") &&
+              startability.message && (
+                <span className="operation-note">{startability.message}</span>
+              )}
+
             {/* Blocked is the one refusal the room has no other way of
                 showing: the rest are the mission's own status, which the
                 page already says. */}

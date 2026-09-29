@@ -1204,7 +1204,8 @@
 }
 
 /* Why the room will not offer to run a mission its brief says is blocked. */
-.operation-blocked {
+.operation-blocked,
+.operation-note {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: baseline;

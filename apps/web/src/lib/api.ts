@@ -720,13 +720,24 @@ export interface ExecutionRoom {
  * this person may start it is a separate question, answered by their role.
  */
 export type Startability =
-  | { startable: true; mode: "start" | "resume" }
+  | {
+      startable: true;
+      mode: "start" | "resume";
+      /**
+       * What the run will be like: ready, limited in what it can give back,
+       * or stopping at a step that waits for a person. Absent from an API
+       * that predates it.
+       */
+      state?: "ready" | "limited" | "approval_required";
+      message?: string;
+    }
   | {
       startable: false;
       reason:
         | "not_planned"
         | "planning"
         | "waiting_approval"
+        | "running"
         | "completed"
         | "cancelled"
         | "failed"

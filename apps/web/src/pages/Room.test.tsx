@@ -158,6 +158,47 @@ describe("the execution room's start", () => {
     expect(await screen.findByRole("button", { name: /Resume it/ })).toBeDefined();
   });
 
+  it("offers to run a mission that will stop for approval, and says where it stops", async () => {
+    open(room({
+      startability: {
+        startable: true,
+        mode: "start",
+        state: "approval_required",
+        message: "It will stop for approval at 1 step.",
+      },
+    }));
+
+    expect(await screen.findByRole("button", { name: /Run it/ })).toBeDefined();
+    expect(screen.getByText("It will stop for approval at 1 step.")).toBeDefined();
+  });
+
+  it("offers to run a limited mission, and says what may be missing", async () => {
+    open(room({
+      startability: {
+        startable: true,
+        mode: "start",
+        state: "limited",
+        message: "Mike is the closest match for step 1 but does not have market research.",
+      },
+    }));
+
+    expect(await screen.findByRole("button", { name: /Run it/ })).toBeDefined();
+    expect(screen.getByText("Mike is the closest match for step 1 but does not have market research.")).toBeDefined();
+  });
+
+  it("does not offer to run a mission that is already running", async () => {
+    open(room({
+      startability: {
+        startable: false,
+        reason: "running",
+        message: "This mission is already running, or waiting for a worker to pick it up.",
+      },
+    }));
+
+    await screen.findAllByText("Decide whether the laptop upgrade is worth it.");
+    expect(screen.queryByRole("button", { name: /Run it|Resume it/ })).toBeNull();
+  });
+
   it("does not offer to run a blocked mission, says why, and points at its brief", async () => {
     open(room({
       startability: {
