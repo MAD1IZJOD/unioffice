@@ -462,6 +462,8 @@ export function createExecutionRuntime(config: ApiConfig) {
     workspaces: workspaceRepository,
     policies: policyRepository,
     tools: toolRegistry,
+    // Asked only whether a mission already has a job, so it is not started twice.
+    jobs: executionJobRepository,
     // What the company already knew, read from the records planning wrote.
     // No retrieval runs here; the same store is only asked what it handed over.
     recalls: knowledgeLinkRepository,

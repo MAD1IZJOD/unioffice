@@ -19,6 +19,7 @@ import type {
 
 import type {
   AgentRepository,
+  ExecutionJobRepository,
   KnowledgeLinkRepository,
   KnowledgeSearchRepository,
   PolicyRepository,
@@ -336,6 +337,12 @@ export interface MissionIntelligenceDependencies {
   policies: Pick<PolicyRepository, "findEnforced">;
   tools: Pick<ToolRegistry, "get" | "list">;
   /**
+   * The queue, asked only whether this mission already has a job on it. A
+   * mission with one is running, or about to, and is not started again.
+   * Optional: without it the decision reads the mission's status alone.
+   */
+  jobs?: Pick<ExecutionJobRepository, "findActiveByWork">;
+  /**
    * The records of what planning was handed, and the knowledge itself.
    * Optional: a server without them reports that the company was not asked
    * rather than failing to read the mission at all.
@@ -357,11 +364,12 @@ export class MissionIntelligenceService {
    * this caller may see, by the route that read it.
    */
   async getIntelligence(access: Access, work: Work): Promise<MissionIntelligence> {
-    const [tasks, allAgents, allWorkspaces, enforced] = await Promise.all([
+    const [tasks, allAgents, allWorkspaces, enforced, running] = await Promise.all([
       this.deps.tasks.findByWork(work.id),
       this.deps.agents.findByOrganization(work.organizationId),
       this.deps.workspaces.findByOrganization(work.organizationId),
       this.deps.policies.findEnforced(work.organizationId),
+      this.hasActiveJob(work),
     ]);
 
     const knowledge = await this.knowledgeOf(access, work, tasks.length > 0);
@@ -378,7 +386,7 @@ export class MissionIntelligenceService {
     const stage = stageOf(work, tasks);
     const read = tasks.length > 0 ? this.planOf(tasks, agents) : null;
     const preflight = this.preflightOf(access, work, agents, enforced, stage, read);
-    const startability = startabilityOf(work, tasks.length, readinessOf(preflight));
+    const startability = startabilityOf(work, tasks.length, readinessOf(preflight), running);
 
     return {
       missionId: work.id,
@@ -386,7 +394,13 @@ export class MissionIntelligenceService {
       status: work.status,
       stage,
       brief: this.briefOf(work, tasks, agents, workspace, read?.view ?? null),
-      preflight: { ...preflight, canStart: preflight.canStart && startability.startable },
+      // Whether this person may start it is their role and the shared
+      // decision together; when the decision is what refuses, it says why.
+      preflight: {
+        ...preflight,
+        canStart: preflight.canStart && startability.startable,
+        startNote: preflight.startNote ?? (startability.startable ? undefined : startability.message),
+      },
       startability,
       plan: read?.view ?? null,
       knowledge,
@@ -403,8 +417,11 @@ export class MissionIntelligenceService {
    * been confirmed as one this caller may see.
    */
   async startability(access: Access, work: Work): Promise<Startability> {
-    const tasks = await this.deps.tasks.findByWork(work.id);
-    const lifecycle = lifecycleStartability(work, tasks.length);
+    const [tasks, running] = await Promise.all([
+      this.deps.tasks.findByWork(work.id),
+      this.hasActiveJob(work),
+    ]);
+    const lifecycle = lifecycleStartability(work, tasks.length, running);
 
     if (!lifecycle.startable) return lifecycle;
 
@@ -428,7 +445,11 @@ export class MissionIntelligenceService {
       this.planOf(tasks, agents),
     );
 
-    return startabilityOf(work, tasks.length, readinessOf(preflight));
+    return startabilityOf(work, tasks.length, readinessOf(preflight), running);
+  }
+
+  private async hasActiveJob(work: Work): Promise<boolean> {
+    return this.deps.jobs ? (await this.deps.jobs.findActiveByWork(work.id)) !== null : false;
   }
 
   /* ------------------------------------------------------------------------
@@ -1191,9 +1212,19 @@ function byPlanOrder(left: ExecutionNode, right: ExecutionNode): number {
 
 /** What the preflight found, as the start decision reads it. */
 function readinessOf(preflight: MissionPreflight): StartReadiness {
-  return preflight.state === "blocked"
-    ? { blocked: true, summary: preflight.detail }
-    : { blocked: false };
+  if (preflight.state === "blocked") return { blocked: true, summary: preflight.detail };
+
+  // Read from the checks rather than the overall state, which also counts a
+  // role that may not start as a warning - that is about the person asking,
+  // not about the mission.
+  const limit = preflight.checks.find((check) => check.id === "inputs" && check.state === "warning");
+  const approvals = preflight.checks.find((check) => check.id === "approvals");
+
+  return {
+    blocked: false,
+    limitation: limit?.summary,
+    approvals: approvals?.steps.length ?? 0,
+  };
 }
 
 /** A step that has run its course and will not run again on this plan. */

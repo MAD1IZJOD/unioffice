@@ -192,6 +192,8 @@ function service(options: {
   knowledgeFails?: boolean;
   /** No knowledge store at all, as an older deployment has. */
   withoutKnowledge?: boolean;
+  /** The mission already has a job on the queue. */
+  onTheQueue?: boolean;
 } = {}) {
   const knowledge = options.withoutKnowledge
     ? {}
@@ -216,6 +218,7 @@ function service(options: {
     workspaces: { async findByOrganization() { return options.workspaces ?? []; } },
     policies: { async findEnforced() { return options.policies ?? []; } },
     tools: createDefaultToolRegistry(),
+    jobs: { async findActiveByWork() { return options.onTheQueue ? { id: "job-1" } as never : null; } },
     ...knowledge,
     now: () => epoch,
   });
@@ -481,7 +484,12 @@ test("a capability the agent never had when it was chosen limits the answer and 
   assert.equal(result.preflight.state, "partially_ready");
   assert.match(checkOf(result, "inputs")!.summary, /Harvey is the closest match for step 1 but does not have market research/);
   assert.equal(result.preflight.canStart, true);
-  assert.deepEqual(result.startability, { startable: true, mode: "start" });
+  assert.deepEqual(result.startability, {
+    startable: true,
+    mode: "start",
+    state: "limited",
+    message: "Harvey is the closest match for step 1 but does not have market research.",
+  });
 });
 
 test("a capability lost after planning still blocks, beside one that was never there", async () => {
@@ -536,7 +544,12 @@ test("a step already finished does not hold up resuming the rest", async () => {
   }).getIntelligence(access(), work({ status: "executing" }));
 
   assert.equal(checkOf(result, "workforce")!.state, "ok");
-  assert.deepEqual(result.startability, { startable: true, mode: "resume" });
+  assert.deepEqual(result.startability, {
+    startable: true,
+    mode: "resume",
+    state: "ready",
+    message: "Ready to carry on from where it stopped.",
+  });
 });
 
 test("the start decision on its own is the one the brief shows", async () => {
@@ -549,6 +562,93 @@ test("the start decision on its own is the one the brief shows", async () => {
   for (const subject of cases) {
     const whole = await subject.getIntelligence(access(), work());
     assert.deepEqual(await subject.startability(access(), work()), whole.startability);
+  }
+});
+
+test("a mission whose every requirement is met can be started, and says it is ready", async () => {
+  const result = await service({ tasks: twoStepPlan }).getIntelligence(access(), work());
+
+  assert.equal(result.preflight.canStart, true);
+  assert.deepEqual(result.startability, { startable: true, mode: "start", state: "ready", message: "Ready to run." });
+});
+
+test("a step that waits for a person is a gate the run stops at, not a reason not to start", async () => {
+  const gated = [
+    task("task-1", "Work out the total cost", "agent-harvey"),
+    task("task-2", "Send the recommendation", "agent-harvey", {
+      dependsOn: ["task-1"],
+      approval: { required: true, reason: "It goes to the board." },
+    }),
+  ];
+
+  const result = await service({ tasks: gated }).getIntelligence(access(), work());
+
+  assert.equal(result.preflight.canStart, true);
+  assert.deepEqual(result.startability, {
+    startable: true,
+    mode: "start",
+    state: "approval_required",
+    message: "It will stop for approval at 1 step.",
+  });
+});
+
+test("a tool the agent is not authorized for refuses the start", async () => {
+  const decision = await service({ tasks: twoStepPlan, agents: [agent("Harvey", { toolIds: [] })] })
+    .startability(access(), work());
+
+  assert.equal(!decision.startable && decision.reason, "blocked");
+});
+
+test("an agent removed from the company, or working elsewhere, refuses the start", async () => {
+  const removed = await service({ tasks: twoStepPlan, agents: [] }).startability(access(), work());
+  assert.equal(!removed.startable && removed.reason, "blocked");
+
+  const elsewhere = await service({ tasks: twoStepPlan, agents: [agent("Harvey", { workspaceId: legal })] })
+    .startability(access(), work({ workspaceId: finance }));
+  assert.equal(!elsewhere.startable && elsewhere.reason, "blocked");
+});
+
+test("a mission with a job already on the queue is running: the brief offers no second start", async () => {
+  const subject = service({ tasks: twoStepPlan, onTheQueue: true });
+  const result = await subject.getIntelligence(access(), work());
+
+  assert.equal(!result.startability.startable && result.startability.reason, "running");
+  assert.equal(result.preflight.canStart, false);
+  assert.match(result.preflight.startNote ?? "", /already running/);
+  assert.deepEqual(await subject.startability(access(), work()), result.startability);
+});
+
+test("a cancelled or failed mission is not started again, and a failed one is pointed at retry", async () => {
+  const cancelled = await service({ tasks: twoStepPlan }).startability(access(), work({ status: "cancelled" }));
+  assert.equal(!cancelled.startable && cancelled.reason, "cancelled");
+
+  const failed = await service({ tasks: twoStepPlan }).startability(access(), work({ status: "failed" }));
+  assert.equal(!failed.startable && failed.reason, "failed");
+  assert.match(failed.message, /Retry/);
+});
+
+test("a mission with no steps is never read as ready", async () => {
+  const result = await service({ tasks: [] }).getIntelligence(access(), work());
+
+  assert.equal(result.preflight.canStart, false);
+  assert.equal(!result.startability.startable && result.startability.reason, "not_planned");
+});
+
+test("the brief, the start decision and a viewer's reading agree on one mission", async () => {
+  for (const subject of [
+    service({ tasks: twoStepPlan }),
+    service({ tasks: twoStepPlan, agents: [agent("Harvey", { status: "paused" })] }),
+    service({ tasks: twoStepPlan, onTheQueue: true }),
+  ]) {
+    const asOwner = await subject.getIntelligence(access(), work());
+    const asViewer = await subject.getIntelligence(access("viewer"), work());
+
+    // Whether the mission can start does not depend on who is asking...
+    assert.deepEqual(asViewer.startability, asOwner.startability);
+    assert.deepEqual(await subject.startability(access("viewer"), work()), asOwner.startability);
+    // ...whether this person may start it does.
+    assert.equal(asViewer.preflight.canStart, false);
+    assert.equal(asOwner.preflight.canStart, asOwner.startability.startable);
   }
 });
 

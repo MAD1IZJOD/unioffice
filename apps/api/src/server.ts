@@ -138,7 +138,7 @@ import type {
 } from "./mission-intelligence-service.js";
 
 import {
-  lifecycleStartability,
+  startabilityOf,
   type Startability,
 } from "./mission-startability.js";
 
@@ -961,10 +961,13 @@ export function buildApiServer(
     // same rows the worker is writing.
     //
     // A person pressing start is held to the same decision the brief and the
-    // room show: nothing finished, cancelled or failed is started again here,
-    // and nothing whose remaining steps are blocked. Approvals resuming a run,
+    // room show, worked out afresh here so a page read a minute ago cannot
+    // start what has changed since: nothing finished, cancelled or failed is
+    // started again here, nothing whose remaining steps are blocked, and
+    // nothing that already has a job on the queue. Approvals resuming a run,
     // retries and schedules queue their work themselves and are not gated
-    // here. A mission already on the queue answers with its job, as before.
+    // here. Two starts that race past this still share one job: the queue
+    // keeps one active job per mission.
     instance.post("/work/:id/execute", async (request) => {
       const work = await visibleWork(services, request);
       const access = await confirmAllowed(services, request, "missions.operate", work.workspaceId);
@@ -2652,7 +2655,7 @@ async function authorizedWorkId(
 /**
  * Whether this mission can be started now. The preflight's answer where the
  * server has it; a server built without mission intelligence still refuses
- * what the lifecycle alone rules out.
+ * what the lifecycle and the queue alone rule out.
  */
 async function startabilityFor(
   services: ApiServices,
@@ -2663,9 +2666,12 @@ async function startabilityFor(
     return services.missionIntelligenceService.startability(access, work);
   }
 
-  const tasks = await services.workQueryService.getTasks(work.id);
+  const [tasks, job] = await Promise.all([
+    services.workQueryService.getTasks(work.id),
+    services.executionQueueService.getActiveJob(work.id),
+  ]);
 
-  return lifecycleStartability(work, tasks.length);
+  return startabilityOf(work, tasks.length, { blocked: false }, job !== null);
 }
 
 async function visibleWork(

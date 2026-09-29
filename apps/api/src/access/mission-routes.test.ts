@@ -53,6 +53,8 @@ async function company(options: {
   cancelAfterRead?: WorkId;
   /** Missions with no steps yet. */
   unplanned?: WorkId[];
+  /** Missions that already have a job on the queue. */
+  onTheQueue?: WorkId[];
 } = {}) {
   const members = new InMemoryMembershipRepository();
   const identities = new Map<string, Identity>();
@@ -102,6 +104,7 @@ async function company(options: {
   // leak into the next.
   const missions = new Map([...works].map(([id, work]) => [id, { ...work }]));
   const unplanned = new Set<WorkId>(options.unplanned ?? []);
+  const onTheQueue = new Set<WorkId>(options.onTheQueue ?? []);
 
   // The real launcher over the same stubs, so a launch is observable in `done`.
   const launches: Array<Promise<void>> = [];
@@ -147,7 +150,10 @@ async function company(options: {
         return true;
       },
     },
-    executionQueueService: { async enqueueWork(id: WorkId) { done.push(`execute:${id}`); return { enqueued: true }; } },
+    executionQueueService: {
+      async enqueueWork(id: WorkId) { done.push(`execute:${id}`); return { enqueued: true }; },
+      async getActiveJob(id: WorkId) { return onTheQueue.has(id) ? { id: `job-${id}`, workId: id, status: "queued" } : null; },
+    },
     missionLauncher: options.withoutLauncher ? undefined : launcher,
     workRecoveryService: { async retryWork(id: WorkId) { done.push(`retry:${id}`); return { mode: "replan" }; } },
     workCancellationService: { async cancelWork(id: WorkId) { done.push(`cancel:${id}`); return { id }; } },
@@ -387,10 +393,46 @@ test("the room carries the same start decision the execute route acts on", async
   const { app, as, missions } = await company();
 
   const planned = await app.inject({ method: "GET", url: `/work/${companyWide}/room`, headers: as("owner") });
-  assert.deepEqual(planned.json().startability, { startable: true, mode: "start" });
+  assert.deepEqual(planned.json().startability, { startable: true, mode: "start", state: "ready", message: "Ready to run." });
 
   missions.set(companyWide, { ...missions.get(companyWide)!, status: "completed" });
   const finished = await app.inject({ method: "GET", url: `/work/${companyWide}/room`, headers: as("owner") });
   assert.equal(finished.json().startability.startable, false);
   assert.equal(finished.json().startability.reason, "completed");
+});
+
+test("run is refused for a mission that already has a job, so it is never run twice", async () => {
+  for (const status of ["queued", "executing"] as const) {
+    const { app, as, done, missions } = await company({ onTheQueue: [companyWide] });
+    missions.set(companyWide, { ...missions.get(companyWide)!, status });
+
+    const response = await app.inject({ method: "POST", url: `/work/${companyWide}/execute`, headers: as("owner"), payload: {} });
+
+    assert.equal(response.statusCode, 409, status);
+    assert.match(response.json().error.message, /already running/);
+    assert.deepEqual(done, [], `a ${status} mission with a job is not queued again`);
+  }
+});
+
+test("the start decision is made afresh on every press, not taken from the page", async () => {
+  const { app, as, done, missions } = await company();
+
+  const room = await app.inject({ method: "GET", url: `/work/${companyWide}/room`, headers: as("owner") });
+  assert.equal(room.json().startability.startable, true, "the room offered to run it");
+
+  // Someone cancels it after the room was read. The page still says "Run it".
+  missions.set(companyWide, { ...missions.get(companyWide)!, status: "cancelled" });
+
+  const stale = await app.inject({ method: "POST", url: `/work/${companyWide}/execute`, headers: as("owner"), payload: {} });
+  assert.equal(stale.statusCode, 409);
+  assert.deepEqual(done, []);
+});
+
+test("another organization's mission cannot be started, however its id was learned", async () => {
+  const { app, as, done } = await company();
+
+  const response = await app.inject({ method: "POST", url: `/work/${companyWide}/execute`, headers: as("outsider"), payload: {} });
+
+  assert.equal(response.statusCode, 404);
+  assert.deepEqual(done, []);
 });
