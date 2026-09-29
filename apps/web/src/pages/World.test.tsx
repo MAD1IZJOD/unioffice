@@ -1,13 +1,15 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { OrganizationRole, WorldAgent, WorldSnapshot } from "../lib/api";
+import type { OrganizationRole, WorldAgent, WorldHandoff, WorldSnapshot } from "../lib/api";
 import { AccessContext } from "../lib/access";
+import { planFloor } from "../world/layout";
+import { FIGURE_WIDTH } from "../world/sprites";
 
 import { signedInAs } from "../test/access";
-import { json, stubNetwork } from "../test/network";
+import { deferred, json, stubNetwork } from "../test/network";
 import World from "./World";
 
 /**
@@ -76,6 +78,11 @@ function open(role: OrganizationRole = "owner", data: WorldSnapshot = snapshot()
   const calls = stubNetwork((call) =>
     call.url.pathname.endsWith("/world") ? json(200, data) : json(404, { error: { message: "Not here." } }));
 
+  page(role);
+  return calls;
+}
+
+function page(role: OrganizationRole = "owner") {
   const router = createMemoryRouter(
     [
       {
@@ -91,8 +98,7 @@ function open(role: OrganizationRole = "owner", data: WorldSnapshot = snapshot()
     { initialEntries: ["/world"] },
   );
 
-  render(<RouterProvider router={router} />);
-  return calls;
+  return render(<RouterProvider router={router} />);
 }
 
 async function asList() {
@@ -189,5 +195,307 @@ describe("the world", () => {
     open("owner", { ...snapshot(), rooms: [{ id: "hall", kind: "hall", name: "Company hall", agentIds: [] }], agents: [], missions: [], handoffs: [] });
 
     expect(await screen.findByText("Nobody works here yet.")).toBeDefined();
+  });
+});
+
+/**
+ * Work changing hands, told on the map as it is watched.
+ *
+ * The page is connected over a scripted live channel and reads the office
+ * twice: before a step finished, and after. Nothing else is told to it. The
+ * animation clock is stepped by hand, frame by frame, and each frame is
+ * recorded as it would be seen - so these hold the office to what someone
+ * watching it sees, not to how the walk is worked out.
+ */
+describe("the world, watched as work changes hands", () => {
+  const BEFORE = "2026-09-29T10:00:00.000Z";
+  const AFTER = "2026-09-29T10:00:05.000Z";
+
+  function office(generatedAt: string, handoffs: WorldHandoff[] = []): WorldSnapshot {
+    const finished = handoffs.length > 0;
+
+    return {
+      organizationId: "org",
+      generatedAt,
+      rooms: [
+        { id: "hall", kind: "hall", name: "Company hall", agentIds: ["tyrion", "mike"] },
+        { id: "eng", kind: "workspace", name: "Engineering", slug: "engineering", agentIds: ["tony", "dana"] },
+      ],
+      agents: [
+        agent("tyrion", { type: "orchestrator", capabilities: ["planning"] }),
+        finished
+          ? agent("mike", {
+              seat: 1,
+              capabilities: ["research"],
+              lastOutcome: { missionId: "launch", missionName: "Launch", taskTitle: "Research it", outcome: "completed", at: AFTER },
+            })
+          : agent("mike", {
+              seat: 1,
+              capabilities: ["research"],
+              presence: "working",
+              current: { missionId: "launch", missionName: "Launch", taskTitle: "Research it", state: "working" },
+            }),
+        agent("tony", { roomId: "eng" }),
+        agent("dana", { roomId: "eng", seat: 1, capabilities: ["design"] }),
+      ],
+      missions: [{ id: "launch", name: "Launch", status: "executing", workspaceId: "eng", agentIds: ["mike", "tony", "dana"], steps: 3, completedSteps: finished ? 1 : 0 }],
+      handoffs,
+    };
+  }
+
+  const passedTo = (id: string, name: string, step: number): WorldHandoff => ({
+    from: { id: "mike", name: "Mike" },
+    to: { id, name },
+    fromStep: { number: 1, title: "Research it" },
+    toStep: { number: step, title: `Step ${step}` },
+    state: "in_progress",
+    sentence: `Mike finished “Research it”. ${name} is using it.`,
+    at: AFTER,
+    missionId: "launch",
+    missionName: "Launch",
+  });
+
+  // Where each desk is, from the same floor plan the page draws.
+  const seats = planFloor(office(BEFORE).rooms.map((room) => ({ id: room.id, agentIds: room.agentIds }))).seats;
+  const seatOf = (id: string) => seats.get(id)!.at;
+
+  /** The live channel, scripted: the page opens it, the test says what arrives. */
+  class ScriptedChannel extends EventTarget {
+    static readonly CLOSED = 2;
+    /** Every channel the page opened, across tests: a closing one lingers briefly and may be joined again. */
+    static opened: ScriptedChannel[] = [];
+
+    readonly url: string;
+    readyState = 1;
+    onerror: (() => void) | null = null;
+
+    constructor(url: string) {
+      super();
+      this.url = url;
+      ScriptedChannel.opened.push(this);
+    }
+
+    close() {
+      this.readyState = ScriptedChannel.CLOSED;
+    }
+  }
+
+  /* The animation clock, stepped by hand ------------------------------------ */
+  let clock = 0;
+  let scheduled = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+
+  function frameAt(now: number) {
+    act(() => {
+      clock = now;
+      const due = [...scheduled.values()];
+      scheduled = new Map();
+      due.forEach((callback) => callback(now));
+    });
+  }
+
+  beforeEach(() => {
+    clock = 0;
+    scheduled = new Map();
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      nextFrame += 1;
+      scheduled.set(nextFrame, callback);
+      return nextFrame;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => scheduled.delete(id));
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+
+    // The map is only drawn once its stage has a size, which jsdom never lays out.
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1200 });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 800 });
+  });
+
+  afterEach(() => {
+    delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+    delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+  });
+
+  /** Opens the office live on its first reading; `deliver` is the next one. */
+  async function watch(first: WorldSnapshot) {
+    let latest = first;
+    let reads = 0;
+    const firstRead = deferred<Response>();
+
+    stubNetwork((call) => {
+      if (call.url.pathname.endsWith("/stream/tickets")) return json(200, { ticket: "ticket", expiresAt: AFTER });
+      if (!call.url.pathname.endsWith("/world")) return json(404, { error: { message: "Not here." } });
+
+      reads += 1;
+      return reads === 1 ? firstRead.promise : json(200, latest);
+    });
+    vi.stubGlobal("EventSource", ScriptedChannel);
+
+    const { container } = page();
+
+    // The first reading is held until the channel is open, so it and the
+    // next are two live readings in a row - the only kind the page tells.
+    const channel = await waitFor(() => {
+      const open = ScriptedChannel.opened.at(-1);
+      if (!open || open.readyState === ScriptedChannel.CLOSED) throw new Error("The channel is not open yet.");
+      return open;
+    });
+    act(() => {
+      channel.dispatchEvent(new Event("open"));
+    });
+    await act(async () => firstRead.resolve(json(200, first)));
+    await waitFor(() => expect(container.querySelector(".world-desk")).not.toBeNull());
+
+    return {
+      container,
+      async deliver(next: WorldSnapshot) {
+        latest = next;
+        const before = reads;
+        act(() => {
+          channel.dispatchEvent(new MessageEvent("activity", { data: JSON.stringify({ events: [{ id: "event" }] }) }));
+        });
+        await waitFor(() => expect(reads).toBe(before + 1));
+      },
+    };
+  }
+
+  /* What someone watching sees, one frame at a time ------------------------- */
+  const deskOf = (container: HTMLElement, name: string) =>
+    [...container.querySelectorAll(".world-desk")].find((desk) => desk.querySelector(".world-name")?.textContent === name)!;
+
+  /** Whether their figure is drawn in the chair - what the eye sees, not a class. */
+  const seated = (container: HTMLElement, name: string) => deskOf(container, name).querySelector(".world-figure") !== null;
+
+  interface Seen {
+    /** Every figure of Mike on the map: at the desk and on the floor. */
+    mikes: number;
+    mikeSeated: boolean;
+    /** Where the walking Mike's feet are, and whether the result is in hand. */
+    walker?: { x: number; y: number; carrying: boolean };
+    /** Anyone else on the floor, or out of their chair. */
+    othersMoved: boolean;
+  }
+
+  function see(container: HTMLElement): Seen {
+    const walkers = [...container.querySelectorAll<SVGGElement>('.world-traveller[data-walker="mike"]')];
+    const shown = walkers.find((walker) => walker.getAttribute("opacity") === "1");
+    const mikeSeated = seated(container, "Mike");
+
+    let walker: Seen["walker"];
+    if (shown) {
+      const [, x, y, facing] = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+) 1\)/.exec(shown.getAttribute("transform")!)!.map(Number);
+      const parcel = shown.querySelector(".world-parcel-sprite")!.parentElement!;
+      walker = { x: x! + (facing! * FIGURE_WIDTH) / 2, y: y!, carrying: parcel.getAttribute("display") !== "none" };
+    }
+
+    const strangers = container.querySelectorAll('.world-traveller:not([data-walker="mike"])').length;
+    const othersMoved = strangers > 0 || !["Tony", "Dana", "Tyrion"].every((name) => seated(container, name));
+
+    return { mikes: walkers.length + (mikeSeated ? 1 : 0), mikeSeated, walker, othersMoved };
+  }
+
+  /** Steps the clock a fiftieth of a second at a time until nobody is walking, recording each frame. */
+  function watchFrames(container: HTMLElement): Seen[] {
+    const frames: Seen[] = [];
+
+    for (let now = 0; now <= 60_000; now += 20) {
+      frameAt(now);
+      const seen = see(container);
+      frames.push(seen);
+      if (container.querySelectorAll(".world-traveller").length === 0) return frames;
+    }
+
+    throw new Error("Still walking after a minute.");
+  }
+
+  // Feet are drawn a fixed height above the point walked, so a desk is
+  // matched by x exactly and by y against where the walk began.
+  const distance = (walker: { x: number; y: number }, seat: { x: number; y: number }, lift: number) =>
+    Math.hypot(walker.x - seat.x, walker.y + lift - seat.y);
+
+  it("walks the result from the finishing agent's empty chair to the next desk, and back", async () => {
+    const { container, deliver } = await watch(office(BEFORE));
+    const desks = new Map(["Tony", "Dana", "Tyrion"].map((name) => [name, deskOf(container, name).getAttribute("transform")]));
+    expect(seated(container, "Mike")).toBe(true);
+
+    await deliver(office(AFTER, [passedTo("tony", "Tony", 2)]));
+    await waitFor(() => expect(container.querySelector('[data-walker="mike"]')).not.toBeNull());
+
+    const frames = watchFrames(container);
+    const walking = frames.filter((frame) => frame.walker !== undefined);
+    const lift = seatOf("mike").y - walking[0]!.walker!.y;
+
+    // Off from Mike's own desk, result in hand, and the chair left empty.
+    expect(distance(walking[0]!.walker!, seatOf("mike"), lift)).toBeLessThan(2);
+    expect(walking[0]!.walker!.carrying).toBe(true);
+    expect(walking.every((frame) => !frame.mikeSeated && frame.mikes === 1)).toBe(true);
+
+    // Carried all the way to Tony's desk, set down there, and not picked up again.
+    const handedOver = walking.findIndex((frame) => !frame.walker!.carrying);
+    expect(handedOver).toBeGreaterThan(0);
+    expect(distance(walking[handedOver - 1]!.walker!, seatOf("tony"), lift)).toBeLessThan(2);
+    expect(distance(walking[handedOver]!.walker!, seatOf("tony"), lift)).toBeLessThan(0.5);
+    expect(walking.slice(handedOver).every((frame) => !frame.walker!.carrying)).toBe(true);
+
+    // Back at Mike's desk, empty-handed, and sitting down again.
+    expect(distance(walking.at(-1)!.walker!, seatOf("mike"), lift)).toBeLessThan(2);
+    const last = frames.at(-1)!;
+    expect(last.walker).toBeUndefined();
+    expect(last.mikeSeated).toBe(true);
+    expect(last.mikes).toBe(1);
+
+    // Nobody else left their chair or went anywhere, at any moment.
+    expect(frames.every((frame) => !frame.othersMoved)).toBe(true);
+    for (const [name, transform] of desks) expect(deskOf(container, name).getAttribute("transform")).toBe(transform);
+  });
+
+  it("never draws one agent twice when one result feeds two steps: the walks are made one after the other", async () => {
+    const { container, deliver } = await watch(office(BEFORE));
+
+    await deliver(office(AFTER, [passedTo("tony", "Tony", 2), passedTo("dana", "Dana", 3)]));
+    await waitFor(() => expect(container.querySelector('[data-walker="mike"]')).not.toBeNull());
+
+    const frames = watchFrames(container);
+    const walking = frames.filter((frame) => frame.walker !== undefined);
+    const lift = seatOf("mike").y - walking[0]!.walker!.y;
+
+    expect(frames.every((frame) => frame.mikes === 1)).toBe(true);
+    expect(walking.every((frame) => !frame.mikeSeated)).toBe(true);
+
+    // Where each result was set down: the frames it stops being carried.
+    // (The way to Tony passes Dana's desk, so merely passing a desk proves nothing.)
+    const setDown = walking.filter((frame, index) => index > 0 && walking[index - 1]!.walker!.carrying && !frame.walker!.carrying);
+    expect(setDown).toHaveLength(2);
+    expect(distance(setDown[0]!.walker!, seatOf("tony"), lift)).toBeLessThan(0.5);
+    expect(distance(setDown[1]!.walker!, seatOf("dana"), lift)).toBeLessThan(0.5);
+
+    expect(frames.at(-1)!.mikeSeated).toBe(true);
+    expect(frames.every((frame) => !frame.othersMoved)).toBe(true);
+  });
+
+  it("tells the handoff but walks nobody when the viewer asked for reduced motion", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("prefers-reduced-motion: reduce"),
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+
+    const { container, deliver } = await watch(office(BEFORE));
+    expect(screen.getByRole("button", { name: "Motion off" }).getAttribute("aria-pressed")).toBe("false");
+
+    await deliver(office(AFTER, [passedTo("tony", "Tony", 2)]));
+
+    // The change is still told, and the handoff is still on the map.
+    const log = screen.getByRole("region", { name: "Seen while you watched" });
+    await waitFor(() => expect(within(log).getAllByRole("listitem").length).toBeGreaterThan(0));
+    expect(screen.getByText(/1 handoff in play/)).toBeDefined();
+
+    for (let now = 0; now <= 10_000; now += 100) {
+      frameAt(now);
+      const seen = see(container);
+      expect(container.querySelectorAll(".world-traveller")).toHaveLength(0);
+      expect(seen.mikeSeated).toBe(true);
+      expect(seen.othersMoved).toBe(false);
+    }
   });
 });
