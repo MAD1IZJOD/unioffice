@@ -229,6 +229,15 @@ describe("the execution room's start", () => {
   });
 });
 
+describe("the mission in the office", () => {
+  it("links to the office opened on this mission, by its own id", async () => {
+    open(room());
+
+    const link = await screen.findByRole("link", { name: "View in World" });
+    expect(link.getAttribute("href")).toBe(`/world?mission=${MISSION}`);
+  });
+});
+
 describe("a link to one of the mission's results", () => {
   const result: ArtifactItem = {
     id: "artifact-1",

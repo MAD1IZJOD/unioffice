@@ -3,6 +3,7 @@ import {
   Ban,
   CalendarClock,
   LoaderCircle,
+  MapIcon,
   Play,
   RefreshCw,
   RotateCcw,
@@ -339,6 +340,13 @@ export default function Room() {
                 Run {scheduledRun.sequence} of {scheduledRun.name}
               </Link>
             )}
+
+            {/* The same mission in the office: a view of it, never a second
+                place to run it. World looks the id up in its own reading. */}
+            <Link to={`/world?mission=${encodeURIComponent(work.id)}`} className="operation-place">
+              <MapIcon size={12} />
+              View in World
+            </Link>
           </div>
 
           <h2
