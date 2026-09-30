@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { StreamTickets } from "./access/stream-tickets.js";
 import { loadApiConfig } from "./config.js";
 import { MissionLauncher } from "./mission-launcher.js";
-import { ensureDevelopmentWorkforce } from "./development-workforce.js";
+import { completeDevelopmentWorkforce, ensureDevelopmentWorkforce } from "./development-workforce.js";
 import { createExecutionRuntime } from "./runtime.js";
 import { buildApiServer } from "./server.js";
 
@@ -44,6 +44,7 @@ export async function createApiServer() {
         runtime.organizationRepository,
         runtime.agentRepository,
         runtime.workspaceRepository,
+        completeDevelopmentWorkforce,
       )
     : undefined;
 

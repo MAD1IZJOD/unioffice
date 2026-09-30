@@ -144,11 +144,9 @@ export const workforce: Blueprint[] = [
 ];
 
 /**
- * Twelve more agents, proposed and not yet approved - their names in
- * particular. They are never created on boot: nothing provisions them until
- * someone passes them to `ensureDevelopmentWorkforce` on purpose, so a
- * restart of an API that seeds cannot put unapproved people into a real
- * company. Tests exercise them exactly as they would be provisioned.
+ * Twelve more agents, each with a role and a room. They are provisioned on
+ * boot as part of `completeDevelopmentWorkforce`, only when the development
+ * seed is switched on.
  */
 export const proposedWorkforce: Blueprint[] = [
   /* Engineering ------------------------------------------------------------ */
@@ -306,11 +304,22 @@ export const proposedWorkforce: Blueprint[] = [
   },
 ];
 
+/**
+ * Everyone the development seed provisions when it is switched on
+ * (`SEED_DEVELOPMENT_WORKFORCE=true`): the first six and the twelve after
+ * them. Agents people made themselves - Dana and Rhea - are not blueprints,
+ * so the seed never touches them.
+ */
+export const completeDevelopmentWorkforce: readonly Blueprint[] = [
+  ...workforce,
+  ...proposedWorkforce,
+];
+
 export async function ensureDevelopmentWorkforce(
   organizationRepository: OrganizationRepository,
   agentRepository: AgentRepository,
   workspaceRepository: WorkspaceRepository,
-  /** Who to seed. The boot seed is the first six only; anyone else is passed on purpose. */
+  /** Who to seed. The first six unless told otherwise; the API passes `completeDevelopmentWorkforce`. */
   blueprints: readonly Blueprint[] = workforce,
 ): Promise<{
   organization: Organization;

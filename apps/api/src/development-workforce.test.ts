@@ -16,10 +16,16 @@ import type {
   WorkspaceRepository,
 } from "@unioffice/database";
 
-import { ensureDevelopmentWorkforce, proposedWorkforce, SEED_WORKSPACES, workforce } from "./development-workforce.js";
+import {
+  completeDevelopmentWorkforce,
+  ensureDevelopmentWorkforce,
+  proposedWorkforce,
+  SEED_WORKSPACES,
+  workforce,
+} from "./development-workforce.js";
 
-/** The first six and the twelve proposed after them, provisioned together on purpose. */
-const everyone = [...workforce, ...proposedWorkforce];
+/** Everyone the API provisions on boot when the development seed is on. */
+const everyone = completeDevelopmentWorkforce;
 
 const organizationId = "2f6b579a-f0f8-45a5-868a-21c08bde1314" as OrganizationId;
 const harveyId = "e32813a2-dda6-4a89-a756-c2991510c503" as AgentId;
@@ -276,18 +282,24 @@ const newcomers = [
   { name: "Katrina", role: "Customer Support Specialist", owns: "customer_support", room: "customer-success" },
 ];
 
-test("the boot seed makes none of the proposed agents and no room, whatever the database holds", async () => {
+test("the boot list is the first six and the twelve after them, each once", () => {
+  assert.deepEqual(completeDevelopmentWorkforce.map((blueprint) => blueprint.id), [...workforce, ...proposedWorkforce].map((blueprint) => blueprint.id));
+  assert.equal(completeDevelopmentWorkforce.length, 18);
+  assert.equal(new Set(completeDevelopmentWorkforce.map((blueprint) => blueprint.id)).size, 18, "no id twice");
+  assert.equal(new Set(completeDevelopmentWorkforce.map((blueprint) => blueprint.name)).size, 18, "no name twice");
+});
+
+test("called without a list, the seed still makes only the first six and no room", async () => {
   const agents = agentRepository([]);
   const workspaces = workspaceRepository([companyEngineering()]);
 
-  // Called exactly as the API calls it on start.
   const { agents: seeded } = await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
 
   assert.deepEqual(seeded.map((agent) => agent.name).sort(), ["Harvey", "Jamie", "Mike", "Peter", "Tony", "Tyrion"]);
   for (const proposed of proposedWorkforce) {
-    assert.equal(agents.agents.has(proposed.id as AgentId), false, `${proposed.name} is not created on boot`);
+    assert.equal(agents.agents.has(proposed.id as AgentId), false, `${proposed.name} is only made when passed`);
   }
-  assert.deepEqual([...workspaces.workspaces.values()].map((workspace) => workspace.slug), ["engineering"], "no room is made on boot");
+  assert.deepEqual([...workspaces.workspaces.values()].map((workspace) => workspace.slug), ["engineering"], "no room is made");
 });
 
 test("seeds all twelve beyond the first six, each once, each with a role and a room", async () => {
