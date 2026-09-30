@@ -614,6 +614,64 @@ export const customerExpansion: Blueprint[] = [
   },
 ];
 
+/* Company hall ------------------------------------------------------------- */
+
+// No room of their own: like Tyrion, Jamie and Peter they work for the whole
+// company, and a mission's own room is still preferred when someone there
+// can do the step.
+export const hallExpansion: Blueprint[] = [
+  {
+    id: id(566),
+    name: "Victor",
+    type: "specialist",
+    role: "Executive Analyst",
+    description:
+      "Prepares the analysis the leadership team decides on: pulls the figures supplied across departments into one view, compares the options and writes the briefing with a clear recommendation.",
+    capabilities: ["executive_analysis", "decision_support", "communication"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["executive-briefing", "announcement-drafting"],
+  },
+  {
+    id: id(567),
+    name: "Stella",
+    type: "specialist",
+    role: "Strategy Analyst",
+    description:
+      "Works on the questions that shape the whole company: where to compete, what to build or buy, and what the market will look like. Frames the options, tests them against the evidence supplied and writes the case.",
+    capabilities: ["strategy_analysis", "research", "decision_support"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["competitor-analysis", "market-research"],
+  },
+  {
+    id: id(568),
+    name: "Adrian",
+    type: "specialist",
+    role: "Chief of Staff",
+    description:
+      "Keeps the leadership team's priorities moving: turns decisions into owners and dates, prepares the agenda and the follow-ups, and writes the updates that tell the company what was decided and why.",
+    capabilities: ["executive_coordination", "communication", "stakeholder_messaging"],
+    toolIds: ["datetime"],
+    skills: ["executive-briefing", "stakeholder-update"],
+  },
+];
+
+/* Compliance and risk ------------------------------------------------------ */
+
+export const complianceExpansion: Blueprint[] = [
+  {
+    id: id(569),
+    name: "Victoria",
+    type: "specialist",
+    role: "Compliance Analyst",
+    workspace: "compliance-risk",
+    description:
+      "Checks that the company's work meets the rules it has to follow: reads the regulation and the internal policy against what a team plans to do, flags the gaps and drafts the controls and policy text that close them.",
+    capabilities: ["compliance", "risk_assessment", "process_design"],
+    toolIds: ["datetime"],
+    skills: ["policy-drafting"],
+  },
+];
+
 /** Everyone beyond the first twenty, in the order they are provisioned. */
 export const expandedWorkforce: Blueprint[] = [
   ...engineeringExpansion,
@@ -623,4 +681,6 @@ export const expandedWorkforce: Blueprint[] = [
   ...operationsExpansion,
   ...financeExpansion,
   ...customerExpansion,
+  ...hallExpansion,
+  ...complianceExpansion,
 ];

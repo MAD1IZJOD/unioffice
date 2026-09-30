@@ -101,4 +101,7 @@ test("each department has the people it was planned with", () => {
   assert.deepEqual(byRoom.get("operations"), ["Marcus", "Ava O", "Theo", "Grace O", "Isaac", "Lily O"]);
   assert.deepEqual(byRoom.get("finance"), ["Olivia F", "James", "Sophia", "William"]);
   assert.deepEqual(byRoom.get("customer-success"), ["Amelia", "Mason", "Harper", "Evelyn"]);
+  assert.deepEqual(byRoom.get("hall"), ["Victor", "Stella", "Adrian"]);
+  assert.deepEqual(byRoom.get("compliance-risk"), ["Victoria"]);
+  assert.equal(expandedWorkforce.length, 51, "fifty-one more, for seventy-one in all");
 });
