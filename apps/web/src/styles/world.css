@@ -326,9 +326,27 @@
   user-select: none;
 }
 
+/* The zoom controls have a rail of their own at the stage's right edge,
+   which the map is never drawn in (ZOOM_RAIL in camera.ts), so they never
+   sit over a room's name or someone's desk. */
+.world-stage {
+  --world-zoom-rail: 44px;
+}
+
+.world-stage::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: var(--world-zoom-rail);
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+
 .world-zoom {
   position: absolute;
-  right: var(--space-3);
+  right: 3px;
   bottom: var(--space-3);
   display: grid;
   gap: 2px;

@@ -17,7 +17,7 @@ import { Maximize, Minus, Plus } from "lucide-react";
 import type { WorldAgent, WorldHandoff, WorldMission, WorldSnapshot } from "../lib/api";
 import { disciplineOf } from "../lib/workforce";
 
-import { cameraOn, keepCentre, type Camera, type FocusTarget } from "./camera";
+import { cameraOn, keepCentre, ZOOM_RAIL, type Camera, type FocusTarget } from "./camera";
 import { HANDOFF_LABEL, missionStatusWord, recentFailure } from "./describe";
 import { Desk, Runs } from "./Desk";
 import { handoffKey } from "./moments";
@@ -144,7 +144,8 @@ export function Scene({
     const element = stage.current;
     if (!element) return;
 
-    const measure = () => setSize({ width: element.clientWidth, height: element.clientHeight });
+    // The map is drawn in the stage less the zoom controls' rail.
+    const measure = () => setSize({ width: Math.max(0, element.clientWidth - ZOOM_RAIL), height: element.clientHeight });
     measure();
 
     if (typeof ResizeObserver === "undefined") return;

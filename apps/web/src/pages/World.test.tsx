@@ -7,6 +7,7 @@ import type { OrganizationRole, WorldAgent, WorldHandoff, WorldSnapshot } from "
 import { AccessContext } from "../lib/access";
 import { planFloor } from "../world/layout";
 import { FIGURE_WIDTH } from "../world/sprites";
+import { ZOOM_RAIL } from "../world/camera";
 
 import { signedInAs } from "../test/access";
 import { deferred, json, stubNetwork } from "../test/network";
@@ -349,7 +350,7 @@ describe("the world", () => {
       await userEvent.click(screen.getByRole("button", { name: "Engineering. 1 agent." }));
       const room = plan.rooms.find((entry) => entry.id === "eng")!.rect;
       const middle = centreOf({ x: room.x + room.width / 2, y: room.y + room.height / 2 });
-      expect(middle.x).toBeCloseTo(600);
+      expect(middle.x).toBeCloseTo((1200 - ZOOM_RAIL) / 2);
       expect(middle.y).toBeCloseTo(400);
 
       const details = screen.getByRole("complementary", { name: "Details: Engineering" });
@@ -358,12 +359,12 @@ describe("the world", () => {
       // Someone in it, chosen from the details: now they are in the middle.
       await userEvent.click(within(details).getByRole("button", { name: "Tony" }));
       const tony = centreOf(plan.seats.get("tony")!.at);
-      expect(tony.x).toBeCloseTo(600);
+      expect(tony.x).toBeCloseTo((1200 - ZOOM_RAIL) / 2);
       expect(tony.y).toBeCloseTo(400);
 
       // And back to the whole office.
       await userEvent.click(screen.getByRole("button", { name: "Fit the whole office" }));
-      expect(view().k).toBeCloseTo(Math.min(1200 / plan.width, 800 / plan.height));
+      expect(view().k).toBeCloseTo(Math.min((1200 - ZOOM_RAIL) / plan.width, 800 / plan.height));
     } finally {
       delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
       delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
@@ -421,7 +422,7 @@ describe("the world", () => {
 
     const expectCentred = (container: HTMLElement, point: { x: number; y: number }, width: number) => {
       const at = drawnAt(container, point);
-      expect(at.x).toBeCloseTo(width / 2);
+      expect(at.x).toBeCloseTo((width - ZOOM_RAIL) / 2);
       expect(at.y).toBeCloseTo(TALL / 2);
     };
 
@@ -480,7 +481,7 @@ describe("the world", () => {
       resized();
       await userEvent.click(screen.getByRole("button", { name: "Fit the whole office" }));
 
-      const fitted = Math.min(NARROW / plan.width, TALL / plan.height);
+      const fitted = Math.min((NARROW - ZOOM_RAIL) / plan.width, TALL / plan.height);
       expect(drawnAt(container, tony).k).toBeCloseTo(fitted);
 
       // Closing the panel does not pull the camera back onto Tony; the whole
@@ -502,14 +503,14 @@ describe("the world", () => {
       stage.focus();
       await userEvent.keyboard("{ArrowLeft}");
       const panned = drawnAt(container, tony);
-      expect(panned.x).toBeCloseTo(NARROW / 2 + 48);
+      expect(panned.x).toBeCloseTo((NARROW - ZOOM_RAIL) / 2 + 48);
 
       await userEvent.click(screen.getByRole("button", { name: "Close details" }));
       resized();
 
       // The same floor point is in the middle as before the resize: Tony
       // stays 48 pixels right of it, where the viewer put him.
-      expect(drawnAt(container, tony).x).toBeCloseTo(WIDE / 2 + 48);
+      expect(drawnAt(container, tony).x).toBeCloseTo((WIDE - ZOOM_RAIL) / 2 + 48);
     });
   });
 
@@ -585,7 +586,7 @@ describe("the world", () => {
       // In the middle of the map left above the sheet - stage y 0 to 260 -
       // not the middle of the whole stage, which the sheet covers.
       const seen = (sheet: number) => (sheet - STAGE.top) / 2;
-      expect(drawnAt(container, tony).x).toBeCloseTo(STAGE.width / 2);
+      expect(drawnAt(container, tony).x).toBeCloseTo((STAGE.width - ZOOM_RAIL) / 2);
       expect(Math.abs(drawnAt(container, tony).y - seen(380))).toBeLessThanOrEqual(4);
 
       // The tools arrive and the sheet grows: Tony moves up with it.

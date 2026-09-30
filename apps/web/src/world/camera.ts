@@ -15,6 +15,14 @@ export interface Camera {
   k: number;
 }
 
+/**
+ * Stage pixels at its right edge that the map is not drawn in: the rail the
+ * zoom controls sit in, so they never cover a room's name or a desk. Every
+ * view - the opening one, Fit, bringing something into view - is worked out
+ * in the map's own width. Matches `--world-zoom-rail` in world.css.
+ */
+export const ZOOM_RAIL = 44;
+
 export interface Box {
   x: number;
   y: number;
