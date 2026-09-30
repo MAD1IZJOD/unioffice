@@ -6,14 +6,17 @@ import type {
   AgentId,
   Organization,
   OrganizationId,
+  Workspace,
+  WorkspaceId,
 } from "@unioffice/core";
 
 import type {
   AgentRepository,
   OrganizationRepository,
+  WorkspaceRepository,
 } from "@unioffice/database";
 
-import { ensureDevelopmentWorkforce } from "./development-workforce.js";
+import { ensureDevelopmentWorkforce, SEED_WORKSPACES } from "./development-workforce.js";
 
 const organizationId = "2f6b579a-f0f8-45a5-868a-21c08bde1314" as OrganizationId;
 const harveyId = "e32813a2-dda6-4a89-a756-c2991510c503" as AgentId;
@@ -48,6 +51,37 @@ function agentRepository(initial: Agent[]): AgentRepository & { agents: Map<Agen
   };
 }
 
+function workspaceRepository(initial: Workspace[] = []): WorkspaceRepository & { workspaces: Map<WorkspaceId, Workspace> } {
+  const workspaces = new Map(initial.map((workspace) => [workspace.id, workspace]));
+
+  return {
+    workspaces,
+    async create(workspace) { workspaces.set(workspace.id, workspace); return workspace; },
+    async findById(id) { return workspaces.get(id) ?? null; },
+    async findByOrganization(organization) { return [...workspaces.values()].filter((entry) => entry.organizationId === organization); },
+    async findBySlug(organization, slug) {
+      return [...workspaces.values()].find((entry) => entry.organizationId === organization && entry.slug === slug) ?? null;
+    },
+    async update(workspace) { workspaces.set(workspace.id, workspace); return workspace; },
+    async delete(id) { workspaces.delete(id); },
+  } as WorkspaceRepository & { workspaces: Map<WorkspaceId, Workspace> };
+}
+
+/** The Engineering workspace the company made itself, with its own id. */
+function companyEngineering(): Workspace {
+  const now = new Date();
+  return {
+    id: "ee52c29c-e9b5-47d6-8e11-666c05088a4c" as WorkspaceId,
+    organizationId,
+    name: "Engineering",
+    slug: "engineering",
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+    metadata: {},
+  };
+}
+
 function existingOrganization(): Organization {
   const now = new Date();
   return {
@@ -64,7 +98,7 @@ function existingOrganization(): Organization {
 test("creates the full workforce with their granted tools when nothing exists yet", async () => {
   const agents = agentRepository([]);
 
-  await ensureDevelopmentWorkforce(organizationRepository(null), agents);
+  await ensureDevelopmentWorkforce(organizationRepository(null), agents, workspaceRepository());
 
   const harvey = agents.agents.get(harveyId);
   assert.ok(harvey);
@@ -88,7 +122,7 @@ test("grants tools to an agent seeded before toolIds existed, without touching i
   };
   const agents = agentRepository([staleHarvey]);
 
-  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents);
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaceRepository());
 
   const updated = agents.agents.get(harveyId);
   assert.ok(updated);
@@ -133,7 +167,7 @@ test("does not rewrite an agent that already matches the blueprint", async () =>
     return originalUpdate(agent);
   };
 
-  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents);
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaceRepository());
 
   assert.equal(updateCalls, 0, "an already-current agent must not be rewritten");
 });
@@ -156,7 +190,7 @@ test("renames an agent seeded under an earlier name", async () => {
   };
   const agents = agentRepository([previouslyNamed]);
 
-  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents);
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaceRepository());
 
   const updated = agents.agents.get(harveyId);
   assert.ok(updated);
@@ -188,6 +222,7 @@ test("leaves an agent alone once a person has configured it", async () => {
   await ensureDevelopmentWorkforce(
     organizationRepository(existingOrganization()),
     agents,
+    workspaceRepository(),
   );
 
   const after = agents.agents.get(configured.id)!;
@@ -202,7 +237,7 @@ test("every seeded agent holds only skills it can actually use", async () => {
   const { resolveSkills, skillFit } = await import("@unioffice/skills");
   const repository = agentRepository([]);
 
-  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), repository);
+  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), repository, workspaceRepository());
   const skills = resolveSkills([]);
 
   assert.ok(agents.some((agent) => (agent.skills ?? []).length > 0));
@@ -213,5 +248,95 @@ test("every seeded agent holds only skills it can actually use", async () => {
       assert.ok(skill, `${agent.name} holds unknown skill ${slug}`);
       assert.equal(skillFit(agent, skill).fits, true, `${agent.name} cannot use ${slug}`);
     }
+  }
+});
+
+/* The workforce beyond the first six ---------------------------------------- */
+
+const engineeringTeam = [
+  { name: "Wanda", role: "Frontend Engineer", owns: "frontend_development" },
+  { name: "Bruce", role: "Backend Engineer", owns: "backend_development" },
+  { name: "Natasha", role: "QA Engineer", owns: "quality_assurance" },
+  { name: "Sam", role: "DevOps Engineer", owns: "infrastructure_operations" },
+];
+
+test("seats the engineering team in the company's own Engineering workspace, found by its slug", async () => {
+  const agents = agentRepository([]);
+  const workspaces = workspaceRepository([companyEngineering()]);
+
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+
+  // Nothing new was made for a room the company already has.
+  assert.deepEqual([...workspaces.workspaces.values()].map((workspace) => workspace.slug), ["engineering"]);
+
+  for (const member of engineeringTeam) {
+    const agent = [...agents.agents.values()].find((entry) => entry.name === member.name);
+    assert.ok(agent, `${member.name} was seeded`);
+    assert.equal(agent.organizationId, organizationId);
+    assert.equal(agent.workspaceId, companyEngineering().id);
+    assert.equal(agent.metadata.role, member.role);
+    assert.equal(agent.status, "active");
+    assert.ok(agent.capabilities.includes(member.owns), `${member.name} holds ${member.owns}`);
+    assert.match(String(agent.metadata.systemInstructions), new RegExp(`^You are ${member.name}, the UNIOFFICE ${member.role}\\.`));
+  }
+});
+
+test("gives each new agent a capability nobody else holds, and only tools that exist", async () => {
+  const { createDefaultToolRegistry } = await import("@unioffice/tools");
+  const registry = createDefaultToolRegistry();
+  const agents = agentRepository([]);
+
+  const { agents: seeded } = await ensureDevelopmentWorkforce(organizationRepository(null), agents, workspaceRepository());
+
+  for (const member of engineeringTeam) {
+    const holders = seeded.filter((agent) => agent.capabilities.includes(member.owns));
+    assert.deepEqual(holders.map((agent) => agent.name), [member.name], `${member.owns} belongs to ${member.name} alone`);
+  }
+
+  for (const agent of seeded) {
+    for (const toolId of agent.toolIds) {
+      assert.equal(registry.has(toolId), true, `${agent.name} is granted ${toolId}, which is not a registered tool`);
+    }
+  }
+});
+
+test("creates a missing room once under the seed's id, and a second run changes nothing", async () => {
+  const agents = agentRepository([]);
+  const workspaces = workspaceRepository();
+
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+  const engineering = [...workspaces.workspaces.values()].find((workspace) => workspace.slug === "engineering");
+  assert.equal(engineering?.id, SEED_WORKSPACES.engineering.id);
+  assert.equal(engineering?.organizationId, organizationId);
+
+  let writes = 0;
+  const count = <T>(write: (value: T) => Promise<T>) => async (value: T) => { writes += 1; return write(value); };
+  agents.create = count(agents.create.bind(agents));
+  agents.update = count(agents.update.bind(agents));
+  workspaces.create = count(workspaces.create.bind(workspaces));
+
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+  assert.equal(writes, 0, "a second boot writes nothing");
+});
+
+test("leaves the first six where they are: no room or role is given to them", async () => {
+  const agents = agentRepository([]);
+
+  await ensureDevelopmentWorkforce(organizationRepository(null), agents, workspaceRepository([companyEngineering()]));
+
+  for (const name of ["Tyrion", "Tony", "Harvey", "Mike", "Jamie", "Peter"]) {
+    const agent = [...agents.agents.values()].find((entry) => entry.name === name)!;
+    assert.equal(agent.workspaceId, undefined, `${name} keeps no seeded room`);
+    assert.equal(agent.metadata.role, undefined, `${name} keeps no seeded role`);
+  }
+});
+
+test("names nobody twice and brings back none of the retired names", async () => {
+  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), agentRepository([]), workspaceRepository());
+  const names = agents.map((agent) => agent.name);
+
+  assert.equal(new Set(names).size, names.length);
+  for (const retired of ["Atlas", "Forge", "Ledger", "Nova", "Kindred", "Relay", "Dana", "Rhea"]) {
+    assert.equal(names.includes(retired), false, `${retired} is not seeded`);
   }
 });

@@ -43,6 +43,7 @@ export async function createApiServer() {
     ? await ensureDevelopmentWorkforce(
         runtime.organizationRepository,
         runtime.agentRepository,
+        runtime.workspaceRepository,
       )
     : undefined;
 
