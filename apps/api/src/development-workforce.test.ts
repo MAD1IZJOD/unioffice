@@ -265,6 +265,9 @@ const newcomers = [
   ...engineeringTeam.map((member) => ({ ...member, room: "engineering" })),
   { name: "Jessica", role: "Product Manager", owns: "product_management", room: "product" },
   { name: "Rachel", role: "Product Researcher", owns: "product_research", room: "research" },
+  { name: "Donna", role: "Account Executive", owns: "sales", room: "revenue-growth" },
+  { name: "Louis", role: "Marketing Manager", owns: "marketing", room: "revenue-growth" },
+  { name: "Sansa", role: "Growth & Content Lead", owns: "content_creation", room: "revenue-growth" },
 ];
 
 test("seats the engineering team in the company's own Engineering workspace, found by its slug", async () => {

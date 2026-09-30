@@ -40,6 +40,11 @@ export const SEED_WORKSPACES = {
     name: "Research",
     description: "Finds out what is true before the company decides.",
   },
+  "revenue-growth": {
+    id: "e32813a2-dda6-4a89-a756-c2991510d004",
+    name: "Revenue & Growth",
+    description: "Wins customers, and grows how many find and choose the product.",
+  },
 } satisfies Record<string, { id: string; name: string; description: string }>;
 
 export type SeedWorkspace = keyof typeof SEED_WORKSPACES;
@@ -201,6 +206,44 @@ export const workforce: Blueprint[] = [
     capabilities: ["product_research", "research", "synthesis"],
     toolIds: ["calculator", "datetime"],
     skills: ["market-research", "competitor-analysis", "source-synthesis"],
+  },
+
+  /* Revenue and growth ------------------------------------------------------ */
+  {
+    id: "e32813a2-dda6-4a89-a756-c2991510c513",
+    name: "Donna",
+    type: "specialist",
+    role: "Account Executive",
+    workspace: "revenue-growth",
+    description:
+      "Turns interest into signed customers: qualifies opportunities, prepares proposals and pricing from the figures supplied, and writes the follow-ups and account updates. Drafts them; never sends anything externally.",
+    capabilities: ["sales", "stakeholder_messaging", "writing"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["stakeholder-update", "meeting-summary"],
+  },
+  {
+    id: "e32813a2-dda6-4a89-a756-c2991510c514",
+    name: "Louis",
+    type: "specialist",
+    role: "Marketing Manager",
+    workspace: "revenue-growth",
+    description:
+      "Decides how the product is positioned and announced: messaging, campaign plans and launch material, written for the audience each one is meant for. Drafts them; never publishes anything externally.",
+    capabilities: ["marketing", "communication", "writing"],
+    toolIds: ["datetime"],
+    skills: ["announcement-drafting", "briefing-generation"],
+  },
+  {
+    id: "e32813a2-dda6-4a89-a756-c2991510c515",
+    name: "Sansa",
+    type: "specialist",
+    role: "Growth & Content Lead",
+    workspace: "revenue-growth",
+    description:
+      "Grows how many people find and keep using the product: plans content, writes articles and guides, and reads the acquisition and retention figures supplied to decide what to try next.",
+    capabilities: ["content_creation", "growth_analysis", "writing"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["briefing-generation"],
   },
 ];
 
