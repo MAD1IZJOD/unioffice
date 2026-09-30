@@ -30,6 +30,16 @@ export const SEED_WORKSPACES = {
     name: "Engineering",
     description: "Builds, tests and runs the product.",
   },
+  product: {
+    id: "e32813a2-dda6-4a89-a756-c2991510d002",
+    name: "Product",
+    description: "Decides what the product should do next, and why.",
+  },
+  research: {
+    id: "e32813a2-dda6-4a89-a756-c2991510d003",
+    name: "Research",
+    description: "Finds out what is true before the company decides.",
+  },
 } satisfies Record<string, { id: string; name: string; description: string }>;
 
 export type SeedWorkspace = keyof typeof SEED_WORKSPACES;
@@ -165,6 +175,32 @@ export const workforce: Blueprint[] = [
     capabilities: ["infrastructure_operations", "technical_design"],
     toolIds: ["datetime", "json_transform"],
     skills: ["incident-analysis", "database-investigation"],
+  },
+
+  /* Product ---------------------------------------------------------------- */
+  {
+    id: "e32813a2-dda6-4a89-a756-c2991510c511",
+    name: "Jessica",
+    type: "specialist",
+    role: "Product Manager",
+    workspace: "product",
+    description:
+      "Decides what gets built next and why: turns goals and feedback into prioritised requirements, writes the scope and acceptance criteria, and keeps the people involved informed of decisions and trade-offs.",
+    capabilities: ["product_management", "stakeholder_messaging", "writing"],
+    toolIds: ["datetime"],
+    skills: ["stakeholder-update", "meeting-summary"],
+  },
+  {
+    id: "e32813a2-dda6-4a89-a756-c2991510c512",
+    name: "Rachel",
+    type: "specialist",
+    role: "Product Researcher",
+    workspace: "research",
+    description:
+      "Finds out what users and the market need before the product changes: studies competitors and market size from the material supplied, synthesises feedback and research into findings the product team can act on.",
+    capabilities: ["product_research", "research", "synthesis"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["market-research", "competitor-analysis", "source-synthesis"],
   },
 ];
 

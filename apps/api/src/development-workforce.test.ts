@@ -260,6 +260,13 @@ const engineeringTeam = [
   { name: "Sam", role: "DevOps Engineer", owns: "infrastructure_operations" },
 ];
 
+/** Everyone beyond the first six: where they sit, what they do, and the capability that is theirs alone. */
+const newcomers = [
+  ...engineeringTeam.map((member) => ({ ...member, room: "engineering" })),
+  { name: "Jessica", role: "Product Manager", owns: "product_management", room: "product" },
+  { name: "Rachel", role: "Product Researcher", owns: "product_research", room: "research" },
+];
+
 test("seats the engineering team in the company's own Engineering workspace, found by its slug", async () => {
   const agents = agentRepository([]);
   const workspaces = workspaceRepository([companyEngineering()]);
@@ -267,7 +274,8 @@ test("seats the engineering team in the company's own Engineering workspace, fou
   await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
 
   // Nothing new was made for a room the company already has.
-  assert.deepEqual([...workspaces.workspaces.values()].map((workspace) => workspace.slug), ["engineering"]);
+  const engineering = [...workspaces.workspaces.values()].filter((workspace) => workspace.slug === "engineering");
+  assert.deepEqual(engineering.map((workspace) => workspace.id), [companyEngineering().id]);
 
   for (const member of engineeringTeam) {
     const agent = [...agents.agents.values()].find((entry) => entry.name === member.name);
@@ -288,7 +296,7 @@ test("gives each new agent a capability nobody else holds, and only tools that e
 
   const { agents: seeded } = await ensureDevelopmentWorkforce(organizationRepository(null), agents, workspaceRepository());
 
-  for (const member of engineeringTeam) {
+  for (const member of newcomers) {
     const holders = seeded.filter((agent) => agent.capabilities.includes(member.owns));
     assert.deepEqual(holders.map((agent) => agent.name), [member.name], `${member.owns} belongs to ${member.name} alone`);
   }
@@ -317,6 +325,36 @@ test("creates a missing room once under the seed's id, and a second run changes 
 
   await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
   assert.equal(writes, 0, "a second boot writes nothing");
+});
+
+test("seats everyone new in their room, making only the rooms the company does not have yet", async () => {
+  // The company's workspaces as they are: made by people, with their own ids.
+  const now = new Date();
+  const theirs = ["Engineering", "Research", "Finance", "Operations", "Customer Success"].map((name, index): Workspace => ({
+    id: `00000000-0000-4000-8000-00000000000${index}` as WorkspaceId,
+    organizationId,
+    name,
+    slug: name.toLowerCase().replace(/ /g, "-"),
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+    metadata: {},
+  }));
+  const workspaces = workspaceRepository(theirs);
+  const agents = agentRepository([]);
+
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+
+  const bySlug = new Map([...workspaces.workspaces.values()].map((workspace) => [workspace.slug, workspace]));
+  const made = [...workspaces.workspaces.values()].filter((workspace) => !theirs.some((existing) => existing.id === workspace.id));
+  assert.deepEqual(made.map((workspace) => workspace.slug).sort(), [...new Set(newcomers.map((member) => member.room))].filter((slug) => !theirs.some((existing) => existing.slug === slug)).sort());
+  for (const workspace of made) assert.equal(workspace.metadata.developmentSeed, true);
+
+  for (const member of newcomers) {
+    const agent = [...agents.agents.values()].find((entry) => entry.name === member.name)!;
+    assert.equal(agent.workspaceId, bySlug.get(member.room)!.id, `${member.name} works in ${member.room}`);
+    assert.equal(agent.metadata.role, member.role);
+  }
 });
 
 test("leaves the first six where they are: no room or role is given to them", async () => {
