@@ -55,6 +55,16 @@ export const SEED_WORKSPACES = {
     name: "Customer Success",
     description: "Looks after customers once they have chosen the product.",
   },
+  "compliance-risk": {
+    id: "e32813a2-dda6-4a89-a756-c2991510d007",
+    name: "Compliance & Risk",
+    description: "Keeps the company within the rules it has to follow, and sees risk coming.",
+  },
+  finance: {
+    id: "e32813a2-dda6-4a89-a756-c2991510d008",
+    name: "Finance",
+    description: "Keeps the books, plans the money and says what the numbers mean.",
+  },
 } satisfies Record<string, { id: string; name: string; description: string }>;
 
 export type SeedWorkspace = keyof typeof SEED_WORKSPACES;
