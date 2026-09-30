@@ -106,7 +106,7 @@ async function company() {
 
   const agents: Agent[] = [
     agent(tony, "Tony"),
-    agent(ledger, "Ledger", { workspaceId: finance }),
+    agent(ledger, "Harvey", { workspaceId: finance }),
     agent(theirs, "Theirs", { organizationId: orgB }),
   ];
 
@@ -197,7 +197,7 @@ test("every member of the organization can see its workforce, and nobody outside
   const { get } = await company();
 
   assert.equal((await get(null, "/workforce")).statusCode, 401);
-  assert.deepEqual(names((await get("owner", "/workforce")).json()), ["Ledger", "Tony"]);
+  assert.deepEqual(names((await get("owner", "/workforce")).json()), ["Harvey", "Tony"]);
   assert.deepEqual(names((await get("viewer", "/workforce")).json()), ["Tony"]);
   assert.deepEqual(names((await get("outsider", "/workforce")).json()), ["Theirs"]);
   assert.equal((await get("outsider", `/workforce?organizationId=${orgA}`)).statusCode, 404);
@@ -280,7 +280,7 @@ test("the world is the same workforce, laid out in the rooms the caller can reac
   assert.deepEqual(seen.rooms.map((room: { name: string }) => room.name), ["Company hall"]);
   assert.deepEqual(seen.missions, []);
   assert.equal(seen.agents[0].workingElsewhere, true);
-  assert.doesNotMatch(viewer.body, /Finance|Ledger|Reconcile|PROMPT-THAT-MUST-STAY-ON-THE-SERVER|systemInstructions/);
+  assert.doesNotMatch(viewer.body, /Finance|Harvey|Reconcile|PROMPT-THAT-MUST-STAY-ON-THE-SERVER|systemInstructions/);
 
   const outsider = (await get("outsider", "/world")).json();
   assert.deepEqual(outsider.agents.map((entry: { name: string }) => entry.name), ["Theirs"]);

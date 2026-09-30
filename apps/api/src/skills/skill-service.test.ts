@@ -62,7 +62,7 @@ function person(role: OrganizationRole, organizationId = orgA, grants: Array<[Wo
   };
 }
 
-function setup(agents: Agent[] = [agent("Ledger")]) {
+function setup(agents: Agent[] = [agent("Harvey")]) {
   const repository = new InMemorySkillRepository();
   const versions = new InMemorySkillVersionRepository();
   const events: RecordEventInput[] = [];
@@ -229,7 +229,7 @@ test("an organization skill replaces the system skill of the same slug; drafts a
 
 test("assignment only succeeds for an agent that already meets every requirement", async () => {
   const { service } = setup();
-  const ledger = agent("Ledger");
+  const ledger = agent("Harvey");
   const writer = agent("Writer", { capabilities: ["writing"], toolIds: [] });
 
   await service.checkAssignment(ledger, ["financial-analysis"]);

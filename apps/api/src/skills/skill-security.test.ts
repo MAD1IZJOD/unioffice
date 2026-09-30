@@ -68,7 +68,7 @@ function agent(name: string, overrides: Partial<Agent> = {}): Agent {
   };
 }
 
-function setup(agents: Agent[] = [agent("Ledger")]) {
+function setup(agents: Agent[] = [agent("Harvey")]) {
   const repository = new InMemorySkillRepository();
   const versions = new InMemorySkillVersionRepository();
   const events: RecordEventInput[] = [];
@@ -183,7 +183,7 @@ test("a skill's instructions cannot carry hidden characters or break out of thei
 });
 
 test("assignment never makes up the difference: an agent must already hold what a skill needs", async () => {
-  const { service } = setup([agent("Ledger"), agent("Scribe", { toolIds: [], capabilities: ["writing"] })]);
+  const { service } = setup([agent("Harvey"), agent("Scribe", { toolIds: [], capabilities: ["writing"] })]);
   const owner = person("owner");
   await service.create(owner, { ...draft, status: "active" });
 
@@ -236,7 +236,7 @@ test("resolution never crosses into another organization's skills or agents", ()
   const resolution = resolveSkill({
     requirement: { text: "Expense review of Q3", capabilities: [], tools: [], requestedSlug: "their-review" },
     skills: [ours],
-    agents: [agent("Ledger", { skills: ["expense-review"] })],
+    agents: [agent("Harvey", { skills: ["expense-review"] })],
   });
 
   assert.equal(resolution.outcome, "none");

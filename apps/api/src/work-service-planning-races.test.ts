@@ -77,7 +77,7 @@ function planningHarness(options: { startingStatus: WorkStatus; duringPlan?: (se
   const agent = {
     id: "dddddddd-0000-4000-8000-000000000004" as AgentId,
     organizationId,
-    name: "Ledger",
+    name: "Harvey",
     status: "active",
     type: "specialist",
     capabilities: ["financial_analysis"],

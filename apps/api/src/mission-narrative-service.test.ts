@@ -54,7 +54,7 @@ function agent(name: string): Agent {
   };
 }
 
-const nova = agent("Nova");
+const mike = agent("Mike");
 const tony = agent("Tony");
 const harvey = agent("Harvey");
 
@@ -178,7 +178,7 @@ function read(input: Partial<Parameters<typeof readNarrative>[0]> = {}) {
     events: [],
     artifacts: [],
     approvals: [],
-    agents: [nova, tony, harvey],
+    agents: [mike, tony, harvey],
     ...input,
   });
 }
@@ -189,13 +189,13 @@ function read(input: Partial<Parameters<typeof readNarrative>[0]> = {}) {
 
 test("the timeline reads in order, as sentences, with the state each moment was in", () => {
   const narrative = read({
-    tasks: [task("task-1", "Research the requirements", nova)],
+    tasks: [task("task-1", "Research the requirements", mike)],
     events: [
       event("work.created", 0),
       event("work.planning_completed", 1, { payload: { taskCount: 2 } }),
       event("work.started", 2),
-      event("task.started", 3, { taskId: "task-1" as TaskId, agentId: nova.id, payload: { title: "Research the requirements" } }),
-      event("task.completed", 5, { taskId: "task-1" as TaskId, agentId: nova.id, payload: { title: "Research the requirements" } }),
+      event("task.started", 3, { taskId: "task-1" as TaskId, agentId: mike.id, payload: { title: "Research the requirements" } }),
+      event("task.completed", 5, { taskId: "task-1" as TaskId, agentId: mike.id, payload: { title: "Research the requirements" } }),
       event("work.completed", 6),
     ],
   });
@@ -204,8 +204,8 @@ test("the timeline reads in order, as sentences, with the state each moment was 
     narrative.timeline.map((entry) => entry.state),
     ["queued", "planning", "running", "running", "completed", "completed"],
   );
-  assert.equal(narrative.timeline[3]!.sentence, "Nova started “Research the requirements”");
-  assert.equal(narrative.timeline[3]!.agent!.name, "Nova");
+  assert.equal(narrative.timeline[3]!.sentence, "Mike started “Research the requirements”");
+  assert.equal(narrative.timeline[3]!.agent!.name, "Mike");
   assert.equal(narrative.timeline[3]!.step, 1);
 
   const times = narrative.timeline.map((entry) => entry.at.getTime());
@@ -214,7 +214,7 @@ test("the timeline reads in order, as sentences, with the state each moment was 
 
 test("waiting for a person is its own state, and approving it resumes", () => {
   const narrative = read({
-    tasks: [task("task-1", "Send the announcement", nova, { status: "waiting" })],
+    tasks: [task("task-1", "Send the announcement", mike, { status: "waiting" })],
     events: [
       event("approval.requested", 4, { taskId: "task-1" as TaskId, payload: { title: "Send the announcement" } }),
       event("approval.approved", 9, { taskId: "task-1" as TaskId, payload: { title: "Send the announcement" } }),
@@ -233,7 +233,7 @@ test("waiting for a person is its own state, and approving it resumes", () => {
 test("a refusal and a failure are told apart rather than both reading as stopped", () => {
   const narrative = read({
     work: work({ status: "failed" }),
-    tasks: [task("task-1", "Run the numbers", nova, { status: "failed" })],
+    tasks: [task("task-1", "Run the numbers", mike, { status: "failed" })],
     events: [
       event("governance.denied", 3, { payload: { policyName: "No external writes", action: "send_email" } }),
       event("task.failed", 4, { taskId: "task-1" as TaskId, payload: { title: "Run the numbers" } }),
@@ -286,22 +286,22 @@ test("bookkeeping events are left out rather than rendered as their own type", (
 test("a handoff appears where one agent's finished step feeds another's", () => {
   const narrative = read({
     tasks: [
-      task("task-1", "Research the requirements", nova),
+      task("task-1", "Research the requirements", mike),
       task("task-2", "Assess engineering impact", tony, { dependsOn: ["task-1"], status: "running", minutes: 5 }),
     ],
-    artifacts: [artifact("artifact-1", "task-1", "Research findings", nova)],
+    artifacts: [artifact("artifact-1", "task-1", "Research findings", mike)],
   });
 
   assert.equal(narrative.handoffs.length, 1);
 
   const handoff = narrative.handoffs[0]!;
-  assert.equal(handoff.from.name, "Nova");
+  assert.equal(handoff.from.name, "Mike");
   assert.equal(handoff.to.name, "Tony");
   assert.deepEqual(handoff.fromStep, { number: 1, title: "Research the requirements" });
   assert.deepEqual(handoff.toStep, { number: 2, title: "Assess engineering impact" });
   assert.equal(handoff.delivered!.name, "Research findings");
   assert.equal(handoff.state, "in_progress");
-  assert.equal(handoff.sentence, "Nova finished “Research the requirements”. Tony is working from it now.");
+  assert.equal(handoff.sentence, "Mike finished “Research the requirements”. Tony is working from it now.");
 });
 
 test("one agent carrying on alone is not dressed up as a handoff", () => {
@@ -318,7 +318,7 @@ test("one agent carrying on alone is not dressed up as a handoff", () => {
 test("nothing is handed over until the upstream step has actually finished", () => {
   const narrative = read({
     tasks: [
-      task("task-1", "Research the requirements", nova, { status: "running" }),
+      task("task-1", "Research the requirements", mike, { status: "running" }),
       task("task-2", "Assess engineering impact", tony, { dependsOn: ["task-1"], status: "pending", minutes: 5 }),
     ],
   });
@@ -329,7 +329,7 @@ test("nothing is handed over until the upstream step has actually finished", () 
 test("parallel branches each produce their own handoff into the step that joins them", () => {
   const narrative = read({
     tasks: [
-      task("task-1", "Gather the quotes", nova),
+      task("task-1", "Gather the quotes", mike),
       task("task-2", "Measure current usage", tony, { minutes: 1 }),
       task("task-3", "Decide", harvey, { dependsOn: ["task-1", "task-2"], status: "running", minutes: 6 }),
     ],
@@ -338,7 +338,7 @@ test("parallel branches each produce their own handoff into the step that joins 
   assert.equal(narrative.handoffs.length, 2);
   assert.deepEqual(
     narrative.handoffs.map((handoff) => `${handoff.from.name}->${handoff.to.name}`),
-    ["Nova->Harvey", "Tony->Harvey"],
+    ["Mike->Harvey", "Tony->Harvey"],
   );
   assert.deepEqual(narrative.handoffs.map((handoff) => handoff.toStep.number), [3, 3]);
 });
@@ -347,7 +347,7 @@ test("a handoff says whether the work it fed is done, running, held or stuck", (
   const states = (["completed", "running", "waiting", "pending"] as const).map((status) => {
     const narrative = read({
       tasks: [
-        task("task-1", "Research", nova),
+        task("task-1", "Research", mike),
         task("task-2", "Assess", tony, { dependsOn: ["task-1"], status, minutes: 5 }),
       ],
     });
@@ -360,10 +360,10 @@ test("a handoff says whether the work it fed is done, running, held or stuck", (
 test("a handoff never carries a task id or an agent's instructions", () => {
   const narrative = read({
     tasks: [
-      task("task-1", "Research the requirements", nova),
+      task("task-1", "Research the requirements", mike),
       task("task-2", "Assess engineering impact", tony, { dependsOn: ["task-1"], status: "running", minutes: 5 }),
     ],
-    artifacts: [artifact("artifact-1", "task-1", "Research findings", nova)],
+    artifacts: [artifact("artifact-1", "task-1", "Research findings", mike)],
   });
 
   const serialized = JSON.stringify(narrative.handoffs);
@@ -379,7 +379,7 @@ test("a mission that did everything it meant to is simply finished, with high co
   const narrative = read({
     tasks: [
       task("task-1", "Work out the cost", harvey, { requiredToolsSatisfied: true }),
-      task("task-2", "Write it up", nova, { dependsOn: ["task-1"], minutes: 5 }),
+      task("task-2", "Write it up", mike, { dependsOn: ["task-1"], minutes: 5 }),
     ],
   });
 
@@ -406,7 +406,7 @@ test("a step that did not use the tool it was told to use finishes with limitati
 
 test("a step that ran without its procedure limits the result without gutting confidence", () => {
   const narrative = read({
-    tasks: [task("task-1", "Research the market", nova, {
+    tasks: [task("task-1", "Research the market", mike, {
       skillNote: "Market research is active, but no agent available to this mission holds it.",
     })],
   });
@@ -418,7 +418,7 @@ test("a step that ran without its procedure limits the result without gutting co
 
 test("a step routed to the nearest available agent is recorded as a limitation", () => {
   const narrative = read({
-    tasks: [task("task-1", "Research the market", nova, { unmatchedCapabilities: ["market_research"] })],
+    tasks: [task("task-1", "Research the market", mike, { unmatchedCapabilities: ["market_research"] })],
   });
 
   assert.equal(narrative.outcome.limitations[0]!.kind, "partial_match");
@@ -449,7 +449,7 @@ test("knowledge a rule held back is reported as shaping the work", () => {
 test("a mission waiting on a person is blocked, and is never given a confidence", () => {
   const narrative = read({
     work: work({ status: "waiting_approval", completedAt: undefined }),
-    tasks: [task("task-1", "Send it", nova, { status: "waiting" })],
+    tasks: [task("task-1", "Send it", mike, { status: "waiting" })],
     approvals: [approval("pending")],
   });
 
@@ -480,7 +480,7 @@ test("a cancelled mission names how much was left unfinished", () => {
     work: work({ status: "cancelled", completedAt: undefined }),
     tasks: [
       task("task-1", "Work out the cost", harvey),
-      task("task-2", "Write it up", nova, { status: "cancelled", minutes: 5 }),
+      task("task-2", "Write it up", mike, { status: "cancelled", minutes: 5 }),
     ],
   });
 
@@ -518,7 +518,7 @@ test("several limitations are all reported, worst one setting the confidence", (
   const narrative = read({
     tasks: [
       task("task-1", "Work out the cost", harvey, { requiredToolsSatisfied: false }),
-      task("task-2", "Research the market", nova, { unmatchedCapabilities: ["market_research"], minutes: 5 }),
+      task("task-2", "Research the market", mike, { unmatchedCapabilities: ["market_research"], minutes: 5 }),
     ],
     withheldKnowledge: 1,
   });
@@ -536,7 +536,7 @@ test("the same limitation across several steps is said once, naming all of them"
   const narrative = read({
     tasks: [
       task("task-1", "Work out the cost", harvey, { skillNote: note }),
-      task("task-2", "Write it up", nova, { skillNote: note, minutes: 5 }),
+      task("task-2", "Write it up", mike, { skillNote: note, minutes: 5 }),
       task("task-3", "Check it", tony, { skillNote: note, minutes: 8 }),
     ],
   });
@@ -548,7 +548,7 @@ test("the same limitation across several steps is said once, naming all of them"
 
 test("the handoffs read on their own are exactly the room's, from only names", () => {
   const tasks = [
-    task("task-1", "Research the requirements", nova),
+    task("task-1", "Research the requirements", mike),
     task("task-2", "Assess engineering impact", tony, { dependsOn: ["task-1"], status: "running", minutes: 5 }),
     task("task-3", "Cost it", harvey, { dependsOn: ["task-2"], status: "pending", minutes: 6 }),
   ];
@@ -556,7 +556,7 @@ test("the handoffs read on their own are exactly the room's, from only names", (
   const room = read({ tasks }).handoffs;
   const alone = readHandoffs(
     [...tasks].reverse(),
-    [nova, tony, harvey].map((member) => ({ id: member.id, name: member.name })),
+    [mike, tony, harvey].map((member) => ({ id: member.id, name: member.name })),
   );
 
   assert.deepEqual(alone, room);

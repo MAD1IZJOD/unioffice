@@ -42,7 +42,7 @@ test("Mission Control shows a narrowed caller only the missions, approvals and k
 test("the workforce roster leaves out agents working in workspaces the caller was not given", async () => {
   const { f } = financeCompany();
   f.agent("Tony");
-  f.agent("Ledger", { workspaceId: finance, status: "paused" });
+  f.agent("Harvey", { workspaceId: finance, status: "paused" });
 
   const narrowed = await f.service.getMissionControl(orgA, { ...asOwner, reach: companyOnly });
   const full = await f.service.getMissionControl(orgA, asOwner);
@@ -50,7 +50,7 @@ test("the workforce roster leaves out agents working in workspaces the caller wa
   assert.deepEqual(narrowed.workforce.roster.map((entry) => entry.name), ["Tony"]);
   assert.equal(narrowed.workforce.total, 1);
   assert.deepEqual(narrowed.workforce.unavailable, []);
-  assert.deepEqual(full.workforce.roster.map((entry) => entry.name).sort(), ["Ledger", "Tony"]);
+  assert.deepEqual(full.workforce.roster.map((entry) => entry.name).sort(), ["Harvey", "Tony"]);
 });
 
 test("the attention queue is narrowed the same way", async () => {

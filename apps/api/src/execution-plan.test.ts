@@ -224,7 +224,7 @@ test("a step shows the skill it follows, why, and nothing else of it", () => {
             scope: "system",
             approval: "none",
             memory: "recall",
-            reasons: ["the step mentions financial, analysis", "Ledger holds it with everything it needs"],
+            reasons: ["the step mentions financial, analysis", "Harvey holds it with everything it needs"],
             instructions: "SHOULD NOT LEAVE",
           },
         },
@@ -241,7 +241,7 @@ test("a step shows the skill it follows, why, and nothing else of it", () => {
     version: 3,
     scope: "system",
     approval: "none",
-    reasons: ["the step mentions financial, analysis", "Ledger holds it with everything it needs"],
+    reasons: ["the step mentions financial, analysis", "Harvey holds it with everything it needs"],
   });
   assert.equal(plan.nodes[0]!.ranSkillVersion, 3, "the version that ran is the version it pinned");
   assert.equal(plan.nodes[1]!.skill, undefined);

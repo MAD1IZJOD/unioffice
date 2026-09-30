@@ -41,7 +41,7 @@ const work: Work = {
 const ledger: Agent = {
   id: agentId,
   organizationId: org,
-  name: "Ledger",
+  name: "Dana",
   description: "",
   type: "specialist",
   status: "active",
@@ -109,7 +109,7 @@ test("an approval names the action, not just the step", async () => {
 
   assert.match(
     stored.summary,
-    /Ledger would carry out "Analyse Q3 expenses" following Financial analysis version 3, using Calculator\./,
+    /Dana would carry out "Analyse Q3 expenses" following Financial analysis version 3, using Calculator\./,
   );
   assert.equal(request.action, stored.summary, "the approval says what would happen");
   assert.equal(request.resource, `proposal:${stored.id}`, "and points at that exact proposal");

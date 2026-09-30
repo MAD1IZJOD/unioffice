@@ -44,7 +44,7 @@ function server(role: OrganizationRole, workspaces: Record<string, WorkspaceAcce
 }
 
 const policy = { name: "Payments need a person", subject: "tool", effect: "require_approval", risk: "high", scope: {} };
-const agent = { name: "Ledger", description: "Keeps the books.", type: "specialist", capabilities: ["calculation"], toolIds: ["calculator"] };
+const agent = { name: "Harvey", description: "Keeps the books.", type: "specialist", capabilities: ["calculation"], toolIds: ["calculator"] };
 
 const changes = (post: ReturnType<typeof server>["post"]) => [
   () => post("/policies", policy),

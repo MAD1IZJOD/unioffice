@@ -337,10 +337,10 @@ test("a workspace belonging to another organization is not attached", async () =
 
 test("the room's story is read from the same rows the room itself returns", async () => {
   const service = buildService({
-    roster: [agent("Nova"), agent("Tony")],
+    roster: [agent("Jamie"), agent("Tony")],
     tasks: [
       task("t1", {
-        assignedAgentId: "Nova" as AgentId,
+        assignedAgentId: "Jamie" as AgentId,
         title: "Research the requirements",
         status: "completed",
         completedAt: now,
@@ -358,7 +358,7 @@ test("the room's story is read from the same rows the room itself returns", asyn
 
   // The handoff is the dependency edge the room already carries, named.
   assert.equal(room.narrative.handoffs.length, 1);
-  assert.equal(room.narrative.handoffs[0]!.from.name, "Nova");
+  assert.equal(room.narrative.handoffs[0]!.from.name, "Jamie");
   assert.equal(room.narrative.handoffs[0]!.to.name, "Tony");
   assert.equal(room.narrative.handoffs[0]!.fromStep.number, 1);
 
