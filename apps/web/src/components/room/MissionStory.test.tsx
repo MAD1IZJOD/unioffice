@@ -41,8 +41,8 @@ function entry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
   return {
     at: at(0),
     state: "running",
-    sentence: "Nova started “Research the requirements”",
-    agent: { id: "agent-nova", name: "Nova" },
+    sentence: "Mike started “Research the requirements”",
+    agent: { id: "agent-mike", name: "Mike" },
     step: 1,
     ...overrides,
   };
@@ -50,13 +50,13 @@ function entry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
 
 function handoff(overrides: Partial<Handoff> = {}): Handoff {
   return {
-    from: { id: "agent-nova", name: "Nova" },
+    from: { id: "agent-mike", name: "Mike" },
     to: { id: "agent-tony", name: "Tony" },
     fromStep: { number: 1, title: "Research the requirements" },
     toStep: { number: 2, title: "Assess engineering impact" },
     delivered: { artifactId: "artifact-1", name: "Research findings" },
     state: "in_progress",
-    sentence: "Nova finished “Research the requirements”. Tony is working from it now.",
+    sentence: "Mike finished “Research the requirements”. Tony is working from it now.",
     at: at(5),
     ...overrides,
   };
@@ -101,7 +101,7 @@ describe("the mission timeline", () => {
   it("puts what is going on now first, and names the state of each moment", () => {
     mount(<MissionTimeline entries={[
       entry({ at: at(0), state: "queued", sentence: "The mission was opened", agent: undefined, step: undefined }),
-      entry({ at: at(3), state: "running", sentence: "Nova started “Research”" }),
+      entry({ at: at(3), state: "running", sentence: "Mike started “Research”" }),
       entry({ at: at(9), state: "waiting", sentence: "Asked for a decision on “Send it”", step: 2 }),
     ]} />);
 
@@ -128,7 +128,7 @@ describe("the mission timeline", () => {
   it("links a moment to the agent it was about, and names the step by number", () => {
     mount(<MissionTimeline entries={[entry()]} />);
 
-    expect(screen.getByRole("link", { name: "Nova" }).getAttribute("href")).toBe("/workforce/agent-nova");
+    expect(screen.getByRole("link", { name: "Mike" }).getAttribute("href")).toBe("/workforce/agent-mike");
     expect(screen.getByText("Step 1")).toBeDefined();
   });
 
@@ -159,9 +159,9 @@ describe("agent handoffs", () => {
   it("names both specialists, the transition and which steps it joined", () => {
     mount(<MissionHandoffs handoffs={[handoff()]} artifacts={[artifact]} onOpenArtifact={() => {}} />);
 
-    expect(screen.getByRole("link", { name: "Nova" }).getAttribute("href")).toBe("/workforce/agent-nova");
+    expect(screen.getByRole("link", { name: "Mike" }).getAttribute("href")).toBe("/workforce/agent-mike");
     expect(screen.getByRole("link", { name: "Tony" }).getAttribute("href")).toBe("/workforce/agent-tony");
-    expect(screen.getByText("Nova finished “Research the requirements”. Tony is working from it now.")).toBeDefined();
+    expect(screen.getByText("Mike finished “Research the requirements”. Tony is working from it now.")).toBeDefined();
     expect(screen.getByText("Step 1 → step 2")).toBeDefined();
     expect(screen.getByText("In hand")).toBeDefined();
   });
@@ -183,13 +183,13 @@ describe("agent handoffs", () => {
   });
 
   it("shows parallel branches as separate handoffs into the step that joins them", () => {
-    // Two branches finishing into one joining step: Nova and Tony both hand
+    // Two branches finishing into one joining step: Mike and Tony both hand
     // to Harvey, which is the shape a parallel plan actually produces.
     const join = { id: "agent-harvey", name: "Harvey" };
 
     mount(<MissionHandoffs
       handoffs={[
-        handoff({ from: { id: "agent-nova", name: "Nova" }, to: join, fromStep: { number: 1, title: "Quotes" }, toStep: { number: 3, title: "Decide" } }),
+        handoff({ from: { id: "agent-mike", name: "Mike" }, to: join, fromStep: { number: 1, title: "Quotes" }, toStep: { number: 3, title: "Decide" } }),
         handoff({ from: { id: "agent-tony", name: "Tony" }, to: join, fromStep: { number: 2, title: "Usage" }, toStep: { number: 3, title: "Decide" } }),
       ]}
       artifacts={[]}
@@ -198,7 +198,7 @@ describe("agent handoffs", () => {
 
     expect(screen.getAllByRole("article")).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: "Harvey" })).toHaveLength(2);
-    expect(screen.getByRole("link", { name: "Nova" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Mike" })).toBeDefined();
     expect(screen.getByRole("link", { name: "Tony" })).toBeDefined();
     expect(screen.getByText("Step 1 → step 3")).toBeDefined();
     expect(screen.getByText("Step 2 → step 3")).toBeDefined();

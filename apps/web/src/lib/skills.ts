@@ -45,7 +45,7 @@ export function matchesSkill(skill: SkillItem, query: string): boolean {
  * Whether the company can actually use a skill right now, and why not.
  *
  * A skill is only real when an agent holds it and already has everything it
- * needs. "Held by Ledger" is not the same as "Ledger can run it", and the
+ * needs. "Held by Harvey" is not the same as "Harvey can run it", and the
  * difference is the whole point of the catalogue, so it is said plainly
  * rather than left to be worked out from a list of tools.
  */
