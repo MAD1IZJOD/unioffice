@@ -60,6 +60,30 @@ twenty is held by `workforce-expansion.test.ts` to real tools, skills it can
 use and a capability nobody else has. All agents run on the one model the
 API is configured with; there is no per-agent model.
 
+## Routing, and a known weakness
+
+The delegator (`packages/orchestrator/src/delegation/default-delegator.ts`)
+ranks eligible agents by the mission's room first, then by how many of the
+step's required capabilities each holds, then agent type and load, and
+breaks a remaining tie by agent id. A step's skill is chosen from what the
+room's agents hold before it is routed.
+
+**Known issue - a step nobody in the room can do still goes to someone in
+the room.** Capabilities rank candidates but do not filter them, and the
+room outranks capability. So when the planner asks for a capability no one
+in the mission's room holds, every agent there scores zero and the id
+tie-break picks one. Found on a live Engineering mission (`03c4ad99`): a
+security question arrived asking for `research`, nobody in Engineering holds
+it, and it went to Dana - whose capabilities are scheduling and calculation -
+rather than Chloe, the Security Engineer, who holds `security_engineering`
+but was not asked for it. Dana completed the step, but it was not her work.
+
+This is a routing-correctness problem separate from provisioning, and it is
+not fixed. A fix belongs in the delegator, with its own regression test, and
+has to decide what should happen instead - route by partial capability
+match across rooms, or refuse the step - without breaking room affinity for
+steps someone in the room can do.
+
 ## The profile
 
 An agent's profile shows its identity and presence, current work, capabilities,
