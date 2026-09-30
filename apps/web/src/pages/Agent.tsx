@@ -34,7 +34,7 @@ import { useCan } from "../lib/access";
 import { useLiveResource } from "../lib/live";
 import { useResource } from "../lib/useResource";
 import { statusLabel, taskStatusTone, toneClass, type Tone } from "../lib/tone";
-import { capabilityLabel, PRESENCE, profileOf } from "../lib/workforce";
+import { capabilityLabel, PRESENCE, roleLabel } from "../lib/workforce";
 
 import {
   Connecting,
@@ -163,7 +163,7 @@ export default function Agent() {
               </div>
 
               <div className="place-slug">
-                {profileOf(member).label} · {member.type}
+                {roleLabel(member)} · {member.type}
                 {orchestrator && " · system-critical"}
               </div>
             </div>

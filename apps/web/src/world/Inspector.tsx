@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 import { fetchAgentProfile, formatRelativeTime, type AgentProfile, type WorldAgent, type WorldSnapshot } from "../lib/api";
 import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
-import { capabilityLabel, disciplineOf, profileOf } from "../lib/workforce";
+import { capabilityLabel, disciplineOf, roleLabel } from "../lib/workforce";
 
 import { agentLine, DESK_LABEL, deskStateOf, HANDOFF_LABEL, lastLine, missionStatusWord, type DeskState } from "./describe";
 import { Runs } from "./Desk";
@@ -94,7 +94,6 @@ function AgentPanel({
   onCenter: (agentId: string) => void;
 }) {
   const state = deskStateOf(agent);
-  const profile = profileOf(agent);
   const room = snapshot.rooms.find((entry) => entry.id === agent.roomId);
   const missionId = agent.current?.missionId ?? agent.planning?.missionId;
   const mission = missionId ? snapshot.missions.find((entry) => entry.id === missionId) : undefined;
@@ -112,7 +111,7 @@ function AgentPanel({
           <Runs runs={figureRuns(lookOf(agent.id, disciplineOf(agent)))} />
         </svg>
         <div className="min-w-0">
-          <div className="world-portrait-role">{profile.label}</div>
+          <div className="world-portrait-role">{roleLabel(agent)}</div>
           <div className="world-portrait-room">{room?.name ?? "—"}</div>
           <StatePill state={state} />
         </div>

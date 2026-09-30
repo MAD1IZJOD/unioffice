@@ -152,6 +152,15 @@ export function profileOf(agent: {
   return DISCIPLINES[disciplineOf(agent)];
 }
 
+/**
+ * The job title to show: the role the company gave the agent - "Backend
+ * Engineer" - or, for one given none, its discipline's label. One source for
+ * every surface, so an agent is never called two different things.
+ */
+export function roleLabel(agent: { role?: string; type?: string; capabilities?: string[] }): string {
+  return agent.role?.trim() || profileOf(agent).label;
+}
+
 /** Groups a roster by discipline, in a stable reading order. */
 export const DISCIPLINE_ORDER: Discipline[] = [
   "orchestration",

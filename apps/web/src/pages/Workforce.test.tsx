@@ -131,6 +131,16 @@ describe("the workforce", () => {
     expect(within(tony).getByRole("link", { name: /Tony/ }).getAttribute("href")).toBe("/workforce/agent-tony");
   });
 
+  it("names each agent by the role they were given, and the rest by what they can do", async () => {
+    open("owner", () => json(200, roster([
+      ...company.members,
+      member("Bruce", { role: "Backend Engineer", capabilities: ["backend_development", "coding", "technical_design"] }),
+    ])));
+
+    expect(within(await screen.findByRole("article", { name: "Bruce" })).getByText("Backend Engineer")).toBeDefined();
+    expect(within(row("Tony")).getByText("Engineering")).toBeDefined();
+  });
+
   it("names each state the way the backend records it", async () => {
     open("owner");
     await screen.findByRole("article", { name: "Tony" });

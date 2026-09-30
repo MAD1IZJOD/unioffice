@@ -21,7 +21,7 @@ import { useLiveResource } from "../lib/live";
 import { useResource } from "../lib/useResource";
 import { toneClass } from "../lib/tone";
 import { spellOut } from "../lib/statement";
-import { capabilityLabel, PRESENCE, profileOf } from "../lib/workforce";
+import { capabilityLabel, PRESENCE, roleLabel } from "../lib/workforce";
 
 import {
   Chapter,
@@ -194,7 +194,7 @@ function Worker({ member }: { member: WorkforceMember }) {
 
       <Link to={`/workforce/${member.id}`} className="worker-who">
         <span className="worker-name">{member.name}</span>
-        <span className="worker-role">{profileOf(member).label}</span>
+        <span className="worker-role">{roleLabel(member)}</span>
       </Link>
 
       <span className="worker-status">

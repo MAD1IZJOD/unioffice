@@ -1862,6 +1862,8 @@ export type WorkforcePresence = "working" | "waiting" | "available" | "paused" |
 export interface WorkforceMember {
   id: string;
   name: string;
+  /** The job, as the company names it. Absent when none was given. */
+  role?: string;
   description: string;
   type: AgentSummary["type"];
   status: AgentSummary["status"];
@@ -1962,6 +1964,8 @@ export interface WorldRoom {
 export interface WorldAgent {
   id: string;
   name: string;
+  /** The job, as the company names it. Absent when none was given. */
+  role?: string;
   type: AgentSummary["type"];
   status: AgentSummary["status"];
   presence: WorkforcePresence;

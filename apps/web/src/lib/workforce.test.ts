@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { disciplineOf } from "./workforce";
+import { disciplineOf, roleLabel } from "./workforce";
 
 /**
  * Who reads as what. Each agent is described by the capabilities it was
@@ -41,6 +41,12 @@ describe("reading a discipline from what an agent can do", () => {
     for (const agent of firstEight) {
       expect(disciplineOf({ type: agent.type, capabilities: [...agent.capabilities] }), agent.name).toBe(agent.is);
     }
+  });
+
+  it("calls an agent by the role they were given, and one given none by their discipline", () => {
+    expect(roleLabel({ role: "Backend Engineer", type: "specialist", capabilities: ["backend_development"] })).toBe("Backend Engineer");
+    expect(roleLabel({ role: "  ", type: "specialist", capabilities: ["coding"] })).toBe("Engineering");
+    expect(roleLabel({ type: "orchestrator", capabilities: ["planning"] })).toBe("Orchestration");
   });
 
   it("reads each of the twelve by the work they were given, never as a generic specialist", () => {

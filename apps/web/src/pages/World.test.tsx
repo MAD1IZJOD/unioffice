@@ -131,6 +131,19 @@ describe("the world", () => {
     expect(screen.getByText("Working on a mission you cannot open.")).toBeDefined();
   });
 
+  it("names an agent by the role they were given, and one given none by what they can do", async () => {
+    const data = snapshot();
+    data.agents = data.agents.map((entry) => (entry.id === "tony" ? { ...entry, role: "Release Engineer" } : entry));
+    open("owner", data);
+    await asList();
+
+    await userEvent.click(screen.getByRole("button", { name: "Tony" }));
+    expect(within(screen.getByRole("complementary", { name: "Details: Tony" })).getByText("Release Engineer")).toBeDefined();
+
+    await userEvent.click(screen.getByRole("button", { name: "Mike" }));
+    expect(within(screen.getByRole("complementary", { name: "Details: Mike" })).getByText("Research")).toBeDefined();
+  });
+
   it("offers the decision to a role that can make it, and the mission's own record", async () => {
     open("owner");
     await asList();
