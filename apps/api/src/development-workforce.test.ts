@@ -23,9 +23,10 @@ import {
   SEED_WORKSPACES,
   workforce,
 } from "./development-workforce.js";
+import { expandedWorkforce } from "./workforce-expansion.js";
 
-/** Everyone the API provisions on boot when the development seed is on. */
-const everyone = completeDevelopmentWorkforce;
+/** The first six and the twelve after them: what the tests below are about. */
+const everyone = [...workforce, ...proposedWorkforce];
 
 const organizationId = "2f6b579a-f0f8-45a5-868a-21c08bde1314" as OrganizationId;
 const harveyId = "e32813a2-dda6-4a89-a756-c2991510c503" as AgentId;
@@ -282,11 +283,14 @@ const newcomers = [
   { name: "Katrina", role: "Customer Support Specialist", owns: "customer_support", room: "customer-success" },
 ];
 
-test("the boot list is the first six and the twelve after them, each once", () => {
-  assert.deepEqual(completeDevelopmentWorkforce.map((blueprint) => blueprint.id), [...workforce, ...proposedWorkforce].map((blueprint) => blueprint.id));
-  assert.equal(completeDevelopmentWorkforce.length, 18);
-  assert.equal(new Set(completeDevelopmentWorkforce.map((blueprint) => blueprint.id)).size, 18, "no id twice");
-  assert.equal(new Set(completeDevelopmentWorkforce.map((blueprint) => blueprint.name)).size, 18, "no name twice");
+test("the boot list is the first six, the twelve after them and the expansion, each once", () => {
+  assert.deepEqual(
+    completeDevelopmentWorkforce.map((blueprint) => blueprint.id),
+    [...workforce, ...proposedWorkforce, ...expandedWorkforce].map((blueprint) => blueprint.id),
+  );
+  assert.equal(completeDevelopmentWorkforce.length, 69, "sixty-nine blueprints; Dana and Rhea make seventy-one");
+  assert.equal(new Set(completeDevelopmentWorkforce.map((blueprint) => blueprint.id)).size, 69, "no id twice");
+  assert.equal(new Set(completeDevelopmentWorkforce.map((blueprint) => blueprint.name)).size, 69, "no name twice");
 });
 
 test("called without a list, the seed still makes only the first six and no room", async () => {

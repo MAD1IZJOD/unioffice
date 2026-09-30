@@ -14,16 +14,18 @@ import {
   workforce as firstSix,
 } from "./development-workforce.js";
 import { SkillService } from "./skills/skill-service.js";
+import { expandedWorkforce } from "./workforce-expansion.js";
 import { WorkforceService } from "./workforce-service.js";
 import { HALL_ID, WorldService } from "./world-service.js";
 
 /**
  * The development company, provisioned the way the API does on boot when the
  * seed is on, and read back through the real Workforce and World services
- * over the same stores. The company starts as it really is: eight agents -
- * three of the first six still owned by the seed, three a person has since
- * configured, and Dana and Rhea, whom people made - and five workspaces
- * people made, with their own ids.
+ * over the same stores. The company starts as it was before any of the
+ * newcomers: eight agents - three of the first six still owned by the seed,
+ * three a person has since configured, and Dana and Rhea, whom people made -
+ * and five workspaces people made, with their own ids. Provisioning brings
+ * the twelve and the fifty-one of the expansion, seventy-one in all.
  */
 
 const org = "2f6b579a-f0f8-45a5-868a-21c08bde1314" as OrganizationId;
@@ -40,6 +42,9 @@ const workspaceId = (slug: string) => theirWorkspaces.find(([entry]) => entry ==
 
 const existingEight = ["Tyrion", "Tony", "Harvey", "Mike", "Jamie", "Peter", "Dana", "Rhea"];
 const retired = ["Atlas", "Forge", "Ledger", "Nova", "Kindred", "Relay"];
+
+/** Everyone the seed adds to the eight. */
+const newcomers = [...proposedWorkforce, ...expandedWorkforce];
 
 /** Where each of the twelve sits, and as what. */
 const expected: Record<string, { role: string; room: string }> = {
@@ -127,7 +132,7 @@ async function company() {
   return { agents, workspaces, writes, provision, workforce, world };
 }
 
-test("the complete development workforce reaches the Workforce and the World: twenty agents, each once", async () => {
+test("the complete development workforce reaches the Workforce and the World: seventy-one agents, each once", async () => {
   const { provision, workforce, world, agents } = await company();
   const before = structuredClone([...agents.values()]);
   assert.deepEqual(before.map((agent) => agent.name).sort(), [...existingEight].sort(), "the company starts with its eight");
@@ -136,10 +141,10 @@ test("the complete development workforce reaches the Workforce and the World: tw
 
   const members = (await workforce.getWorkforce(org)).members;
   const names = members.map((member) => member.name);
-  assert.equal(members.length, 20);
-  assert.deepEqual([...names].sort(), [...existingEight, ...Object.keys(expected)].sort());
-  assert.equal(new Set(members.map((member) => member.id)).size, 20, "no id twice");
-  assert.equal(new Set(names).size, 20, "no name twice");
+  assert.equal(members.length, 71);
+  assert.deepEqual([...names].sort(), [...existingEight, ...newcomers.map((blueprint) => blueprint.name)].sort());
+  assert.equal(new Set(members.map((member) => member.id)).size, 71, "no id twice");
+  assert.equal(new Set(names).size, 71, "no name twice");
   for (const name of retired) assert.equal(names.includes(name), false, `${name} does not come back`);
 
   // The World shows exactly the same people, each seated once.
@@ -151,7 +156,7 @@ test("the complete development workforce reaches the Workforce and the World: tw
   for (const agent of before) assert.ok(members.some((member) => member.id === agent.id && member.name === agent.name), `${agent.name} is still here`);
 });
 
-test("each of the twelve is in their workspace's room, with their role, capabilities, tools, skills and status", async () => {
+test("each newcomer is in their workspace's room, with their role, capabilities, tools, skills and status", async () => {
   const { provision, workforce, world, workspaces } = await company();
   await provision();
 
@@ -159,12 +164,17 @@ test("each of the twelve is in their workspace's room, with their role, capabili
   const snapshot = await world.getWorld(org);
   const roomOf = (slug: string) => [...workspaces.values()].find((workspace) => workspace.slug === slug)!;
 
-  for (const blueprint of proposedWorkforce) {
-    const { role, room } = expected[blueprint.name]!;
+  // The twelve are checked against what was agreed for them; the expansion
+  // against its own blueprints, which its contract test already holds to.
+  for (const blueprint of proposedWorkforce) assert.deepEqual(expected[blueprint.name], { role: blueprint.role, room: blueprint.workspace });
+
+  for (const blueprint of newcomers) {
+    const role = blueprint.role!;
+    const room = blueprint.workspace;
     const member = members.find((entry) => entry.id === blueprint.id);
     assert.ok(member, `${blueprint.name} is in the Workforce`);
     assert.equal(member.role, role);
-    assert.equal(member.workspace?.slug, room);
+    assert.equal(member.workspace?.slug, room, `${blueprint.name}'s workspace`);
     assert.equal(member.status, "active");
     assert.equal(member.presence, "available");
     assert.deepEqual(member.capabilities, blueprint.capabilities);
@@ -175,25 +185,31 @@ test("each of the twelve is in their workspace's room, with their role, capabili
 
     const inWorld = snapshot.agents.find((entry) => entry.id === blueprint.id)!;
     assert.equal(inWorld.role, role);
-    assert.equal(inWorld.roomId, roomOf(room).id, `${blueprint.name} sits in ${room}`);
+    const roomId = room ? roomOf(room).id : HALL_ID;
+    assert.equal(inWorld.roomId, roomId, `${blueprint.name} sits in ${room ?? "the hall"}`);
     assert.equal(inWorld.presence, "available");
-    assert.ok(snapshot.rooms.find((entry) => entry.id === roomOf(room).id)?.agentIds.includes(blueprint.id as AgentId));
+    assert.ok(snapshot.rooms.find((entry) => entry.id === roomId)?.agentIds.includes(blueprint.id as AgentId));
   }
 });
 
-test("reuses the company's workspaces and makes only Product and Revenue & Growth", async () => {
+test("reuses the company's workspaces and makes only Product, Revenue & Growth and Compliance & Risk", async () => {
   const { provision, workspaces, writes } = await company();
   await provision();
 
   const bySlug = new Map([...workspaces.values()].map((workspace) => [workspace.slug, workspace]));
-  assert.equal(workspaces.size, 7);
+  assert.equal(workspaces.size, 8);
   for (const [slug, , id] of theirWorkspaces) assert.equal(bySlug.get(slug)?.id, id, `${slug} is reused`);
   assert.equal(bySlug.get("product")?.id, SEED_WORKSPACES.product.id);
   assert.equal(bySlug.get("revenue-growth")?.id, SEED_WORKSPACES["revenue-growth"].id);
-  assert.deepEqual(writes.filter((write) => write.includes("workspace")).sort(), ["create workspace product", "create workspace revenue-growth"]);
+  assert.equal(bySlug.get("compliance-risk")?.id, SEED_WORKSPACES["compliance-risk"].id);
+  assert.deepEqual(writes.filter((write) => write.includes("workspace")).sort(), [
+    "create workspace compliance-risk",
+    "create workspace product",
+    "create workspace revenue-growth",
+  ]);
 });
 
-test("writes only the twelve new agents: nobody existing is changed, and nothing is deleted", async () => {
+test("writes only the newcomers: nobody existing is changed, and nothing is deleted", async () => {
   const { provision, agents, writes } = await company();
   const before = structuredClone(new Map(agents));
 
@@ -201,7 +217,7 @@ test("writes only the twelve new agents: nobody existing is changed, and nothing
 
   assert.deepEqual(
     writes.filter((write) => write.includes("agent")).sort(),
-    proposedWorkforce.map((blueprint) => `create agent ${blueprint.name}`).sort(),
+    newcomers.map((blueprint) => `create agent ${blueprint.name}`).sort(),
   );
   for (const [id, agent] of before) assert.deepEqual(agents.get(id), agent, `${agent.name} is exactly as it was`);
 });
@@ -228,8 +244,10 @@ test("someone who reaches only some workspaces sees only the agents in them, in 
   const listed = (await workforce.getWorkforce(org, { reach })).members.map((member) => member.name).sort();
   const snapshot = await world.getWorld(org, { reach });
 
-  for (const name of ["Donna", "Louis", "Sansa"]) assert.equal(listed.includes(name), false, `${name} is hidden`);
-  assert.equal(listed.length, 17);
+  const inRevenue = newcomers.filter((blueprint) => blueprint.workspace === "revenue-growth").map((blueprint) => blueprint.name);
+  assert.equal(inRevenue.length, 13);
+  for (const name of inRevenue) assert.equal(listed.includes(name), false, `${name} is hidden`);
+  assert.equal(listed.length, 71 - 13);
   assert.deepEqual(snapshot.agents.map((agent) => agent.name).sort(), listed);
   assert.equal(snapshot.rooms.some((room) => room.id === hidden), false, "their room is hidden too");
   assert.ok(snapshot.rooms.some((room) => room.id === HALL_ID));

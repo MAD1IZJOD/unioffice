@@ -13,6 +13,8 @@ import type {
   WorkspaceRepository,
 } from "@unioffice/database";
 
+import { expandedWorkforce } from "./workforce-expansion.js";
+
 const developmentOrganization = {
   id: "2f6b579a-f0f8-45a5-868a-21c08bde1314" as OrganizationId,
   slug: "unioffice-development",
@@ -316,13 +318,14 @@ export const proposedWorkforce: Blueprint[] = [
 
 /**
  * Everyone the development seed provisions when it is switched on
- * (`SEED_DEVELOPMENT_WORKFORCE=true`): the first six and the twelve after
- * them. Agents people made themselves - Dana and Rhea - are not blueprints,
- * so the seed never touches them.
+ * (`SEED_DEVELOPMENT_WORKFORCE=true`): the first six, the twelve after them,
+ * and the fifty-one of the expansion. Agents people made themselves - Dana
+ * and Rhea - are not blueprints, so the seed never touches them.
  */
 export const completeDevelopmentWorkforce: readonly Blueprint[] = [
   ...workforce,
   ...proposedWorkforce,
+  ...expandedWorkforce,
 ];
 
 export async function ensureDevelopmentWorkforce(
