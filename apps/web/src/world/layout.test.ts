@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pathBetween, pathLength, planFloor, TILE, type FloorPlan, type Point } from "./layout";
+import { pathBetween, pathLength, planFloor, TILE, type FloorPlan, type Point, type Rect } from "./layout";
 
 const rooms = [
   { id: "hall", agentIds: ["tyrion", "jamie", "peter", "mike"] },
@@ -238,5 +238,85 @@ describe("walking through the office as it is today", () => {
 
   it("gives the same way for the same two desks, every time", () => {
     expect(pathBetween(office, "harvey", "rhea")).toEqual(pathBetween(office, "harvey", "rhea"));
+  });
+});
+
+describe("the office with all twenty", () => {
+  // The rooms as the server lists them once the twelve are seated: the hall
+  // first, then the workspaces by name. Engineering needs a second row.
+  const rooms = [
+    { id: "hall", agentIds: ["tyrion", "jamie", "peter"] },
+    { id: "customer-success", agentIds: ["rhea", "katrina"] },
+    { id: "engineering", agentIds: ["dana", "tony", "wanda", "bruce", "natasha", "sam"] },
+    { id: "finance", agentIds: ["harvey"] },
+    { id: "operations", agentIds: ["brienne", "davos"] },
+    { id: "product", agentIds: ["jessica"] },
+    { id: "research", agentIds: ["mike", "rachel"] },
+    { id: "revenue-growth", agentIds: ["donna", "louis", "sansa"] },
+  ];
+  const office = planFloor(rooms);
+  const everyone = rooms.flatMap((room) => room.agentIds);
+  const overlap = (a: Rect, b: Rect) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+  it("seats all twenty, each once, in the room they belong to", () => {
+    expect(everyone).toHaveLength(20);
+    expect([...office.seats.keys()].sort()).toEqual([...everyone].sort());
+
+    for (const room of rooms) {
+      for (const id of room.agentIds) expect(office.seats.get(id)!.roomId).toBe(room.id);
+    }
+  });
+
+  it("gives every desk its own floor, inside its own room", () => {
+    const seats = [...office.seats.values()];
+
+    for (const [index, seat] of seats.entries()) {
+      const room = office.rooms.find((entry) => entry.id === seat.roomId)!.rect;
+      expect(seat.cell.x >= room.x && seat.cell.x + seat.cell.width <= room.x + room.width).toBe(true);
+      expect(seat.cell.y >= room.y && seat.cell.y + seat.cell.height <= room.y + room.height).toBe(true);
+      for (const other of seats.slice(index + 1)) expect(overlap(seat.cell, other.cell), `${seat.agentId} and ${other.agentId}`).toBe(false);
+    }
+
+    for (const [index, room] of office.rooms.entries()) {
+      for (const other of office.rooms.slice(index + 1)) expect(overlap(room.rect, other.rect), `${room.id} and ${other.id}`).toBe(false);
+    }
+  });
+
+  it("puts Engineering's second row behind its first, with an aisle in front of each", () => {
+    const [first, second] = [office.seats.get("dana")!, office.seats.get("bruce")!];
+
+    expect(second.cell.y).toBeGreaterThan(first.cell.y + first.cell.height);
+    expect(first.front.y).toBeGreaterThan(first.cell.y + first.cell.height);
+    expect(first.front.y).toBeLessThan(second.cell.y);
+  });
+
+  it("opens every door onto floor", () => {
+    for (const placed of office.rooms) {
+      const inward = placed.side === "north" ? -1 : 1;
+      expect(crossesADesk(placed.door, { x: placed.door.x, y: placed.door.y + inward * TILE }, office)).toBe(false);
+    }
+  });
+
+  it("reaches every desk from every other without crossing a desk or leaving the floor", () => {
+    const floor = [office.corridor, ...office.rooms.map((room) => room.rect)];
+
+    for (const from of everyone) {
+      for (const to of everyone) {
+        if (from === to) continue;
+        const path = pathBetween(office, from, to)!;
+
+        expect(path[0]).toEqual(office.seats.get(from)!.front);
+        expect(path.at(-1)).toEqual(office.seats.get(to)!.front);
+        for (const [a, b] of legsOf(path)) {
+          expect(a.x === b.x || a.y === b.y).toBe(true);
+          expect(crossesADesk(a, b, office)).toBe(false);
+          expect(legInside(a, b, floor)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("is the same office every time for the same twenty", () => {
+    expect(JSON.stringify([...planFloor(rooms).seats])).toBe(JSON.stringify([...office.seats]));
   });
 });
