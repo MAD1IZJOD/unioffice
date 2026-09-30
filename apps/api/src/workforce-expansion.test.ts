@@ -92,4 +92,6 @@ test("each department has the people it was planned with", () => {
   for (const agent of expandedWorkforce) byRoom.set(agent.workspace ?? "hall", [...(byRoom.get(agent.workspace ?? "hall") ?? []), agent.name]);
 
   assert.deepEqual(byRoom.get("engineering"), ["Alex", "Maya", "Leo", "Elena", "Ryan", "Chloe", "Ethan", "Olivia", "Noah", "Arjun", "Sophie", "Liam"]);
+  assert.deepEqual(byRoom.get("product"), ["Emma", "Lucas", "Mia", "Daniel", "Ava", "Henry"]);
+  assert.deepEqual(byRoom.get("research"), ["Nora", "Adam", "Isabella", "Ethan R", "Clara"]);
 });

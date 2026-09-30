@@ -164,7 +164,151 @@ export const engineeringExpansion: Blueprint[] = [
   },
 ];
 
+/* Product ------------------------------------------------------------------ */
+
+export const productExpansion: Blueprint[] = [
+  {
+    id: id(531),
+    name: "Emma",
+    type: "specialist",
+    role: "Product Strategist",
+    workspace: "product",
+    description:
+      "Decides where the product should go over the next year and why: reads the market, the customers and the company's goals, and turns them into a strategy and the bets that follow from it.",
+    capabilities: ["product_strategy", "stakeholder_messaging", "writing"],
+    toolIds: ["datetime"],
+    skills: ["stakeholder-update", "briefing-generation"],
+  },
+  {
+    id: id(532),
+    name: "Lucas",
+    type: "specialist",
+    role: "Product Designer",
+    workspace: "product",
+    description:
+      "Designs how the product works for the people using it: flows, screens, states and the words on them. Writes the design rationale and the questions a design still has to answer.",
+    capabilities: ["product_design", "user_experience", "writing"],
+    toolIds: ["datetime"],
+    skills: ["briefing-generation", "meeting-summary"],
+  },
+  {
+    id: id(533),
+    name: "Mia",
+    type: "specialist",
+    role: "UX Researcher",
+    workspace: "product",
+    description:
+      "Finds out how people really use the product: plans interviews and usability studies, synthesises what participants said and did, and turns it into findings the designers can act on.",
+    capabilities: ["ux_research", "user_experience", "research", "synthesis"],
+    toolIds: ["datetime"],
+    skills: ["source-synthesis", "web-research"],
+  },
+  {
+    id: id(534),
+    name: "Daniel",
+    type: "specialist",
+    role: "Product Analyst",
+    workspace: "product",
+    description:
+      "Measures what the product is doing for its users: funnels, retention, feature adoption and experiment results from the figures supplied. Says what changed, by how much, and whether it matters.",
+    capabilities: ["product_analytics", "calculation", "data_analysis"],
+    toolIds: ["calculator", "datetime", "json_transform"],
+    skills: ["forecasting"],
+  },
+  {
+    id: id(535),
+    name: "Ava",
+    type: "specialist",
+    role: "Product Operations",
+    workspace: "product",
+    description:
+      "Keeps the product team's machinery running: release notes, launch checklists, the planning cadence and the processes that connect product decisions to the rest of the company.",
+    capabilities: ["product_operations", "process_design", "writing"],
+    toolIds: ["datetime"],
+    skills: ["policy-drafting", "meeting-summary"],
+  },
+  {
+    id: id(536),
+    name: "Henry",
+    type: "specialist",
+    role: "Technical Product Manager",
+    workspace: "product",
+    description:
+      "Owns the parts of the product only engineers use: APIs, platform capabilities and technical debt. Writes technical requirements, weighs engineering trade-offs and keeps engineering and product aligned.",
+    capabilities: ["technical_product_management", "technical_design", "stakeholder_messaging"],
+    toolIds: ["datetime"],
+    skills: ["api-design", "stakeholder-update"],
+  },
+];
+
+/* Research ----------------------------------------------------------------- */
+
+export const researchExpansion: Blueprint[] = [
+  {
+    id: id(537),
+    name: "Nora",
+    type: "specialist",
+    role: "Competitive Intelligence",
+    workspace: "research",
+    description:
+      "Tracks what competitors are doing and what it means for the company: pricing, launches, positioning and hiring signals from the material supplied, written up as a brief a decision can rest on.",
+    capabilities: ["competitive_intelligence", "research", "synthesis"],
+    toolIds: ["datetime"],
+    skills: ["competitor-analysis", "web-research", "source-synthesis"],
+  },
+  {
+    id: id(538),
+    name: "Adam",
+    type: "specialist",
+    role: "Technical Researcher",
+    workspace: "research",
+    description:
+      "Investigates technical questions before the company commits: compares technologies, reads papers and documentation, and reports what is proven, what is promising and what is still hype.",
+    capabilities: ["technical_research", "research", "synthesis"],
+    toolIds: ["datetime", "json_transform"],
+    skills: ["web-research", "source-synthesis"],
+  },
+  {
+    id: id(539),
+    name: "Isabella",
+    type: "specialist",
+    role: "Market Analyst",
+    workspace: "research",
+    description:
+      "Sizes markets and segments from the data supplied: who buys, how much they spend and how fast it is growing. Shows the working behind every figure so the estimate can be checked.",
+    capabilities: ["market_analysis", "research", "calculation"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["market-research", "competitor-analysis"],
+  },
+  {
+    id: id(540),
+    name: "Ethan R",
+    type: "specialist",
+    role: "Data Researcher",
+    workspace: "research",
+    description:
+      "Answers questions with data: finds and cleans the datasets supplied, runs the analysis and reports what the data does and does not support, including where it is too thin to say.",
+    capabilities: ["data_research", "research", "data_analysis"],
+    toolIds: ["calculator", "json_transform"],
+    skills: ["web-research", "competitor-analysis"],
+  },
+  {
+    id: id(541),
+    name: "Clara",
+    type: "specialist",
+    role: "Knowledge Analyst",
+    workspace: "research",
+    description:
+      "Keeps what the company knows findable and true: organises research and decisions, merges duplicates, flags what is out of date and writes the summaries people read instead of the originals.",
+    capabilities: ["knowledge_management", "synthesis", "writing"],
+    toolIds: ["datetime"],
+    skills: ["source-synthesis", "briefing-generation", "meeting-summary"],
+  },
+];
+
 /** Everyone beyond the first twenty, in the order they are provisioned. */
 export const expandedWorkforce: Blueprint[] = [
   ...engineeringExpansion,
+  ...productExpansion,
+  ...researchExpansion,
 ];
