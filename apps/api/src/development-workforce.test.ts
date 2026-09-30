@@ -16,7 +16,10 @@ import type {
   WorkspaceRepository,
 } from "@unioffice/database";
 
-import { ensureDevelopmentWorkforce, SEED_WORKSPACES } from "./development-workforce.js";
+import { ensureDevelopmentWorkforce, proposedWorkforce, SEED_WORKSPACES, workforce } from "./development-workforce.js";
+
+/** The first six and the twelve proposed after them, provisioned together on purpose. */
+const everyone = [...workforce, ...proposedWorkforce];
 
 const organizationId = "2f6b579a-f0f8-45a5-868a-21c08bde1314" as OrganizationId;
 const harveyId = "e32813a2-dda6-4a89-a756-c2991510c503" as AgentId;
@@ -237,7 +240,7 @@ test("every seeded agent holds only skills it can actually use", async () => {
   const { resolveSkills, skillFit } = await import("@unioffice/skills");
   const repository = agentRepository([]);
 
-  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), repository, workspaceRepository());
+  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), repository, workspaceRepository(), everyone);
   const skills = resolveSkills([]);
 
   assert.ok(agents.some((agent) => (agent.skills ?? []).length > 0));
@@ -273,8 +276,22 @@ const newcomers = [
   { name: "Katrina", role: "Customer Support Specialist", owns: "customer_support", room: "customer-success" },
 ];
 
+test("the boot seed makes none of the proposed agents and no room, whatever the database holds", async () => {
+  const agents = agentRepository([]);
+  const workspaces = workspaceRepository([companyEngineering()]);
+
+  // Called exactly as the API calls it on start.
+  const { agents: seeded } = await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+
+  assert.deepEqual(seeded.map((agent) => agent.name).sort(), ["Harvey", "Jamie", "Mike", "Peter", "Tony", "Tyrion"]);
+  for (const proposed of proposedWorkforce) {
+    assert.equal(agents.agents.has(proposed.id as AgentId), false, `${proposed.name} is not created on boot`);
+  }
+  assert.deepEqual([...workspaces.workspaces.values()].map((workspace) => workspace.slug), ["engineering"], "no room is made on boot");
+});
+
 test("seeds all twelve beyond the first six, each once, each with a role and a room", async () => {
-  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), agentRepository([]), workspaceRepository());
+  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), agentRepository([]), workspaceRepository(), everyone);
   const seeded = agents.filter((agent) => typeof agent.metadata.role === "string");
 
   assert.equal(newcomers.length, 12);
@@ -291,7 +308,7 @@ test("seats the engineering team in the company's own Engineering workspace, fou
   const agents = agentRepository([]);
   const workspaces = workspaceRepository([companyEngineering()]);
 
-  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces, everyone);
 
   // Nothing new was made for a room the company already has.
   const engineering = [...workspaces.workspaces.values()].filter((workspace) => workspace.slug === "engineering");
@@ -314,7 +331,7 @@ test("gives each new agent a capability nobody else holds, and only tools that e
   const registry = createDefaultToolRegistry();
   const agents = agentRepository([]);
 
-  const { agents: seeded } = await ensureDevelopmentWorkforce(organizationRepository(null), agents, workspaceRepository());
+  const { agents: seeded } = await ensureDevelopmentWorkforce(organizationRepository(null), agents, workspaceRepository(), everyone);
 
   for (const member of newcomers) {
     const holders = seeded.filter((agent) => agent.capabilities.includes(member.owns));
@@ -332,7 +349,7 @@ test("creates a missing room once under the seed's id, and a second run changes 
   const agents = agentRepository([]);
   const workspaces = workspaceRepository();
 
-  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces, everyone);
   const engineering = [...workspaces.workspaces.values()].find((workspace) => workspace.slug === "engineering");
   assert.equal(engineering?.id, SEED_WORKSPACES.engineering.id);
   assert.equal(engineering?.organizationId, organizationId);
@@ -343,7 +360,7 @@ test("creates a missing room once under the seed's id, and a second run changes 
   agents.update = count(agents.update.bind(agents));
   workspaces.create = count(workspaces.create.bind(workspaces));
 
-  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces, everyone);
   assert.equal(writes, 0, "a second boot writes nothing");
 });
 
@@ -363,7 +380,7 @@ test("seats everyone new in their room, making only the rooms the company does n
   const workspaces = workspaceRepository(theirs);
   const agents = agentRepository([]);
 
-  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces);
+  await ensureDevelopmentWorkforce(organizationRepository(existingOrganization()), agents, workspaces, everyone);
 
   const bySlug = new Map([...workspaces.workspaces.values()].map((workspace) => [workspace.slug, workspace]));
   const made = [...workspaces.workspaces.values()].filter((workspace) => !theirs.some((existing) => existing.id === workspace.id));
@@ -380,7 +397,7 @@ test("seats everyone new in their room, making only the rooms the company does n
 test("leaves the first six where they are: no room or role is given to them", async () => {
   const agents = agentRepository([]);
 
-  await ensureDevelopmentWorkforce(organizationRepository(null), agents, workspaceRepository([companyEngineering()]));
+  await ensureDevelopmentWorkforce(organizationRepository(null), agents, workspaceRepository([companyEngineering()]), everyone);
 
   for (const name of ["Tyrion", "Tony", "Harvey", "Mike", "Jamie", "Peter"]) {
     const agent = [...agents.agents.values()].find((entry) => entry.name === name)!;
@@ -390,7 +407,7 @@ test("leaves the first six where they are: no room or role is given to them", as
 });
 
 test("names nobody twice and brings back none of the retired names", async () => {
-  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), agentRepository([]), workspaceRepository());
+  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), agentRepository([]), workspaceRepository(), everyone);
   const names = agents.map((agent) => agent.name);
 
   assert.equal(new Set(names).size, names.length);

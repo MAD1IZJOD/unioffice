@@ -141,7 +141,16 @@ export const workforce: Blueprint[] = [
     toolIds: ["datetime"],
     skills: ["executive-briefing", "stakeholder-update", "announcement-drafting", "meeting-summary"],
   },
+];
 
+/**
+ * Twelve more agents, proposed and not yet approved - their names in
+ * particular. They are never created on boot: nothing provisions them until
+ * someone passes them to `ensureDevelopmentWorkforce` on purpose, so a
+ * restart of an API that seeds cannot put unapproved people into a real
+ * company. Tests exercise them exactly as they would be provisioned.
+ */
+export const proposedWorkforce: Blueprint[] = [
   /* Engineering ------------------------------------------------------------ */
   {
     id: "e32813a2-dda6-4a89-a756-c2991510c507",
@@ -301,6 +310,8 @@ export async function ensureDevelopmentWorkforce(
   organizationRepository: OrganizationRepository,
   agentRepository: AgentRepository,
   workspaceRepository: WorkspaceRepository,
+  /** Who to seed. The boot seed is the first six only; anyone else is passed on purpose. */
+  blueprints: readonly Blueprint[] = workforce,
 ): Promise<{
   organization: Organization;
   agents: Agent[];
@@ -334,11 +345,11 @@ export async function ensureDevelopmentWorkforce(
   const rooms = await ensureSeedWorkspaces(
     workspaceRepository,
     organization.id,
-    new Set(workforce.flatMap((blueprint) => (blueprint.workspace ? [blueprint.workspace] : []))),
+    new Set(blueprints.flatMap((blueprint) => (blueprint.workspace ? [blueprint.workspace] : []))),
     now,
   );
 
-  for (const blueprint of workforce) {
+  for (const blueprint of blueprints) {
     const toolIds = blueprint.toolIds;
     const workspaceId = blueprint.workspace ? rooms.get(blueprint.workspace) : undefined;
     const systemInstructions = [

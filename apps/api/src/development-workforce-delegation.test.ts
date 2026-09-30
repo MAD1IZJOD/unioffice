@@ -13,7 +13,7 @@ import type {
 import type { AgentRepository, OrganizationRepository, WorkspaceRepository } from "@unioffice/database";
 import { DefaultDelegator } from "@unioffice/orchestrator";
 
-import { ensureDevelopmentWorkforce } from "./development-workforce.js";
+import { ensureDevelopmentWorkforce, proposedWorkforce, workforce } from "./development-workforce.js";
 
 /**
  * Who the delegator actually hands work to, across the whole seeded
@@ -51,7 +51,8 @@ async function seededWorkforce() {
     async delete(id) { workspaces.delete(id); },
   };
 
-  await ensureDevelopmentWorkforce(organizations, agentRepository, workspaceRepository);
+  // The first six and the twelve proposed, provisioned together on purpose.
+  await ensureDevelopmentWorkforce(organizations, agentRepository, workspaceRepository, [...workforce, ...proposedWorkforce]);
 
   // The two the company made itself, as they are.
   const engineering = [...workspaces.values()].find((workspace) => workspace.slug === "engineering")!;
