@@ -19,8 +19,8 @@ const works = [
   { id: financeWork, organizationId: orgA, workspaceId: finance, objective: "Finance mission" },
 ] as Work[];
 
-function event(id: string, workId?: WorkId): Event {
-  return { id, type: "work.started", organizationId: orgA, workId, actorType: "system", timestamp: new Date(), payload: {}, metadata: {} } as Event;
+function event(id: string, workId?: WorkId, agentId?: string): Event {
+  return { id, type: "work.started", organizationId: orgA, workId, agentId, actorType: "system", timestamp: new Date(), payload: {}, metadata: {} } as Event;
 }
 
 function server(role: OrganizationRole, overrides: Partial<ApiServices> = {}) {
@@ -38,6 +38,9 @@ function server(role: OrganizationRole, overrides: Partial<ApiServices> = {}) {
       },
       async getOrganizationActivity() {
         return [event("company-event", companyWork), event("finance-event", financeWork), event("organization-event")];
+      },
+      async getAgents() {
+        return [{ id: "company-agent" }, { id: "finance-agent", workspaceId: finance }];
       },
       async workspaceIndex() {
         indexReads += 1;
@@ -64,6 +67,25 @@ test("a member without a workspace grant sees company-wide missions, artifacts a
   assert.deepEqual(list, [companyWork]);
   assert.deepEqual(artifacts, ["company-artifact"]);
   assert.deepEqual(activity, ["company-event", "organization-event"]);
+});
+
+test("a member is not told about an agent the roster hides, outside any mission", async () => {
+  const { app } = server("member", {
+    workQueryService: {
+      async getOrganizationActivity() {
+        return [event("finance-agent-joined", undefined, "finance-agent"), event("company-agent-joined", undefined, "company-agent")];
+      },
+      async getAgents() {
+        return [{ id: "company-agent" }, { id: "finance-agent", workspaceId: finance }];
+      },
+      async workspaceIndex() {
+        return new Map();
+      },
+    },
+  } as unknown as Partial<ApiServices>);
+
+  const activity = (await app.inject({ method: "GET", url: "/activity", headers: bearer })).json().events.map((entry: { id: string }) => entry.id);
+  assert.deepEqual(activity, ["company-agent-joined"]);
 });
 
 test("an owner sees everything, without the extra read narrowing needs", async () => {

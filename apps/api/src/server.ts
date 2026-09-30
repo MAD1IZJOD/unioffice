@@ -1633,7 +1633,18 @@ export function buildApiServer(
         parseOptionalLimit(query.limit),
       );
 
-      return { events: await reachableByWork(services, access, events) };
+      const reachable = await reachableByWork(services, access, events);
+      const reach = reachOf(access);
+      if (!reach) return { events: reachable };
+
+      // An event that belongs to no mission passes the mission check, so one
+      // about an agent the roster hides - joining, being reconfigured - is
+      // left out here, as the agent is from the roster.
+      const hidden = new Set((await services.workQueryService.getAgents(access.organizationId))
+        .filter((agent) => !reach(agent.workspaceId))
+        .map((agent) => agent.id));
+
+      return { events: reachable.filter((event) => event.workId || !event.agentId || !hidden.has(event.agentId)) };
     });
 
     // ---------------------------------------------------------------------
