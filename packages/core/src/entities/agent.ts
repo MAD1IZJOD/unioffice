@@ -23,6 +23,14 @@ export interface Agent {
 
   name: string;
 
+  /**
+   * The job, as the company names it - "Frontend Engineer". Distinct from
+   * the discipline the product reads from the agent's capabilities
+   * ("Engineering"), and from `type`, which is how the pipeline uses it.
+   * Absent when none was given.
+   */
+  role?: string;
+
   description: string;
 
   type: AgentType;

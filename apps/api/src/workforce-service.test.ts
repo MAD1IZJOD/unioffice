@@ -176,8 +176,8 @@ test("a member's role is the one they were given, and nobody else gets one", asy
   const service = setup({
     agents: [
       agent("tony"),
-      agent("bruce", { workspaceId: finance, metadata: { role: " Backend Engineer " } }),
-      agent("jessica", { metadata: { role: "" } }),
+      agent("bruce", { workspaceId: finance, role: " Backend Engineer " }),
+      agent("jessica", { role: "" }),
       agent("secretive", { metadata: { systemInstructions: "Not a role." } }),
     ],
   });
@@ -192,7 +192,7 @@ test("a member's role is the one they were given, and nobody else gets one", asy
 
 test("a newcomer in a workspace someone cannot reach stays out of their workforce, role and all", async () => {
   const service = setup({
-    agents: [agent("tony"), agent("jessica", { workspaceId: finance, metadata: { role: "Product Manager" } })],
+    agents: [agent("tony"), agent("jessica", { workspaceId: finance, role: "Product Manager" })],
   });
 
   const members = (await service.getWorkforce(orgA, { reach: companyOnly })).members;

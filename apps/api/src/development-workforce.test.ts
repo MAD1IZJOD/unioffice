@@ -292,7 +292,7 @@ test("the boot seed makes none of the proposed agents and no room, whatever the 
 
 test("seeds all twelve beyond the first six, each once, each with a role and a room", async () => {
   const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), agentRepository([]), workspaceRepository(), everyone);
-  const seeded = agents.filter((agent) => typeof agent.metadata.role === "string");
+  const seeded = agents.filter((agent) => typeof agent.role === "string");
 
   assert.equal(newcomers.length, 12);
   assert.deepEqual(seeded.map((agent) => agent.name).sort(), newcomers.map((member) => member.name).sort());
@@ -319,7 +319,7 @@ test("seats the engineering team in the company's own Engineering workspace, fou
     assert.ok(agent, `${member.name} was seeded`);
     assert.equal(agent.organizationId, organizationId);
     assert.equal(agent.workspaceId, companyEngineering().id);
-    assert.equal(agent.metadata.role, member.role);
+    assert.equal(agent.role, member.role);
     assert.equal(agent.status, "active");
     assert.ok(agent.capabilities.includes(member.owns), `${member.name} holds ${member.owns}`);
     assert.match(String(agent.metadata.systemInstructions), new RegExp(`^You are ${member.name}, the UNIOFFICE ${member.role}\\.`));
@@ -390,7 +390,7 @@ test("seats everyone new in their room, making only the rooms the company does n
   for (const member of newcomers) {
     const agent = [...agents.agents.values()].find((entry) => entry.name === member.name)!;
     assert.equal(agent.workspaceId, bySlug.get(member.room)!.id, `${member.name} works in ${member.room}`);
-    assert.equal(agent.metadata.role, member.role);
+    assert.equal(agent.role, member.role);
   }
 });
 
@@ -402,7 +402,7 @@ test("leaves the first six where they are: no room or role is given to them", as
   for (const name of ["Tyrion", "Tony", "Harvey", "Mike", "Jamie", "Peter"]) {
     const agent = [...agents.agents.values()].find((entry) => entry.name === name)!;
     assert.equal(agent.workspaceId, undefined, `${name} keeps no seeded room`);
-    assert.equal(agent.metadata.role, undefined, `${name} keeps no seeded role`);
+    assert.equal(agent.role, undefined, `${name} keeps no seeded role`);
   }
 });
 

@@ -48,7 +48,7 @@ export class SupabaseAgentRepository
           updated_at:
             agent.updatedAt.toISOString(),
           metadata:
-            agent.metadata,
+            metadataOf(agent),
         })
         .select()
         .single();
@@ -166,7 +166,7 @@ export class SupabaseAgentRepository
           updated_at:
             agent.updatedAt.toISOString(),
           metadata:
-            agent.metadata,
+            metadataOf(agent),
         })
         .eq("id", agent.id)
         .select()
@@ -200,6 +200,9 @@ export class SupabaseAgentRepository
   private mapRow(
     row: any,
   ): Agent {
+    const { role, ...metadata } = (row.metadata ?? {}) as Record<string, unknown>;
+    const title = typeof role === "string" && role.trim() ? role.trim() : undefined;
+
     return {
       id: row.id as AgentId,
 
@@ -210,6 +213,8 @@ export class SupabaseAgentRepository
         row.workspace_id ?? undefined,
 
       name: row.name,
+
+      ...(title ? { role: title } : {}),
 
       description:
         row.description,
@@ -233,8 +238,18 @@ export class SupabaseAgentRepository
       updatedAt:
         new Date(row.updated_at),
 
-      metadata:
-        row.metadata ?? {},
+      metadata,
     };
   }
+}
+
+/**
+ * The row's metadata, carrying the agent's role. The role is stored there
+ * rather than in a column of its own, and it lives in one place: set from
+ * `agent.role` on every write - cleared when the agent has none - and read
+ * back into `agent.role`, never left in the metadata the rest of the code sees.
+ */
+export function metadataOf(agent: Agent): Record<string, unknown> {
+  const { role: _stale, ...metadata } = agent.metadata;
+  return agent.role?.trim() ? { ...metadata, role: agent.role.trim() } : metadata;
 }

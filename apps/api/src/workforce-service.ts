@@ -453,7 +453,7 @@ export class WorkforceService {
     const last = finished[0];
     const workspace = agent.workspaceId ? workspacesById.get(agent.workspaceId) : undefined;
 
-    const role = typeof agent.metadata.role === "string" && agent.metadata.role.trim() ? agent.metadata.role.trim() : undefined;
+    const role = agent.role?.trim() || undefined;
 
     return {
       id: agent.id,

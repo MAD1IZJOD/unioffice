@@ -181,7 +181,7 @@ test("rooms are the hall and each active workspace; an empty one stays empty", a
 
 test("an agent's role comes with them into the world, and nobody is given one they do not have", async () => {
   const snapshot = await world({
-    agents: [...roster, agent("wanda", { workspaceId: engineering, metadata: { role: "Frontend Engineer" } })],
+    agents: [...roster, agent("wanda", { workspaceId: engineering, role: "Frontend Engineer" })],
   }).getWorld(orgA);
 
   assert.equal(snapshot.agents.find((entry) => entry.id === "wanda")?.role, "Frontend Engineer");

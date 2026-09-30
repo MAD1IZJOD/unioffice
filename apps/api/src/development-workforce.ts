@@ -372,6 +372,7 @@ export async function ensureDevelopmentWorkforce(
         organizationId: organization.id,
         ...(workspaceId ? { workspaceId } : {}),
         name: blueprint.name,
+        ...(blueprint.role ? { role: blueprint.role } : {}),
         description: blueprint.description,
         type: blueprint.type,
         status: "active",
@@ -383,7 +384,6 @@ export async function ensureDevelopmentWorkforce(
         metadata: {
           developmentSeed: true,
           systemInstructions,
-          ...(blueprint.role ? { role: blueprint.role } : {}),
         },
       });
       continue;
@@ -410,12 +410,13 @@ export async function ensureDevelopmentWorkforce(
       // Only blueprints that name a room or a role own them; the first six
       // never did, so whatever they have is left as it is.
       (blueprint.workspace !== undefined && currentAgent.workspaceId !== workspaceId) ||
-      (blueprint.role !== undefined && currentAgent.metadata.role !== blueprint.role);
+      (blueprint.role !== undefined && currentAgent.role !== blueprint.role);
 
     if (isOutOfDate) {
       await agentRepository.update({
         ...currentAgent,
         ...(blueprint.workspace !== undefined ? { workspaceId } : {}),
+        ...(blueprint.role !== undefined ? { role: blueprint.role } : {}),
         name: blueprint.name,
         description: blueprint.description,
         capabilities: blueprint.capabilities,
@@ -426,7 +427,6 @@ export async function ensureDevelopmentWorkforce(
           ...currentAgent.metadata,
           developmentSeed: true,
           systemInstructions,
-          ...(blueprint.role !== undefined ? { role: blueprint.role } : {}),
         },
       });
     }
