@@ -13,7 +13,7 @@ import type {
  * it.
  *
  * An approval is granted against one of these, not against a step in the
- * abstract: "Ledger will run Financial analysis version 3 on the Q3 expenses,
+ * abstract: "Harvey will run Financial analysis version 3 on the Q3 expenses,
  * using the calculator" is a thing a person can agree to. A step in the
  * abstract is not.
  *

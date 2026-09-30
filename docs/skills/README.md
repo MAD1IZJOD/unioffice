@@ -87,7 +87,7 @@ The server decides, not the model.
    nothing between them resolve to none, and ask for one to be named.
 
    Every selection carries its reasons, in a person's words: *"the step needs
-   calculator, which it uses"*, *"Ledger holds it with everything it needs"*.
+   calculator, which it uses"*, *"Harvey holds it with everything it needs"*.
    They are recorded on the step and shown in the execution room.
 3. **Requirements.** The chosen skill's tools and capabilities become the
    step's, so routing and governance see them whether or not the planner
@@ -123,7 +123,7 @@ procedure cannot close its own section. `memory: none` skips knowledge recall.
 The step records the skill and version it ran with.
 
 If the agent has lost a tool or capability the skill needs since planning, the
-step does not follow the procedure and says which one: *"Ledger could not
+step does not follow the procedure and says which one: *"Harvey could not
 follow Expense signoff because Calculator access is no longer available."*
 
 ## Approval
@@ -139,7 +139,7 @@ its pinned version, the tools, the external writes, the mission - into
 sha-256 fingerprint of those fields. The approval points at that proposal by
 id and carries its hash, and the person reads the sentence it produced:
 
-> Ledger would carry out "Expense Signoff for Q3" following Expense signoff
+> Harvey would carry out "Expense Signoff for Q3" following Expense signoff
 > version 1, using Calculator.
 
 Before the step runs, the action is described again from the step as it then

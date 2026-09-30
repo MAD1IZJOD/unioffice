@@ -36,7 +36,7 @@ function skill(overrides: Partial<Skill> = {}): Skill {
 function agent(overrides: Partial<SkillCandidateAgent> = {}): SkillCandidateAgent {
   return {
     id: "d0000000-0000-4000-8000-000000000001" as AgentId,
-    name: "Ledger",
+    name: "Harvey",
     capabilities: ["financial_analysis", "calculation"] as Agent["capabilities"],
     toolIds: ["calculator"],
     skills: ["financial-analysis"],
@@ -58,7 +58,7 @@ test("a step's own words choose the skill, with reasons anyone can read", () => 
   assert.equal(resolution.outcome, "selected");
   assert.equal(resolution.outcome === "selected" && resolution.match.skill.slug, "financial-analysis");
   assert.ok(resolution.outcome === "selected" && resolution.match.reasons.some((reason) => reason.includes("financial")));
-  assert.ok(resolution.outcome === "selected" && resolution.match.reasons.some((reason) => reason.includes("Ledger holds it")));
+  assert.ok(resolution.outcome === "selected" && resolution.match.reasons.some((reason) => reason.includes("Harvey holds it")));
 });
 
 test("the same inputs always give the same answer, whatever order the skills arrive in", () => {
@@ -111,7 +111,7 @@ test("a skill nobody can run is not selected, and the reason says who is short o
   });
 
   assert.equal(resolution.outcome, "none");
-  assert.match(resolution.outcome === "none" ? resolution.reason : "", /Ledger is missing calculator/);
+  assert.match(resolution.outcome === "none" ? resolution.reason : "", /Harvey is missing calculator/);
 });
 
 test("a skill no available agent holds is not selected", () => {
