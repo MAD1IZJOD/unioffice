@@ -81,6 +81,26 @@ test("admins and owners configure the organization", async () => {
   }
 });
 
+test("an agent is provisioned with its role and skills, in the caller's organization, and never another's", async () => {
+  const { post, calls } = server("owner");
+
+  // Naming another organization is refused before anything is provisioned.
+  const elsewhere = await post("/agents", { ...agent, role: "Controller", organizationId: "bbbbbbbb-0000-4000-8000-000000000002" });
+  assert.ok(elsewhere.statusCode >= 400 && elsewhere.statusCode < 500, `refused with ${elsewhere.statusCode}`);
+  assert.equal(calls.length, 0, "nothing was provisioned");
+
+  await post("/agents", { ...agent, role: "Controller", skills: ["financial-analysis"] });
+  await post(`/agents/${agentId}`, { role: null });
+  await post(`/agents/${agentId}`, { description: "Keeps the books, and the forecasts." });
+
+  const [created, cleared, untouched] = calls.map((entry) => entry.input as Record<string, unknown>);
+  assert.equal(created!.role, "Controller");
+  assert.deepEqual(created!.skills, ["financial-analysis"]);
+  assert.equal(created!.organizationId, orgA);
+  assert.equal(cleared!.role, null, "null clears the role");
+  assert.equal(untouched!.role, undefined, "leaving it out leaves it alone");
+});
+
 test("a policy's author is the signed-in caller, whatever the body claims", async () => {
   const { post, calls } = server("admin");
 

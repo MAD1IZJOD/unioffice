@@ -1560,6 +1560,8 @@ export function buildApiServer(
       const agent = await services.agentDirectoryService.createAgent({
         organizationId: access.organizationId,
         name: requiredText(body.name, "name"),
+        // Checked by the service: text, trimmed, at most 60 characters.
+        role: body.role as string | undefined,
         description: requiredText(body.description, "description"),
         type: parseAgentType(body.type),
         capabilities: stringArray(body.capabilities, "capabilities"),
@@ -1567,6 +1569,7 @@ export function buildApiServer(
         workspaceId: optionalText(body.workspaceId) as
           | WorkspaceId
           | undefined,
+        skills: body.skills === undefined ? undefined : stringArray(body.skills, "skills"),
       });
 
       return reply.status(201).send({ agent: publicAgent(agent) });
@@ -1579,6 +1582,8 @@ export function buildApiServer(
       const agent = await services.agentDirectoryService.updateAgent({
         organizationId: access.organizationId,
         agentId: parameterId(request.params) as unknown as AgentId,
+        // null clears the role; checked by the service like on creation.
+        role: body.role as string | null | undefined,
         description: optionalText(body.description),
         capabilities:
           body.capabilities === undefined

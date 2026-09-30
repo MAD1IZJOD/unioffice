@@ -33,16 +33,22 @@ const MAX_CAPABILITIES = 12;
 export interface CreateAgentInput {
   organizationId: OrganizationId;
   name: string;
+  /** The job, as the company names it - "Frontend Engineer". Optional. */
+  role?: string;
   description: string;
   type: AgentType;
   capabilities: string[];
   toolIds: string[];
   workspaceId?: WorkspaceId;
+  /** Skill slugs to assign straight away, checked against the agent being made. */
+  skills?: string[];
 }
 
 export interface UpdateAgentInput {
   organizationId: OrganizationId;
   agentId: AgentId;
+  /** A new role; null or empty clears it; undefined leaves it alone. */
+  role?: string | null;
   description?: string;
   capabilities?: string[];
   toolIds?: string[];
@@ -92,6 +98,7 @@ export class AgentDirectoryService {
 
   async createAgent(input: CreateAgentInput): Promise<Agent> {
     const name = requiredText(input.name, "name", 60);
+    const role = optionalRole(input.role);
     const description = requiredText(input.description, "description", 600);
     const type = this.parseType(input.type);
     const capabilities = parseCapabilities(input.capabilities);
@@ -116,16 +123,18 @@ export class AgentDirectoryService {
     }
 
     const now = new Date();
-    const agent = await this.agentRepository.create({
+    const draft: Agent = {
       id: createEntityId<"AgentId">() as AgentId,
       organizationId: input.organizationId,
       workspaceId,
       name,
+      ...(role ? { role } : {}),
       description,
       type,
       status: "active",
       capabilities,
       toolIds,
+      skills: [],
       createdAt: now,
       updatedAt: now,
       metadata: {
@@ -134,12 +143,26 @@ export class AgentDirectoryService {
         userConfigured: true,
         systemInstructions: systemInstructionsFor({
           name,
+          role,
           type,
           description,
           toolIds,
         }),
       },
-    });
+    };
+
+    // Skills given at creation are checked against the agent as it is about
+    // to be, exactly as an assignment made afterwards would be.
+    if (input.skills !== undefined && input.skills.length > 0) {
+      if (!this.skillAssignments) {
+        throw new AgentValidationError("Skills cannot be assigned on this server.");
+      }
+
+      draft.skills = [...new Set(input.skills.map((slug) => slug.trim()))];
+      await this.skillAssignments.checkAssignment(draft, draft.skills);
+    }
+
+    const agent = await this.agentRepository.create(draft);
 
     await this.eventRecorder.record({
       organizationId: agent.organizationId,
@@ -148,9 +171,11 @@ export class AgentDirectoryService {
       type: "agent.created",
       payload: {
         name: agent.name,
+        ...(agent.role ? { role: agent.role } : {}),
         type: agent.type,
         capabilities: agent.capabilities,
         toolIds: agent.toolIds,
+        skills: agent.skills ?? [],
         workspaceId: agent.workspaceId,
       },
     });
@@ -165,6 +190,13 @@ export class AgentDirectoryService {
       input.description === undefined
         ? current.description
         : requiredText(input.description, "description", 600);
+
+    const role =
+      input.role === undefined
+        ? current.role
+        : input.role === null
+          ? undefined
+          : optionalRole(input.role);
 
     const capabilities =
       input.capabilities === undefined
@@ -228,8 +260,10 @@ export class AgentDirectoryService {
       );
     }
 
+    const { role: _previous, ...unchanged } = current;
     const updated = await this.agentRepository.update({
-      ...current,
+      ...unchanged,
+      ...(role ? { role } : {}),
       description,
       capabilities,
       toolIds,
@@ -242,6 +276,7 @@ export class AgentDirectoryService {
         userConfigured: true,
         systemInstructions: systemInstructionsFor({
           name: current.name,
+          role,
           type: current.type,
           description,
           toolIds,
@@ -256,6 +291,7 @@ export class AgentDirectoryService {
       type: "agent.updated",
       payload: {
         name: updated.name,
+        ...(updated.role ? { role: updated.role } : {}),
         status: updated.status,
         capabilities: updated.capabilities,
         toolIds: updated.toolIds,
@@ -402,14 +438,31 @@ function parseCapabilities(value: string[]): string[] {
  * seeded workforce writes it, so a user-created agent behaves like a seeded
  * one rather than arriving with no instructions at all.
  */
+/**
+ * A role is a short job title: optional, trimmed, and at most 60 characters.
+ * Empty is the same as none.
+ */
+function optionalRole(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new AgentValidationError("role must be text.");
+
+  const role = value.trim();
+  if (!role) return undefined;
+  if (role.length > 60) throw new AgentValidationError("role must be at most 60 characters.");
+  return role;
+}
+
 export function systemInstructionsFor(agent: {
   name: string;
+  role?: string;
   type: AgentType;
   description: string;
   toolIds: string[];
 }): string {
   return [
-    `You are ${agent.name}, a UNIOFFICE ${agent.type}.`,
+    agent.role
+      ? `You are ${agent.name}, the UNIOFFICE ${agent.role}.`
+      : `You are ${agent.name}, a UNIOFFICE ${agent.type}.`,
     agent.description,
     "Complete the assigned task using the supplied context.",
     "Be concise. Lead with the answer, and surface an assumption only when a different one would change it.",
