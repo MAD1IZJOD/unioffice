@@ -99,4 +99,6 @@ test("each department has the people it was planned with", () => {
   assert.deepEqual(byRoom.get("research"), ["Nora", "Adam", "Isabella", "Ethan R", "Clara"]);
   assert.deepEqual(byRoom.get("revenue-growth"), ["Ryan R", "Grace", "Jack", "Lily", "Max", "Zoe", "Caleb", "Ruby", "Ben", "Ella"]);
   assert.deepEqual(byRoom.get("operations"), ["Marcus", "Ava O", "Theo", "Grace O", "Isaac", "Lily O"]);
+  assert.deepEqual(byRoom.get("finance"), ["Olivia F", "James", "Sophia", "William"]);
+  assert.deepEqual(byRoom.get("customer-success"), ["Amelia", "Mason", "Harper", "Evelyn"]);
 });

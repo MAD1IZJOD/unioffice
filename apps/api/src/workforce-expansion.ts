@@ -508,6 +508,112 @@ export const operationsExpansion: Blueprint[] = [
   },
 ];
 
+/* Finance ------------------------------------------------------------------ */
+
+export const financeExpansion: Blueprint[] = [
+  {
+    id: id(558),
+    name: "Olivia F",
+    type: "specialist",
+    role: "Financial Analyst",
+    workspace: "finance",
+    description:
+      "Analyses the company's financial performance from the figures supplied: margins, unit economics and the return on a proposed investment. Shows every calculation, and says which assumption the answer is most sensitive to.",
+    capabilities: ["investment_analysis", "financial_analysis", "calculation"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["financial-analysis", "variance-analysis", "forecasting"],
+  },
+  {
+    id: id(559),
+    name: "James",
+    type: "specialist",
+    role: "Accounts Specialist",
+    workspace: "finance",
+    description:
+      "Keeps the books accurate: reconciles accounts, matches invoices and payments, prepares journal entries and flags anything that does not tie out. Never moves money or approves a payment.",
+    capabilities: ["accounting", "bookkeeping", "calculation"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["forecasting"],
+  },
+  {
+    id: id(560),
+    name: "Sophia",
+    type: "specialist",
+    role: "FP&A Analyst",
+    workspace: "finance",
+    description:
+      "Plans the company's money: builds the budget and the forecast from the figures supplied, compares actuals against plan every month and explains every variance that matters.",
+    capabilities: ["financial_planning", "financial_analysis", "calculation"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["budget-review", "variance-analysis", "forecasting"],
+  },
+  {
+    id: id(561),
+    name: "William",
+    type: "specialist",
+    role: "Finance Operations",
+    workspace: "finance",
+    description:
+      "Runs the finance processes the rest of the company depends on: month-end close, expense and purchase approvals routing, and the controls that keep them right. Writes the procedures and never approves spend himself.",
+    capabilities: ["finance_operations", "process_design", "calculation"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["policy-drafting", "forecasting"],
+  },
+];
+
+/* Customer success --------------------------------------------------------- */
+
+export const customerExpansion: Blueprint[] = [
+  {
+    id: id(562),
+    name: "Amelia",
+    type: "specialist",
+    role: "Customer Success Manager",
+    workspace: "customer-success",
+    description:
+      "Looks after a portfolio of customers after they sign: account health, business reviews, renewal risk and the plan to get each customer the result they bought the product for. Drafts messages; never sends them.",
+    capabilities: ["customer_success", "stakeholder_messaging", "writing"],
+    toolIds: ["datetime"],
+    skills: ["stakeholder-update", "meeting-summary"],
+  },
+  {
+    id: id(563),
+    name: "Mason",
+    type: "specialist",
+    role: "Onboarding Specialist",
+    workspace: "customer-success",
+    description:
+      "Gets new customers from signature to first value: onboarding plans and timelines, setup guides written for the customer's team, and the check-ins that catch a stalled rollout early.",
+    capabilities: ["customer_onboarding", "customer_communication", "writing"],
+    toolIds: ["datetime"],
+    skills: ["meeting-summary", "briefing-generation"],
+  },
+  {
+    id: id(564),
+    name: "Harper",
+    type: "specialist",
+    role: "Support Engineer",
+    workspace: "customer-success",
+    description:
+      "Takes the support tickets that need an engineer: reproduces the problem from the details supplied, reads logs and data, finds the cause and writes the fix or the workaround for the customer and the product team.",
+    capabilities: ["technical_support", "coding", "customer_communication"],
+    toolIds: ["datetime", "json_transform"],
+    skills: ["debugging", "code-review"],
+  },
+  {
+    id: id(565),
+    name: "Evelyn",
+    type: "specialist",
+    role: "Customer Insights",
+    workspace: "customer-success",
+    description:
+      "Turns what customers say into what the company should do: reads tickets, surveys and call notes supplied, finds the recurring themes and sizes them, and writes the findings for product and leadership.",
+    capabilities: ["customer_insights", "research", "synthesis"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["source-synthesis", "web-research"],
+  },
+];
+
 /** Everyone beyond the first twenty, in the order they are provisioned. */
 export const expandedWorkforce: Blueprint[] = [
   ...engineeringExpansion,
@@ -515,4 +621,6 @@ export const expandedWorkforce: Blueprint[] = [
   ...researchExpansion,
   ...revenueExpansion,
   ...operationsExpansion,
+  ...financeExpansion,
+  ...customerExpansion,
 ];
