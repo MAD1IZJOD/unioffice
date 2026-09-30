@@ -1,4 +1,4 @@
-import type { Discipline } from "../lib/workforce";
+import { disciplineOf, type Discipline } from "../lib/workforce";
 
 /**
  * The people in the world, drawn from pixel maps in code.
@@ -205,6 +205,57 @@ export function lookOf(agentId: string, discipline: Discipline): Look {
     haircut: Math.floor(hash / HAIR.length) % HAIRCUTS.length,
     discipline,
   };
+}
+
+/** Every hair and haircut there is, in a fixed order. */
+const COMBINATIONS = HAIR.length * HAIRCUTS.length;
+
+/**
+ * How everyone in the office looks, told apart from their roommates.
+ *
+ * An agent's own look comes from its id, as `lookOf` gives it. With a
+ * handful of people in a room that is enough; with twenty engineers in one,
+ * two of them drawing the same would be a person the viewer cannot pick out.
+ * So a room is dressed in seat order, and anyone whose look a roommate of
+ * the same discipline already has takes the next free hair and haircut
+ * instead. Nothing is random: the same office always looks the same, and an
+ * agent whose look nobody shares keeps its own.
+ */
+export function castOf(
+  agents: ReadonlyArray<{ id: string; roomId: string; seat: number; type?: string; capabilities?: string[] }>,
+): Map<string, Look> {
+  const looks = new Map<string, Look>();
+  const takenByRoom = new Map<string, Set<string>>();
+  const keyOf = (look: Look) => `${look.discipline}/${look.hair}/${look.haircut}`;
+
+  const inSeatOrder = [...agents].sort((left, right) =>
+    left.roomId.localeCompare(right.roomId) || left.seat - right.seat || left.id.localeCompare(right.id));
+
+  for (const agent of inSeatOrder) {
+    const discipline = disciplineOf(agent);
+    const own = lookOf(agent.id, discipline);
+    const taken = takenByRoom.get(agent.roomId) ?? new Set<string>();
+    takenByRoom.set(agent.roomId, taken);
+
+    const start = HAIR.indexOf(own.hair as (typeof HAIR)[number]) * HAIRCUTS.length + own.haircut;
+    let look = own;
+
+    for (let step = 0; step < COMBINATIONS; step += 1) {
+      const index = (start + step) % COMBINATIONS;
+      const candidate: Look = { hair: HAIR[Math.floor(index / HAIRCUTS.length)]!, haircut: index % HAIRCUTS.length, discipline };
+      if (!taken.has(keyOf(candidate))) {
+        look = candidate;
+        break;
+      }
+    }
+
+    // More people of one discipline in one room than there are looks: the
+    // rest share, which is the best that can be drawn at this size.
+    taken.add(keyOf(look));
+    looks.set(agent.id, look);
+  }
+
+  return looks;
 }
 
 function palette(look: Look): Record<string, string> {
