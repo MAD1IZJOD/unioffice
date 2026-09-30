@@ -97,11 +97,44 @@ describe("the floor plan", () => {
   });
 });
 
-describe("the way between two desks", () => {
-  it("is a straight line inside one room", () => {
-    const plan = planFloor(rooms);
+/** Whether an axis-aligned leg passes through any desk: strictly inside its cell, where the desk is drawn and clicked. */
+function crossesADesk(a: Point, b: Point, plan: FloorPlan) {
+  const cells = [...plan.seats.values()].map((seat) => seat.cell);
+  const length = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
 
-    expect(pathBetween(plan, "dana", "tony")).toEqual([plan.seats.get("dana")!.at, plan.seats.get("tony")!.at]);
+  for (let step = 0; step <= length; step += 1) {
+    const t = length === 0 ? 0 : step / length;
+    const point = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    if (cells.some((cell) => point.x > cell.x && point.x < cell.x + cell.width && point.y > cell.y && point.y < cell.y + cell.height)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+const legsOf = (path: Point[]) => path.slice(1).map((point, index) => [path[index]!, point] as const);
+
+describe("the way between two desks", () => {
+  it("walks the aisle in front of the desks inside one room", () => {
+    const plan = planFloor(rooms);
+    const dana = plan.seats.get("dana")!;
+    const tony = plan.seats.get("tony")!;
+
+    expect(pathBetween(plan, "dana", "tony")).toEqual([dana.front, tony.front]);
+    expect(dana.front.y).toBeGreaterThan(dana.cell.y + dana.cell.height);
+  });
+
+  it("goes round by a side lane to a desk in another row of the same room, and across no desk", () => {
+    const plan = planFloor(rooms);
+    const path = pathBetween(plan, "peter", "mike")!;
+
+    expect(path[0]).toEqual(plan.seats.get("peter")!.front);
+    expect(path.at(-1)).toEqual(plan.seats.get("mike")!.front);
+    for (const [a, b] of legsOf(path)) {
+      expect(a.x === b.x || a.y === b.y).toBe(true);
+      expect(crossesADesk(a, b, plan)).toBe(false);
+    }
   });
 
   it("goes by the doors and the corridor between rooms, never through a wall", () => {
@@ -110,8 +143,8 @@ describe("the way between two desks", () => {
     const from = plan.rooms.find((room) => room.id === "hall")!;
     const to = plan.rooms.find((room) => room.id === "research")!;
 
-    expect(path[0]).toEqual(plan.seats.get("mike")!.at);
-    expect(path.at(-1)).toEqual(plan.seats.get("rhea")!.at);
+    expect(path[0]).toEqual(plan.seats.get("mike")!.front);
+    expect(path.at(-1)).toEqual(plan.seats.get("rhea")!.front);
     expect(path).toContainEqual(from.door);
     expect(path).toContainEqual(to.door);
 
@@ -131,5 +164,79 @@ describe("the way between two desks", () => {
     const plan = planFloor(rooms);
 
     expect(pathLength(pathBetween(plan, "mike", "rhea")!)).toBeGreaterThan(pathLength(pathBetween(plan, "dana", "tony")!));
+  });
+});
+
+describe("walking through the office as it is today", () => {
+  // The company's real rooms: the hall and two workspaces north of the
+  // corridor, three south of it, one of them empty.
+  const office = planFloor([
+    { id: "hall", agentIds: ["tyrion", "jamie", "peter"] },
+    { id: "customer-success", agentIds: ["rhea"] },
+    { id: "engineering", agentIds: ["dana", "tony"] },
+    { id: "finance", agentIds: ["harvey"] },
+    { id: "operations", agentIds: [] },
+    { id: "research", agentIds: ["mike"] },
+  ]);
+  const room = (id: string) => office.rooms.find((entry) => entry.id === id)!;
+
+  it("takes Dana's result from the aisle in front of her desk to the aisle in front of Peter's", () => {
+    const path = pathBetween(office, "dana", "peter")!;
+
+    expect(path[0]).toEqual(office.seats.get("dana")!.front);
+    expect(path.at(-1)).toEqual(office.seats.get("peter")!.front);
+    expect(path).toContainEqual(room("engineering").door);
+    expect(path).toContainEqual(room("hall").door);
+  });
+
+  it("walks back the same way it came", () => {
+    expect(pathBetween(office, "peter", "dana")).toEqual([...pathBetween(office, "dana", "peter")!].reverse());
+    expect(pathBetween(office, "tony", "dana")).toEqual([...pathBetween(office, "dana", "tony")!].reverse());
+  });
+
+  it("hands over in open floor, in front of the receiving desk and inside its room", () => {
+    for (const [from, to] of [["dana", "peter"], ["peter", "harvey"], ["mike", "jamie"], ["tony", "dana"]] as const) {
+      const end = pathBetween(office, from, to)!.at(-1)!;
+      const seat = office.seats.get(to)!;
+      const at = room(seat.roomId).rect;
+
+      expect(end).toEqual(seat.front);
+      expect(end.x).toBe(seat.at.x);
+      expect(end.y).toBeGreaterThan(seat.cell.y + seat.cell.height);
+      expect(end.x > at.x && end.x < at.x + at.width && end.y > at.y && end.y < at.y + at.height).toBe(true);
+      expect([...office.seats.values()].some((other) =>
+        end.x > other.cell.x && end.x < other.cell.x + other.cell.width && end.y > other.cell.y && end.y < other.cell.y + other.cell.height)).toBe(false);
+    }
+  });
+
+  it("never walks across a desk, into or out of a room on either side of the corridor", () => {
+    // The check can see a crossing: straight from one desk to the next is one.
+    expect(crossesADesk(office.seats.get("dana")!.at, office.seats.get("tony")!.at, office)).toBe(true);
+
+    const everyone = [...office.seats.keys()];
+
+    for (const from of everyone) {
+      for (const to of everyone) {
+        if (from === to) continue;
+        const path = pathBetween(office, from, to)!;
+
+        for (const [a, b] of legsOf(path)) {
+          expect(a.x === b.x || a.y === b.y).toBe(true);
+          expect(crossesADesk(a, b, office)).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("opens every door onto floor, not onto a desk", () => {
+    for (const placed of office.rooms) {
+      const inward = placed.side === "north" ? -1 : 1;
+      const step = { x: placed.door.x, y: placed.door.y + inward * TILE };
+      expect(crossesADesk(placed.door, step, office)).toBe(false);
+    }
+  });
+
+  it("gives the same way for the same two desks, every time", () => {
+    expect(pathBetween(office, "harvey", "rhea")).toEqual(pathBetween(office, "harvey", "rhea"));
   });
 });

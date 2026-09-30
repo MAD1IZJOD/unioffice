@@ -52,8 +52,8 @@ describe("what crosses the floor", () => {
       const [a, b] = [points[index - 1]!, points[index]!];
       expect(a.x === b.x || a.y === b.y).toBe(true);
     }
-    expect(points[0]).toEqual(plan.seats.get("mike")!.at);
-    expect(points.at(-1)).toEqual(plan.seats.get("dana")!.at);
+    expect(points[0]).toEqual(plan.seats.get("mike")!.front);
+    expect(points.at(-1)).toEqual(plan.seats.get("dana")!.front);
   });
 
   it("moves nobody for anything but work changing hands", () => {

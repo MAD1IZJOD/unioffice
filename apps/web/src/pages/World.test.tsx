@@ -755,7 +755,8 @@ describe("the world, watched as work changes hands", () => {
 
   // Where each desk is, from the same floor plan the page draws.
   const seats = planFloor(office(BEFORE).rooms.map((room) => ({ id: room.id, agentIds: room.agentIds }))).seats;
-  const seatOf = (id: string) => seats.get(id)!.at;
+  // Where a walk to or from someone's desk starts and ends: the aisle in front of it.
+  const seatOf = (id: string) => seats.get(id)!.front;
 
   /** The live channel, scripted: the page opens it, the test says what arrives. */
   class ScriptedChannel extends EventTarget {
@@ -921,21 +922,24 @@ describe("the world, watched as work changes hands", () => {
     const frames = watchFrames(container);
     const walking = frames.filter((frame) => frame.walker !== undefined);
     const lift = seatOf("mike").y - walking[0]!.walker!.y;
+    // The farthest the walker moves between two frames: how close a frame can be to any point it passes.
+    const stride = Math.max(...walking.slice(1).map((frame, index) =>
+      Math.hypot(frame.walker!.x - walking[index]!.walker!.x, frame.walker!.y - walking[index]!.walker!.y)));
 
     // Off from Mike's own desk, result in hand, and the chair left empty.
-    expect(distance(walking[0]!.walker!, seatOf("mike"), lift)).toBeLessThan(2);
+    expect(distance(walking[0]!.walker!, seatOf("mike"), lift)).toBeLessThanOrEqual(stride);
     expect(walking[0]!.walker!.carrying).toBe(true);
     expect(walking.every((frame) => !frame.mikeSeated && frame.mikes === 1)).toBe(true);
 
     // Carried all the way to Tony's desk, set down there, and not picked up again.
     const handedOver = walking.findIndex((frame) => !frame.walker!.carrying);
     expect(handedOver).toBeGreaterThan(0);
-    expect(distance(walking[handedOver - 1]!.walker!, seatOf("tony"), lift)).toBeLessThan(2);
+    expect(distance(walking[handedOver - 1]!.walker!, seatOf("tony"), lift)).toBeLessThanOrEqual(stride);
     expect(distance(walking[handedOver]!.walker!, seatOf("tony"), lift)).toBeLessThan(0.5);
     expect(walking.slice(handedOver).every((frame) => !frame.walker!.carrying)).toBe(true);
 
     // Back at Mike's desk, empty-handed, and sitting down again.
-    expect(distance(walking.at(-1)!.walker!, seatOf("mike"), lift)).toBeLessThan(2);
+    expect(distance(walking.at(-1)!.walker!, seatOf("mike"), lift)).toBeLessThanOrEqual(stride);
     const last = frames.at(-1)!;
     expect(last.walker).toBeUndefined();
     expect(last.mikeSeated).toBe(true);
@@ -995,7 +999,7 @@ describe("the world, watched as work changes hands", () => {
 
     // Mike sets off with the result and is part of the way to Tony's desk.
     frameAt(0);
-    const lift = crowdSeats.get("mike")!.at.y - see(container).walker!.y;
+    const lift = crowdSeats.get("mike")!.front.y - see(container).walker!.y;
     for (let now = 20; now <= 600; now += 20) frameAt(now);
     const midway = see(container).walker;
     expect(midway?.carrying).toBe(true);
@@ -1030,10 +1034,12 @@ describe("the world, watched as work changes hands", () => {
       if (mike) walking.push(whereIs(mike));
     }
 
-    // Mike's own walk ran its whole course: set down at Tony's desk, then back.
+    // Mike's own walk ran its whole course: set down in front of Tony's
+    // desk, then back to within one frame's step of his own.
     const setDown = walking.findIndex((frame, index) => index > 0 && walking[index - 1]!.carrying && !frame.carrying);
-    expect(distance(walking[setDown]!, crowdSeats.get("tony")!.at, lift)).toBeLessThan(0.5);
-    expect(distance(walking.at(-1)!, crowdSeats.get("mike")!.at, lift)).toBeLessThan(2);
+    const stride = Math.max(...walking.slice(1).map((frame, index) => Math.hypot(frame.x - walking[index]!.x, frame.y - walking[index]!.y)));
+    expect(distance(walking[setDown]!, crowdSeats.get("tony")!.front, lift)).toBeLessThan(0.5);
+    expect(distance(walking.at(-1)!, crowdSeats.get("mike")!.front, lift)).toBeLessThanOrEqual(stride);
 
     for (const [, name] of everyone) expect(seated(container, name)).toBe(true);
     // Nine walkers checked every frame is heavy under jsdom; a ceiling, not a wait.
