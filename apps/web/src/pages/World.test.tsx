@@ -696,6 +696,52 @@ describe("the world", () => {
     });
   });
 
+  describe("opened on one agent", () => {
+    function openAt(path: string) {
+      const calls = stubNetwork((call) =>
+        call.url.pathname.endsWith("/world") ? json(200, snapshot()) : json(404, { error: { message: "Not here." } }));
+      return { calls, ...page("owner", path) };
+    }
+
+    it("chooses the agent and brings its desk into view, quietening nobody", async () => {
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 1200 });
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 800 });
+
+      try {
+        const { container } = openAt("/world?agent=tony");
+
+        expect(await screen.findByRole("complementary", { name: "Details: Tony" })).toBeDefined();
+        await waitFor(() => expect(container.querySelectorAll(".world-desk")).toHaveLength(3));
+        expect(container.querySelectorAll(".world-desk-faded")).toHaveLength(0);
+
+        const plan = planFloor(snapshot().rooms.map((room) => ({ id: room.id, agentIds: room.agentIds })));
+        const [, x, y, k] = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/
+          .exec(container.querySelector(".world-svg > g")!.getAttribute("transform")!)!.map(Number);
+        const at = plan.seats.get("tony")!.at;
+        expect(x! + at.x * k!).toBeGreaterThanOrEqual(0);
+        expect(x! + at.x * k!).toBeLessThanOrEqual(1200);
+        expect(y! + at.y * k!).toBeGreaterThanOrEqual(0);
+        expect(y! + at.y * k!).toBeLessThanOrEqual(800);
+      } finally {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+        delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+      }
+    });
+
+    it("shows the whole office, with one plain note, for an agent not in view, and asks nobody about it", async () => {
+      const foreign = "7d1c2a9e-0b44-4f7e-9d61-2f6a3c8b5e10";
+      const { calls } = openAt(`/world?agent=${foreign}`);
+
+      const note = await screen.findByText(/That agent is not in your view of the office/);
+      expect(note.textContent).toBe("That agent is not in your view of the office, so the whole office is shown. Dismiss");
+      expect(screen.queryByRole("complementary")).toBeNull();
+      expect(calls.some((call) => call.url.href.includes(foreign))).toBe(false);
+
+      await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+      expect(screen.queryByText(/not in your view of the office/)).toBeNull();
+    });
+  });
+
   it("replays nothing on opening: the office is shown as it is", async () => {
     open();
 

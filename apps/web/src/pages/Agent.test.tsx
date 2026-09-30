@@ -149,6 +149,12 @@ describe("an agent's profile", () => {
     expect(screen.getByText("Nothing recorded for this agent yet.")).toBeDefined();
   });
 
+  it("opens the agent in the World, on its own desk", async () => {
+    open("viewer");
+    const link = await screen.findByRole("link", { name: "View in World" });
+    expect(link.getAttribute("href")).toBe("/world?agent=agent-tony");
+  });
+
   it("offers configuration only to roles that configure the workforce", async () => {
     open("owner");
     expect(await screen.findByRole("button", { name: "Configure" })).toBeDefined();

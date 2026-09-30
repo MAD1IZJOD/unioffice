@@ -208,6 +208,19 @@
   letter-spacing: 0.06em;
 }
 
+/* Where the agent sits in the World, opened on its desk. */
+.worker-world {
+  color: var(--ink-secondary);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+.worker-world:hover,
+.worker-world:focus-visible {
+  color: var(--ink-primary);
+}
+
 /* A tool on a profile, with what governance actually lets the agent do with it. */
 .agent-tools {
   display: flex;

@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Blocks,
+  Building2,
   Check,
   CircleDot,
   Pause,
@@ -171,16 +172,23 @@ export default function Agent() {
 
           <p className="place-description">{member.description}</p>
 
-          {member.workspace ? (
-            <Link to={`/workspaces/${member.workspace.id}`} className="place-tag mt-5 inline-flex">
-              <span className="place-tag-mark">
-                <WorkspaceMark slug={member.workspace.slug} size={16} />
-              </span>
-              Works in {member.workspace.name}
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {member.workspace ? (
+              <Link to={`/workspaces/${member.workspace.id}`} className="place-tag inline-flex">
+                <span className="place-tag-mark">
+                  <WorkspaceMark slug={member.workspace.slug} size={16} />
+                </span>
+                Works in {member.workspace.name}
+              </Link>
+            ) : (
+              <div className="place-slug !mt-0">Belongs to no workspace — can be given work anywhere</div>
+            )}
+
+            <Link to={`/world?agent=${member.id}`} className="place-tag inline-flex">
+              <Building2 size={13} aria-hidden="true" />
+              View in World
             </Link>
-          ) : (
-            <div className="place-slug !mt-5">Belongs to no workspace — can be given work anywhere</div>
-          )}
+          </div>
 
           <div className="dispatch-meta !mt-7">
             <Fact label="Finished" value={member.recent.completed} />

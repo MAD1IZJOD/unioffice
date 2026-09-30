@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -131,7 +131,7 @@ describe("the workforce", () => {
     expect(within(tony).getByText("Working")).toBeDefined();
     expect(within(tony).getByRole("link", { name: "Launch Product X" }).getAttribute("href")).toBe("/missions/mission-launch");
     expect(within(tony).getByText("Build authentication flow")).toBeDefined();
-    expect(within(tony).getByRole("link", { name: /Tony/ }).getAttribute("href")).toBe("/workforce/agent-tony");
+    expect(within(tony).getByRole("link", { name: /^Tony/ }).getAttribute("href")).toBe("/workforce/agent-tony");
   });
 
   it("names each agent by the role they were given, and the rest by what they can do", async () => {
@@ -181,7 +181,17 @@ describe("the workforce", () => {
     const peter = await screen.findByRole("article", { name: "Peter" });
 
     expect(within(peter).getByText("On a mission outside your workspaces")).toBeDefined();
-    expect(within(peter).queryAllByRole("link")).toHaveLength(1);
+    const missionLinks = within(peter).queryAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/missions"));
+    expect(missionLinks).toHaveLength(0);
+  });
+
+  it("opens each agent in the World, on its own desk, whatever the viewer's role", async () => {
+    for (const role of ["owner", "viewer"] as const) {
+      open(role);
+      const link = within(await screen.findByRole("article", { name: "Tony" })).getByRole("link", { name: "View Tony in World" });
+      expect(link.getAttribute("href")).toBe("/world?agent=agent-tony");
+      cleanup();
+    }
   });
 
   it("offers adding an agent only to roles that configure the workforce", async () => {
@@ -213,7 +223,8 @@ describe("the workforce", () => {
     await hire("");
     await waitFor(() => expect(calls.filter((call) => call.method === "POST")).toHaveLength(2));
     expect(calls.filter((call) => call.method === "POST")[1]?.body).not.toHaveProperty("role");
-  });
+    // Typing two whole forms is slow under a full, parallel run.
+  }, 15_000);
 
   it("does not offer adding an agent to a member", async () => {
     open("member");

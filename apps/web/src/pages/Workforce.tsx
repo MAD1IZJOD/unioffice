@@ -235,6 +235,9 @@ function Worker({ member }: { member: WorkforceMember }) {
 
       <span className="worker-foot">
         <span>{member.workspace ? member.workspace.name : "Every workspace"}</span>
+        <Link to={`/world?agent=${member.id}`} className="worker-world" aria-label={`View ${member.name} in World`}>
+          View in World
+        </Link>
         {(member.recent.completed > 0 || member.recent.failed > 0) && (
           <span>
             {member.recent.completed} done

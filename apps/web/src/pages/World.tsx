@@ -63,6 +63,7 @@ export default function World() {
   const [focus, setFocus] = useState<{ target: FocusTarget; nonce: number }>();
   const [params, setParams] = useSearchParams();
   const [openedOn, setOpenedOn] = useState<string>();
+  const [openedOnAgent, setOpenedOnAgent] = useState<string>();
   // The details, which on a phone lie over the map as a sheet.
   const details = useRef<HTMLElement>(null);
 
@@ -218,13 +219,28 @@ export default function World() {
     if (target) bringIntoView(target);
   }
 
-  const leaveMission = () => {
-    setOpenedOn(undefined);
+  // Opened on one agent - `?agent=<id>`, as the Workforce links here - it is
+  // chosen and brought into view once, the same as clicking its desk. Only
+  // an agent in this viewer's snapshot can be; nobody else is quietened.
+  const askedAgent = mission ? null : params.get("agent");
+  const agentAsked = askedAgent ? snapshot.agents.find((entry) => entry.id === askedAgent) : undefined;
+
+  if (agentAsked && openedOnAgent !== agentAsked.id) {
+    setOpenedOnAgent(agentAsked.id);
+    setSelection({ kind: "agent", id: agentAsked.id });
+    bringIntoView({ kind: "agent", id: agentAsked.id });
+  }
+
+  const forget = (key: "mission" | "agent") =>
     setParams((current) => {
       const next = new URLSearchParams(current);
-      next.delete("mission");
+      next.delete(key);
       return next;
     }, { replace: true });
+
+  const leaveMission = () => {
+    setOpenedOn(undefined);
+    forget("mission");
   };
 
   const faded = new Set(snapshot.agents
@@ -292,6 +308,15 @@ export default function World() {
         <p className="world-notice">
           That mission is not under way in your view of the company, so the whole office is shown.{" "}
           <button type="button" className="world-link-button" onClick={leaveMission}>Dismiss</button>
+        </p>
+      )}
+
+      {/* As with a mission: missing, another company's and out of reach all
+          read the same. */}
+      {askedAgent && !agentAsked && (
+        <p className="world-notice">
+          That agent is not in your view of the office, so the whole office is shown.{" "}
+          <button type="button" className="world-link-button" onClick={() => forget("agent")}>Dismiss</button>
         </p>
       )}
 
