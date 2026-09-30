@@ -45,6 +45,16 @@ export const SEED_WORKSPACES = {
     name: "Revenue & Growth",
     description: "Wins customers, and grows how many find and choose the product.",
   },
+  operations: {
+    id: "e32813a2-dda6-4a89-a756-c2991510d005",
+    name: "Operations",
+    description: "Keeps projects moving and the company supplied.",
+  },
+  "customer-success": {
+    id: "e32813a2-dda6-4a89-a756-c2991510d006",
+    name: "Customer Success",
+    description: "Looks after customers once they have chosen the product.",
+  },
 } satisfies Record<string, { id: string; name: string; description: string }>;
 
 export type SeedWorkspace = keyof typeof SEED_WORKSPACES;
@@ -244,6 +254,46 @@ export const workforce: Blueprint[] = [
     capabilities: ["content_creation", "growth_analysis", "writing"],
     toolIds: ["calculator", "datetime"],
     skills: ["briefing-generation"],
+  },
+
+  /* Operations -------------------------------------------------------------- */
+  {
+    id: "e32813a2-dda6-4a89-a756-c2991510c516",
+    name: "Brienne",
+    type: "specialist",
+    role: "Project Coordinator",
+    workspace: "operations",
+    description:
+      "Keeps cross-team work on schedule: turns plans into timelines and owners, tracks dependencies and deadlines, and writes the status notes and meeting summaries that say what is late and what it is waiting on.",
+    capabilities: ["project_coordination", "scheduling", "writing"],
+    toolIds: ["datetime"],
+    skills: ["meeting-summary"],
+  },
+  {
+    id: "e32813a2-dda6-4a89-a756-c2991510c517",
+    name: "Davos",
+    type: "specialist",
+    role: "Procurement & Vendor Manager",
+    workspace: "operations",
+    description:
+      "Buys what the company needs at the right price: compares vendor quotes and terms from the documents supplied, forecasts spend, tracks renewals and prepares the purchase recommendation. Never commits the company to a purchase.",
+    capabilities: ["procurement", "vendor_management", "calculation"],
+    toolIds: ["calculator", "datetime"],
+    skills: ["forecasting"],
+  },
+
+  /* Customer ---------------------------------------------------------------- */
+  {
+    id: "e32813a2-dda6-4a89-a756-c2991510c518",
+    name: "Katrina",
+    type: "specialist",
+    role: "Customer Support Specialist",
+    workspace: "customer-success",
+    description:
+      "Resolves what customers bring in: works out what went wrong from the ticket and the context supplied, writes clear replies and troubleshooting steps, and summarises recurring problems for the product team. Drafts replies; never sends them.",
+    capabilities: ["customer_support", "customer_communication", "writing"],
+    toolIds: ["datetime"],
+    skills: ["meeting-summary"],
   },
 ];
 

@@ -268,7 +268,24 @@ const newcomers = [
   { name: "Donna", role: "Account Executive", owns: "sales", room: "revenue-growth" },
   { name: "Louis", role: "Marketing Manager", owns: "marketing", room: "revenue-growth" },
   { name: "Sansa", role: "Growth & Content Lead", owns: "content_creation", room: "revenue-growth" },
+  { name: "Brienne", role: "Project Coordinator", owns: "project_coordination", room: "operations" },
+  { name: "Davos", role: "Procurement & Vendor Manager", owns: "procurement", room: "operations" },
+  { name: "Katrina", role: "Customer Support Specialist", owns: "customer_support", room: "customer-success" },
 ];
+
+test("seeds all twelve beyond the first six, each once, each with a role and a room", async () => {
+  const { agents } = await ensureDevelopmentWorkforce(organizationRepository(null), agentRepository([]), workspaceRepository());
+  const seeded = agents.filter((agent) => typeof agent.metadata.role === "string");
+
+  assert.equal(newcomers.length, 12);
+  assert.deepEqual(seeded.map((agent) => agent.name).sort(), newcomers.map((member) => member.name).sort());
+  assert.equal(agents.length, 18, "the six first seeded and twelve more; Dana and Rhea were made by people, not the seed");
+  for (const agent of seeded) {
+    assert.ok(agent.workspaceId, `${agent.name} sits in a room`);
+    assert.ok(agent.description.length > 80, `${agent.name} says what they actually do`);
+    assert.ok(agent.skills && agent.skills.length > 0, `${agent.name} holds at least one skill`);
+  }
+});
 
 test("seats the engineering team in the company's own Engineering workspace, found by its slug", async () => {
   const agents = agentRepository([]);
