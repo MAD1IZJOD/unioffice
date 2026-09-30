@@ -279,6 +279,19 @@ export class WorkService {
 
       const tasks: Task[] = [];
 
+      // A mission's own room comes first, as it does for the delegator. A
+      // skill is a hard boundary on who gets a step, so choosing one that only
+      // someone outside the room holds took the step away from the people in
+      // it: on a live Product mission, three steps went to a company-wide
+      // communicator because only he held "Announcement drafting", and the
+      // Product Manager got none. Skills are therefore chosen from what the
+      // room's agents hold; with nobody in the room, from everyone available.
+      // A skill asked for by name is still looked for among everyone.
+      const inRoom = updatedWork.workspaceId
+        ? availableAgents.filter((agent) => agent.workspaceId === updatedWork.workspaceId)
+        : [];
+      const skillCandidates = inRoom.length > 0 && !requestedSkill ? inRoom : availableAgents;
+
       for (const plannedTask of plan.tasks) {
         // The server decides the skill, before anyone is given the step: the
         // step's own words and stated needs, against the skills that apply
@@ -305,7 +318,7 @@ export class WorkService {
             suggestedSlug: plannedTask.skill,
           },
           skills: candidateSkills,
-          agents: availableAgents,
+          agents: skillCandidates,
         });
 
         const chosen: SkillMatch | undefined = resolution.outcome === "selected" ? resolution.match : undefined;
