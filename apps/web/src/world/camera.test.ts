@@ -93,6 +93,67 @@ describe("bringing something into view", () => {
     expect(onStage(kept, middle).y).toBeCloseTo(260);
   });
 
+  describe("with all twenty in the office", () => {
+    const office = planFloor([
+      { id: "hall", agentIds: ["tyrion", "jamie", "peter"] },
+      { id: "customer-success", agentIds: ["rhea", "katrina"] },
+      { id: "engineering", agentIds: ["dana", "tony", "wanda", "bruce", "natasha", "sam"] },
+      { id: "finance", agentIds: ["harvey"] },
+      { id: "operations", agentIds: ["brienne", "davos"] },
+      { id: "product", agentIds: ["jessica"] },
+      { id: "research", agentIds: ["mike", "rachel"] },
+      { id: "revenue-growth", agentIds: ["donna", "louis", "sansa"] },
+    ]);
+
+    // A desktop map, and a phone's once the zoom rail is taken off.
+    for (const [label, area] of [["desktop", { width: 948, height: 437 }], ["phone", { width: 310, height: 353 }]] as const) {
+      const fitK = Math.min(area.width / office.width, area.height / office.height);
+      const opts = { fit: fitK, maxZoom: 7 };
+
+      it(`fits the whole office on a ${label} map`, () => {
+        const fit = { k: fitK, x: (area.width - office.width * fitK) / 2, y: (area.height - office.height * fitK) / 2 };
+        const topLeft = onStage(fit, { x: 0, y: 0 });
+        const bottomRight = onStage(fit, { x: office.width, y: office.height });
+
+        expect(topLeft.x).toBeGreaterThanOrEqual(-0.001);
+        expect(topLeft.y).toBeGreaterThanOrEqual(-0.001);
+        expect(bottomRight.x).toBeLessThanOrEqual(area.width + 0.001);
+        expect(bottomRight.y).toBeLessThanOrEqual(area.height + 0.001);
+      });
+
+      it(`brings every one of the twenty into the middle of a ${label} map`, () => {
+        for (const [id, seat] of office.seats) {
+          const camera = cameraOn(office, { kind: "agent", id }, area, opts);
+          expect(camera, id).toBeDefined();
+          const at = onStage(camera!, seat.at);
+          expect(at.x, id).toBeCloseTo(area.width / 2);
+          expect(at.y, id).toBeCloseTo(area.height / 2);
+        }
+      });
+
+      it(`frames every room whole on a ${label} map`, () => {
+        for (const room of office.rooms) {
+          const camera = cameraOn(office, { kind: "room", id: room.id }, area, opts)!;
+          const topLeft = onStage(camera, room.rect);
+          const bottomRight = onStage(camera, { x: room.rect.x + room.rect.width, y: room.rect.y + room.rect.height });
+          const fitsWhole = topLeft.x >= -0.001 && topLeft.y >= -0.001 && bottomRight.x <= area.width + 0.001 && bottomRight.y <= area.height + 0.001;
+          // A room larger than the map even at the whole-office zoom cannot be whole; none is.
+          expect(fitsWhole, room.id).toBe(true);
+        }
+      });
+    }
+
+    it("still opens the desktop map at a readable, whole-number zoom, not shrunk to fit", () => {
+      const area = { width: 948, height: 437 };
+      const fitK = Math.min(area.width / office.width, area.height / office.height);
+      const opening = Math.max(Math.floor(fitK), area.width >= 960 ? 3 : 2);
+
+      expect(Number.isInteger(opening)).toBe(true);
+      expect(opening).toBeGreaterThanOrEqual(2);
+      expect(opening).toBeGreaterThan(fitK);
+    });
+  });
+
   it("gives the same view for the same request, every time", () => {
     expect(cameraOn(plan, { kind: "room", id: "finance" }, stage, options)).toEqual(
       cameraOn(plan, { kind: "room", id: "finance" }, stage, options));
