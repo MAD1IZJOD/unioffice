@@ -871,6 +871,12 @@
   align-items: baseline;
 }
 
+/* A recorded event's particulars, under its line. */
+.world-log-detail {
+  grid-column: 2;
+  overflow-wrap: anywhere;
+}
+
 .world-legend {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line-subtle);
@@ -997,6 +1003,10 @@
   .world-log-list li {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
+  }
+
+  .world-log-detail {
+    grid-column: 1;
   }
 
   .world-roster {

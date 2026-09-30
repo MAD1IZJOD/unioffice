@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import {
+  fetchActivity,
   fetchWorld,
   formatRelativeTime,
   type WorldAgent,
@@ -9,6 +10,7 @@ import {
 } from "../lib/api";
 import { useCan } from "../lib/access";
 import { useLiveResource } from "../lib/live";
+import { useResource } from "../lib/useResource";
 
 import { Connecting, Failure, Quiet } from "../components/primitives";
 
@@ -21,6 +23,7 @@ import { Inspector, StatePill } from "../world/Inspector";
 import { planFloor } from "../world/layout";
 import { agentsOn, missionInView, missionTarget } from "../world/missionFocus";
 import { handoffKey, momentsBetween, type Reading, type WorldMoment } from "../world/moments";
+import { recentInWorld } from "../world/recent";
 import { Scene, type WorldSelection } from "../world/Scene";
 import type { SearchHit } from "../world/search";
 import { finish, travelsOf, type Travel } from "../world/travels";
@@ -54,6 +57,9 @@ interface LogEntry {
 export default function World() {
   const world = useLiveResource<WorldSnapshot>(useCallback(() => fetchWorld(), []), { fallbackPollMs: 15_000 });
   const canConfigure = useCan("agents.configure");
+  // Read once, on opening: what the record says happened before anyone was
+  // watching. From here on the office itself tells what changes.
+  const record = useResource(useCallback(() => fetchActivity(40), []));
 
   const [view, setView] = useState<"map" | "list">("map");
   const [motion, setMotion] = useState(initialMotion);
@@ -198,6 +204,7 @@ export default function World() {
   }
 
   const count = (pick: (agent: WorldAgent) => boolean) => snapshot.agents.filter(pick).length;
+  const recent = recentInWorld(record.data ?? [], snapshot);
   const working = count((agent) => agent.presence === "working");
   const waiting = count((agent) => agent.presence === "waiting");
   const inPlay = snapshot.handoffs.filter((handoff) => handoff.state !== "delivered");
@@ -402,6 +409,29 @@ export default function World() {
                 ) : (
                   <span>{line}</span>
                 )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <section className="world-log" aria-labelledby="world-recent-title">
+        <h3 id="world-recent-title" className="world-section-label">Before you opened</h3>
+        {record.loading ? (
+          <p className="world-meta">Reading the company&apos;s record…</p>
+        ) : record.error ? (
+          <p className="world-meta">The company&apos;s record could not be read. The office above is unaffected.</p>
+        ) : recent.length === 0 ? (
+          <p className="world-meta">Nothing recorded recently about anyone in this office.</p>
+        ) : (
+          <ol className="world-log-list">
+            {recent.map(({ key, at, line, detail, agentId }) => (
+              <li key={key}>
+                <time className="world-meta" dateTime={at}>{formatRelativeTime(at)}</time>
+                <button type="button" className="world-link-button" onClick={() => choose({ kind: "agent", id: agentId })}>
+                  {line}
+                </button>
+                {detail && <span className="world-meta world-log-detail">{detail}</span>}
               </li>
             ))}
           </ol>

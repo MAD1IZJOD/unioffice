@@ -682,7 +682,7 @@ describe("the world", () => {
 
       const note = await screen.findByText(/That mission is not under way in your view of the company/);
       expect(note.textContent).toBe("That mission is not under way in your view of the company, so the whole office is shown. Dismiss");
-      expect(calls.every((call) => call.url.pathname.endsWith("/world"))).toBe(true);
+      expect(calls.every((call) => /\/(world|activity)$/.test(call.url.pathname))).toBe(true);
       expect(calls.some((call) => call.url.href.includes(foreign))).toBe(false);
     });
 
@@ -739,6 +739,40 @@ describe("the world", () => {
 
       await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
       expect(screen.queryByText(/not in your view of the office/)).toBeNull();
+    });
+  });
+
+  describe("before you opened", () => {
+    const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
+    const recorded = [
+      { id: "e1", type: "task.completed", timestamp: at(20), organizationId: "org", agentId: "tony", actorType: "agent", payload: { title: "Design the schema" } },
+      { id: "e2", type: "task.completed", timestamp: at(10), organizationId: "org", agentId: "someone-out-of-reach", actorType: "agent", payload: { title: "Not yours to see" } },
+    ];
+
+    it("lists what the record says the office's agents did, and opens the agent from its line", async () => {
+      stubNetwork((call) =>
+        call.url.pathname.endsWith("/world") ? json(200, snapshot())
+          : call.url.pathname.endsWith("/activity") ? json(200, { events: recorded })
+            : json(404, { error: { message: "Not here." } }));
+      const { container } = page();
+
+      const record = await screen.findByRole("region", { name: "Before you opened" });
+      const line = await within(record).findByRole("button", { name: "Tony · Task completed: Design the schema" });
+      expect(within(record).queryByText(/Not yours to see/)).toBeNull();
+
+      // Told, never acted out: nobody walks for what happened before.
+      expect(container.querySelectorAll(".world-traveller")).toHaveLength(0);
+
+      await userEvent.click(line);
+      expect(screen.getByRole("complementary", { name: "Details: Tony" })).toBeDefined();
+    });
+
+    it("says plainly when the record could not be read, and leaves the office alone", async () => {
+      open();
+
+      const record = await screen.findByRole("region", { name: "Before you opened" });
+      expect(await within(record).findByText(/The company's record could not be read/)).toBeDefined();
+      expect(screen.getByText(/3 agents in 3 rooms/)).toBeDefined();
     });
   });
 
