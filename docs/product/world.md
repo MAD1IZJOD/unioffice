@@ -5,8 +5,10 @@ not a simulation and not a second company. Every desk, lit screen and parcel
 is a fact the server reported, and everything that moves is a change the page
 watched happen.
 
-Open it from **Workforce → World** (`/world`), or from a mission's room with
-**View in World** (`/world?mission=<id>`).
+Open it from **Workforce → World** (`/world`), from a mission's room with
+**View in World** (`/world?mission=<id>`), or from an agent's row or profile
+in the Workforce with **View in World** (`/world?agent=<id>`). The details
+of an agent in the World link back to its profile.
 
 ## What it is, and what it is not
 
@@ -205,6 +207,28 @@ already built for this viewer (`apps/web/src/world/missionFocus.ts`).
   the whole office, one plain note, and no further request. Nothing on the
   page can tell them apart.
 
+## An agent in focus
+
+`/world?agent=<id>` opens the office on one agent: it is chosen, as a click
+on its desk would, and the camera brings its desk into view once. Nobody is
+quietened, and the viewer is free to look anywhere afterwards. As with a
+mission, the id is only looked up in this viewer's snapshot: an agent that
+does not exist, is another company's or sits in a workspace the viewer was
+not given all read the same - the whole office and one plain note. When a
+link names both a mission and an agent, the mission wins.
+
+## Before you opened
+
+The office moves only for what changes while it is watched, so on opening
+the log *Seen while you watched* is empty. Under it, *Before you opened*
+lists the last few events the server recorded about agents in this office -
+steps started and finished, approvals, results, tool calls, agents joining
+or being reconfigured - newest first (`apps/web/src/world/recent.ts`). It is
+read once, from `GET /activity`, on opening. These are lines, never acted
+out: nothing walks and no desk changes for them. Choosing one opens that
+agent. A tool call is told once, by its outcome, and an assignment by the
+step starting.
+
 ## Security and data isolation
 
 - **One read.** `GET /world` is built only from reads that already exist:
@@ -216,9 +240,13 @@ already built for this viewer (`apps/web/src/world/missionFocus.ts`).
   rather than greyed out: agents in workspaces they were not given, missions
   they cannot see, and handoffs in those missions. An agent busy on such a
   mission shows as working without saying on what.
-- **Nothing on the client widens it.** Search, filters and mission focus work
-  on that snapshot and nothing else. The details panel's one extra read is
-  the agent's profile, which the server narrows the same way.
+- **Nothing on the client widens it.** Search, filters, mission focus and
+  agent focus work on that snapshot and nothing else. The details panel's
+  extra read is the agent's profile, which the server narrows the same way.
+- **The record is narrowed twice.** `GET /activity` leaves out events from
+  missions the viewer cannot reach, but lets through events tied to no
+  mission. *Before you opened* therefore keeps only events about an agent in
+  this viewer's snapshot, so an agent the World hides is never named there.
 - **Clicks authorize nothing.** Every action is a link into the page that
   owns it, where the server checks the person's role again. The decision link
   is offered only to roles that can decide.
@@ -228,9 +256,11 @@ already built for this viewer (`apps/web/src/world/missionFocus.ts`).
 - The page reads the shell's existing company-wide live channel, so watching
   the office opens no new connection. It re-reads `/world` when events
   arrive (coalesced) and every 30 seconds as a safety net.
-- The page, its art and its stylesheet are a lazy chunk - about 56 kB of
-  script (16 kB gzipped) and 15 kB of CSS (3.5 kB gzipped). Other pages pay
+- The page, its art and its stylesheet are a lazy chunk - about 60 kB of
+  script (18 kB gzipped) and 16 kB of CSS (3.8 kB gzipped). Other pages pay
   only for the navigation entry.
+- Opening it makes one read of the recorded activity (40 events) besides the
+  snapshot; that is not repeated while the page stays open.
 - The characters are drawn from pixel maps in code
   (`apps/web/src/world/sprites.ts`); there are no image assets.
 - A walk writes its position straight onto its element each frame rather than
@@ -256,7 +286,11 @@ already built for this viewer (`apps/web/src/world/missionFocus.ts`).
   means no movement, non-handoff changes move nobody, an off-floor sender
   draws no parcel, and no random number is ever drawn.
 - `apps/web/src/world/*.test.ts` - moments, travels, layout, camera, search,
-  filters and mission focus, as pure functions.
+  filters, mission focus and the recorded activity, as pure functions.
+- `apps/api/src/workforce-world-contract.test.ts` - the real provisioning,
+  Workforce and World services over one agent store: an agent created
+  through the owner/admin path appears in its workspace's room with its role,
+  with nothing added to the World by hand.
 
 ## Known gaps
 
