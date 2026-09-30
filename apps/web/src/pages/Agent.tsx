@@ -566,6 +566,7 @@ function AgentEditor({
 
   const orchestrator = member.type === "orchestrator";
 
+  const [role, setRole] = useState(member.role ?? "");
   const [description, setDescription] = useState(member.description);
   const [capabilities, setCapabilities] = useState<string[]>([...member.capabilities]);
   const [capabilityDraft, setCapabilityDraft] = useState("");
@@ -598,8 +599,12 @@ function AgentEditor({
       // Skills are sent only when they changed, so an assignment the agent
       // no longer meets does not block saving an unrelated edit.
       const skillsChanged = [...skillSlugs].sort().join() !== [...heldSkills].sort().join();
+      // Likewise the role: an empty field clears it.
+      const nextRole = role.trim() || null;
+      const roleChanged = nextRole !== (member.role?.trim() || null);
 
       await updateAgent(member.id, {
+        ...(roleChanged ? { role: nextRole } : {}),
         description: description.trim(),
         capabilities,
         toolIds,
@@ -617,6 +622,20 @@ function AgentEditor({
 
   return (
     <div className="config">
+      <div className="config-row">
+        <label className="config-label" htmlFor="agent-role">Role</label>
+        <input
+          id="agent-role"
+          value={role}
+          disabled={busy}
+          maxLength={60}
+          onChange={(event) => setRole(event.target.value)}
+          placeholder="Product Manager"
+          className="config-input max-w-[300px]"
+        />
+        <p className="config-hint">A job title. Leave it empty to go by the discipline its capabilities describe.</p>
+      </div>
+
       <div className="config-row">
         <label className="config-label" htmlFor="agent-description">What it does</label>
         <textarea

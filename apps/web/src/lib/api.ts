@@ -2017,11 +2017,15 @@ export async function fetchAgentProfile(agentId: string): Promise<AgentProfile> 
 
 export async function createAgent(input: {
   name: string;
+  /** A job title, such as "Product Manager"; the discipline is derived from capabilities. */
+  role?: string;
   description: string;
   type: AgentSummary["type"];
   capabilities: string[];
   toolIds: string[];
   workspaceId?: string;
+  /** Skill slugs the agent starts with; each must be one it can use. */
+  skills?: string[];
 }): Promise<AgentSummary> {
   const data = await post<{ agent: AgentSummary }>(
     "/agents",
@@ -2039,6 +2043,8 @@ export async function createAgent(input: {
 export async function updateAgent(
   agentId: string,
   changes: {
+    /** null clears the job title. */
+    role?: string | null;
     description?: string;
     capabilities?: string[];
     toolIds?: string[];

@@ -1,4 +1,5 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -77,7 +78,8 @@ const company = roster([
 ]);
 
 function open(role: OrganizationRole, respond: () => Response | Promise<Response> = () => json(200, company)) {
-  stubNetwork((call) => (call.url.pathname === "/workforce" ? respond() : json(200, { workspaces: [], tools: [] })));
+  const calls = stubNetwork((call) =>
+    call.url.pathname === "/workforce" ? respond() : call.method === "POST" ? json(201, { agent: {} }) : json(200, { workspaces: [], tools: [] }));
 
   const router = createMemoryRouter(
     [
@@ -94,6 +96,7 @@ function open(role: OrganizationRole, respond: () => Response | Promise<Response
   );
 
   render(<RouterProvider router={router} />);
+  return calls;
 }
 
 const row = (name: string) => screen.getByRole("article", { name });
@@ -184,6 +187,32 @@ describe("the workforce", () => {
   it("offers adding an agent only to roles that configure the workforce", async () => {
     open("owner");
     expect(await screen.findByRole("button", { name: "Add an agent" })).toBeDefined();
+  });
+
+  it("adds an agent with the role it is given, and without one when it is left empty", async () => {
+    const user = userEvent.setup();
+    const calls = open("owner");
+
+    const hire = async (role: string) => {
+      await user.click(await screen.findByRole("button", { name: "Add an agent" }));
+      await user.type(screen.getByLabelText("Name"), "Jessica");
+      if (role) await user.type(screen.getByLabelText("Role"), role);
+      await user.type(screen.getByLabelText("What it does"), "Decides what gets built next.");
+      await user.type(screen.getByPlaceholderText(/research, calculation/), "product management{Enter}");
+      await user.click(screen.getByRole("button", { name: "Add to the workforce" }));
+    };
+
+    await hire("  Product Manager ");
+    await waitFor(() => expect(calls.filter((call) => call.method === "POST")).toHaveLength(1));
+    expect(calls.find((call) => call.method === "POST")?.body).toMatchObject({
+      name: "Jessica",
+      role: "Product Manager",
+      capabilities: ["product_management"],
+    });
+
+    await hire("");
+    await waitFor(() => expect(calls.filter((call) => call.method === "POST")).toHaveLength(2));
+    expect(calls.filter((call) => call.method === "POST")[1]?.body).not.toHaveProperty("role");
   });
 
   it("does not offer adding an agent to a member", async () => {

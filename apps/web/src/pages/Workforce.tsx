@@ -299,6 +299,7 @@ function HireForm({ onCancel, onHired }: { onCancel: () => void; onHired: () => 
   const tools = useResource<ToolDescriptor[]>(useCallback(() => fetchTools(), []));
 
   const [name, setName] = useState("");
+  const [role, setRole] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<AgentSummary["type"]>("specialist");
   const [capabilities, setCapabilities] = useState<string[]>([]);
@@ -327,6 +328,7 @@ function HireForm({ onCancel, onHired }: { onCancel: () => void; onHired: () => 
     try {
       await createAgent({
         name: name.trim(),
+        role: role.trim() || undefined,
         description: description.trim(),
         type,
         capabilities,
@@ -356,6 +358,22 @@ function HireForm({ onCancel, onHired }: { onCancel: () => void; onHired: () => 
           placeholder="Dana"
           className="config-input max-w-[300px]"
         />
+      </div>
+
+      <div className="config-row">
+        <label className="config-label" htmlFor="agent-role">Role</label>
+        <input
+          id="agent-role"
+          value={role}
+          disabled={busy}
+          maxLength={60}
+          onChange={(event) => setRole(event.target.value)}
+          placeholder="Product Manager"
+          className="config-input max-w-[300px]"
+        />
+        <p className="config-hint">
+          A job title. Optional - without one, the agent is known by the discipline its capabilities describe.
+        </p>
       </div>
 
       <div className="config-row">

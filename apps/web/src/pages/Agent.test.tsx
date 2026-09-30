@@ -272,6 +272,49 @@ describe("an agent's profile", () => {
     expect(within(skills).getByText("Needs the datetime tool.")).toBeDefined();
   });
 
+  it("changes or clears an agent's role, and leaves it out of a save that does not touch it", async () => {
+    const user = userEvent.setup();
+    const saved: unknown[] = [];
+
+    stubNetwork((call) => {
+      if (call.method === "POST") {
+        saved.push(call.body);
+        return json(200, { agent: {} });
+      }
+      if (call.url.pathname === "/workforce/agent-tony") return json(200, { ...tony, member: { ...tony.member, role: "Backend Engineer" } });
+      return json(200, { tools: [], workspaces: [], skills: [] });
+    });
+
+    render(<RouterProvider router={createMemoryRouter(
+      [{ path: "/workforce/:agentId", element: <AccessContext.Provider value={signedInAs("owner")}><Agent /></AccessContext.Provider> }],
+      { initialEntries: ["/workforce/agent-tony"] },
+    )} />);
+
+    const save = async (role?: string) => {
+      await user.click(await screen.findByRole("button", { name: "Configure" }));
+      const field = await screen.findByLabelText("Role");
+      expect((field as HTMLInputElement).value).toBe("Backend Engineer");
+      if (role !== undefined) {
+        await user.clear(field);
+        if (role) await user.type(field, role);
+      }
+      await user.click(screen.getByRole("button", { name: /Save/ }));
+      await waitFor(() => expect(screen.queryByLabelText("Role")).toBeNull());
+    };
+
+    await save("Staff Engineer");
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]).toMatchObject({ role: "Staff Engineer" });
+
+    await save("");
+    await waitFor(() => expect(saved).toHaveLength(2));
+    expect(saved[1]).toMatchObject({ role: null });
+
+    await save();
+    await waitFor(() => expect(saved).toHaveLength(3));
+    expect(saved[2]).not.toHaveProperty("role");
+  });
+
   it("assigns a skill the agent qualifies for, and cannot offer one it does not", async () => {
     const user = userEvent.setup();
     const catalogue = [
