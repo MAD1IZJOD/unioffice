@@ -28,18 +28,37 @@ agent  --holds-->  tools (grants)
 
 ## The development workforce
 
-| Agent | Role | Tools | Skills (seeded) |
-| --- | --- | --- | --- |
-| Tyrion | Orchestration | none | none |
-| Tony | Engineering | calculator, datetime, json_transform | code-review, debugging, api-design, database-investigation, test-generation, incident-analysis |
-| Harvey | Quantitative | calculator, datetime | financial-analysis, budget-review, variance-analysis, forecasting |
-| Mike | Research | datetime, json_transform | web-research, competitor-analysis, source-synthesis, briefing-generation, meeting-summary |
-| Jamie | Operations and people | datetime | candidate-screening, onboarding-planning, policy-drafting, employee-communication |
-| Peter | Communication | datetime | executive-briefing, stakeholder-update, announcement-drafting, meeting-summary |
+Seventy-one agents: sixty-nine blueprints the seed provisions, and Dana and
+Rhea, whom people made. The blueprints are the one place the seeded agents
+are defined - name, role, room, capabilities, tools and skills:
 
-The seed keeps agents in line with this table on boot - unless a person has
-configured an agent through the product, after which the seed leaves it alone
-and skills are assigned from its profile.
+| Source | Who |
+| --- | --- |
+| `workforce` in `apps/api/src/development-workforce.ts` | Tyrion, Tony, Harvey, Mike, Jamie, Peter |
+| `proposedWorkforce` in the same file | the twelve after them, from Wanda to Katrina |
+| `apps/api/src/workforce-expansion.ts` | the fifty-one of the expansion, by department |
+
+| Room | Agents |
+| --- | --- |
+| Company hall (no workspace) | 6 - Tyrion, Jamie, Peter, Victor, Stella, Adrian |
+| Engineering | 18 |
+| Product | 7 |
+| Research | 7 |
+| Revenue & Growth | 13 |
+| Operations | 8 |
+| Finance | 5 |
+| Customer Success | 6 |
+| Compliance & Risk | 1 - Victoria |
+
+The API provisions `completeDevelopmentWorkforce` on boot only when
+`SEED_DEVELOPMENT_WORKFORCE=true`. It is idempotent: a room the company
+already has is found by its slug and reused, a missing one is made once, an
+agent is created once under its fixed id and brought back in line with its
+blueprint on later boots - unless a person has configured it through the
+product, after which the seed leaves it alone. Every agent beyond the first
+twenty is held by `workforce-expansion.test.ts` to real tools, skills it can
+use and a capability nobody else has. All agents run on the one model the
+API is configured with; there is no per-agent model.
 
 ## The profile
 
