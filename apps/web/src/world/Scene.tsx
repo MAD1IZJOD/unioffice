@@ -15,14 +15,13 @@ import {
 import { Maximize, Minus, Plus } from "lucide-react";
 
 import type { WorldAgent, WorldHandoff, WorldMission, WorldSnapshot } from "../lib/api";
-import { disciplineOf } from "../lib/workforce";
 
 import { cameraOn, keepCentre, ZOOM_RAIL, type Camera, type FocusTarget } from "./camera";
 import { HANDOFF_LABEL, missionStatusWord, recentFailure } from "./describe";
 import { Desk, Runs } from "./Desk";
 import { handoffKey } from "./moments";
 import { pathBetween, pathData, pathLength, TILE, type FloorPlan, type Point } from "./layout";
-import { FIGURE_WIDTH, lookOf, STANDING_HEIGHT, walkingRuns } from "./sprites";
+import { castOf, FIGURE_WIDTH, STANDING_HEIGHT, walkingRuns, type Look } from "./sprites";
 import { underway, walkersOf, type Travel } from "./travels";
 
 /** What is selected on the map. */
@@ -422,6 +421,9 @@ export function Scene({
   /* What is drawn --------------------------------------------------------- */
   const agentsById = useMemo(() => new Map(snapshot.agents.map((agent) => [agent.id, agent])), [snapshot.agents]);
   const roomsById = useMemo(() => new Map(snapshot.rooms.map((room) => [room.id, room])), [snapshot.rooms]);
+  // One look per agent for the whole office, so a desk, a walk and the
+  // details all draw the same person, told apart from their roommates.
+  const cast = useMemo(() => castOf(snapshot.agents), [snapshot.agents]);
 
   const open = snapshot.handoffs.filter((handoff) => handoff.state !== "delivered");
   const away = useMemo(() => walkersOf(travels), [travels]);
@@ -545,6 +547,7 @@ export function Scene({
                   <Desk
                     key={agent.id}
                     agent={agent}
+                    look={cast.get(agent.id)!}
                     seat={seat}
                     roomName={roomsById.get(placed.id)?.name}
                     selected={selection?.kind === "agent" && selection.id === agent.id}
@@ -561,6 +564,7 @@ export function Scene({
                 key={travel.key}
                 travel={travel}
                 walker={travel.kind === "walk" ? agentsById.get(travel.agentId) : undefined}
+                look={travel.kind === "walk" ? cast.get(travel.agentId) : undefined}
                 onDone={onTravelled}
               />
             ))}
@@ -761,18 +765,20 @@ const STRIDE = 3;
 function Traveller({
   travel,
   walker,
+  look,
   onDone,
 }: {
   travel: Travel;
   /** The agent walking, for a walk. */
   walker?: WorldAgent;
+  /** How the walker is drawn: the same as at their desk. */
+  look?: Look;
   /** Called once, with when the trip ended on the page's clock. */
   onDone: (key: string, endedAt: number) => void;
 }) {
   const element = useRef<SVGGElement>(null);
   const strides = useRef<[SVGGElement | null, SVGGElement | null]>([null, null]);
   const carried = useRef<SVGGElement>(null);
-  const look = walker ? lookOf(walker.id, disciplineOf(walker)) : undefined;
 
   useEffect(() => {
     const length = pathLength(travel.points);

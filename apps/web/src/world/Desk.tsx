@@ -1,11 +1,10 @@
 import { memo, type KeyboardEvent } from "react";
 
 import type { WorldAgent } from "../lib/api";
-import { disciplineOf } from "../lib/workforce";
 
 import { agentLabel, deskStateOf, type DeskState } from "./describe";
 import type { PlacedSeat } from "./layout";
-import { deskItemRuns, figureRuns, lookOf, type PixelRun } from "./sprites";
+import { deskItemRuns, figureRuns, type Look, type PixelRun } from "./sprites";
 
 /**
  * One agent at their desk.
@@ -22,6 +21,7 @@ import { deskItemRuns, figureRuns, lookOf, type PixelRun } from "./sprites";
  */
 export const Desk = memo(function Desk({
   agent,
+  look,
   seat,
   roomName,
   selected,
@@ -31,6 +31,8 @@ export const Desk = memo(function Desk({
   onSelect,
 }: {
   agent: WorldAgent;
+  /** How they are drawn, told apart from their roommates (`castOf`). */
+  look: Look;
   seat: PlacedSeat;
   roomName?: string;
   selected: boolean;
@@ -47,7 +49,6 @@ export const Desk = memo(function Desk({
   onSelect: (agentId: string) => void;
 }) {
   const state = deskStateOf(agent);
-  const look = lookOf(agent.id, disciplineOf(agent));
   const figure = figureRuns(look);
   const item = deskItemRuns(look);
 

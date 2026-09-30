@@ -6,13 +6,13 @@ import { Link } from "react-router-dom";
 import { fetchAgentProfile, formatRelativeTime, type AgentProfile, type WorldAgent, type WorldSnapshot } from "../lib/api";
 import { useCan } from "../lib/access";
 import { useResource } from "../lib/useResource";
-import { capabilityLabel, disciplineOf, roleLabel } from "../lib/workforce";
+import { capabilityLabel, roleLabel } from "../lib/workforce";
 
 import { agentLine, DESK_LABEL, deskStateOf, HANDOFF_LABEL, lastLine, missionStatusWord, type DeskState } from "./describe";
 import { Runs } from "./Desk";
 import { handoffKey } from "./moments";
 import type { WorldSelection } from "./Scene";
-import { figureRuns, lookOf } from "./sprites";
+import { castOf, figureRuns } from "./sprites";
 
 /**
  * What the world knows about the thing that was clicked, and where to go to
@@ -108,7 +108,7 @@ function AgentPanel({
     <>
       <div className="world-portrait">
         <svg className="world-portrait-figure" viewBox="0 0 12 13" width={60} height={65} aria-hidden="true">
-          <Runs runs={figureRuns(lookOf(agent.id, disciplineOf(agent)))} />
+          <Runs runs={figureRuns(castOf(snapshot.agents).get(agent.id)!)} />
         </svg>
         <div className="min-w-0">
           <div className="world-portrait-role">{roleLabel(agent)}</div>
