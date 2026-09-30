@@ -179,6 +179,16 @@ test("rooms are the hall and each active workspace; an empty one stays empty", a
   assert.ok(!snapshot.rooms.some((room) => room.name === "Old team"), "an archived workspace is not a room");
 });
 
+test("an agent's role comes with them into the world, and nobody is given one they do not have", async () => {
+  const snapshot = await world({
+    agents: [...roster, agent("wanda", { workspaceId: engineering, metadata: { role: "Frontend Engineer" } })],
+  }).getWorld(orgA);
+
+  assert.equal(snapshot.agents.find((entry) => entry.id === "wanda")?.role, "Frontend Engineer");
+  assert.equal(snapshot.rooms.find((room) => room.name === "Engineering")?.agentIds.map(String).includes("wanda"), true);
+  assert.equal("role" in snapshot.agents.find((entry) => entry.id === "tony")!, false);
+});
+
 test("an agent whose workspace was archived still works here, in the hall", async () => {
   const snapshot = await world({ agents: roster }).getWorld(orgA);
 

@@ -83,6 +83,8 @@ export interface WorkforceOutcome {
 export interface WorkforceMember {
   id: AgentId;
   name: string;
+  /** The job, as the company names it - "Backend Engineer". Absent when none was given. */
+  role?: string;
   description: string;
   type: Agent["type"];
   /** The agent's own configured status. */
@@ -451,9 +453,12 @@ export class WorkforceService {
     const last = finished[0];
     const workspace = agent.workspaceId ? workspacesById.get(agent.workspaceId) : undefined;
 
+    const role = typeof agent.metadata.role === "string" && agent.metadata.role.trim() ? agent.metadata.role.trim() : undefined;
+
     return {
       id: agent.id,
       name: agent.name,
+      ...(role ? { role } : {}),
       description: agent.description,
       type: agent.type,
       status: agent.status,

@@ -69,6 +69,8 @@ export interface WorldRoom {
 export interface WorldAgent {
   id: AgentId;
   name: string;
+  /** The job, as the company names it. Absent when none was given. */
+  role?: string;
   type: Agent["type"];
   status: Agent["status"];
   presence: WorkforceMember["presence"];
@@ -190,6 +192,7 @@ export class WorldService {
         return {
           id: member.id,
           name: member.name,
+          ...(member.role ? { role: member.role } : {}),
           type: member.type,
           status: member.status,
           presence: member.presence,

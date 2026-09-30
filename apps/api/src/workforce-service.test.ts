@@ -172,6 +172,35 @@ test("the last outcome and recent counts come from finished steps", async () => 
   assert.deepEqual(harvey!.recent, { completed: 1, failed: 1 });
 });
 
+test("a member's role is the one they were given, and nobody else gets one", async () => {
+  const service = setup({
+    agents: [
+      agent("tony"),
+      agent("bruce", { workspaceId: finance, metadata: { role: " Backend Engineer " } }),
+      agent("jessica", { metadata: { role: "" } }),
+      agent("secretive", { metadata: { systemInstructions: "Not a role." } }),
+    ],
+  });
+
+  const members = (await service.getWorkforce(orgA)).members;
+  const byName = (name: string) => members.find((member) => member.name === name)!;
+
+  assert.equal(byName("Bruce").role, "Backend Engineer");
+  for (const name of ["Tony", "Jessica", "Secretive"]) assert.equal("role" in byName(name), false, `${name} has no role`);
+  assert.equal((await service.getProfile(orgA, "bruce" as AgentId)).member.role, "Backend Engineer");
+});
+
+test("a newcomer in a workspace someone cannot reach stays out of their workforce, role and all", async () => {
+  const service = setup({
+    agents: [agent("tony"), agent("jessica", { workspaceId: finance, metadata: { role: "Product Manager" } })],
+  });
+
+  const members = (await service.getWorkforce(orgA, { reach: companyOnly })).members;
+
+  assert.deepEqual(members.map((member) => member.name), ["Tony"]);
+  await assert.rejects(service.getProfile(orgA, "jessica" as AgentId, { reach: companyOnly }), AgentNotFoundError);
+});
+
 test("another organization's agents and missions never appear", async () => {
   const service = setup({
     agents: [agent("tony"), agent("intruder", { organizationId: orgB })],
