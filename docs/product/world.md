@@ -102,6 +102,16 @@ The rules a walk keeps:
   state is news for the log, not a second trip.
 - **Both ends must be on this floor.** A handoff whose sender or receiver the
   viewer cannot see draws no route, no parcel and no walk.
+- **It walks the floor, not the furniture.** Every row of desks has an aisle
+  in front of it, and walks and routes start and end there: in the open floor
+  in front of the sender's desk and the receiver's, where the result is handed
+  over and can be seen. In between they follow the aisles, the lanes down each
+  side wall, the strip below a room's sign, the doorways and the corridor, and
+  never cross a desk; every door opens onto floor. Within one room a walk
+  follows the shared aisle, or a side lane to another row. The way is worked
+  out from the floor plan alone (`apps/web/src/world/layout.ts`): the same two
+  desks always give the same way, the way back is that way reversed, and
+  nothing is chosen at random.
 - **One figure per agent.** A result that feeds several steps is carried to
   each desk in turn: the agent makes one walk after another and their chair
   stays empty until the last one is done.
@@ -254,7 +264,6 @@ already built for this viewer (`apps/web/src/world/missionFocus.ts`).
   shows it. A handoff is one step's result becoming another's input.
 - A step's skill is not in the snapshot, so the details name an agent's
   skills but not which one a step is using; the mission room does.
-- Within one room a walk goes straight from desk to desk.
 - Two readings can only name a handoff once. If one vanished from a reading
   and came back while its walk was still under way, the page would draw a
   second walk under the same name.
