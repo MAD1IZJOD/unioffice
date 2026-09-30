@@ -70,6 +70,20 @@ server's fields into the state the desk draws. It reads only `status`,
 There is no "blocked" agent state, because nothing records one: a blocker
 belongs to a mission's steps, and the mission brief is where it is shown.
 
+### How each agent is drawn
+
+Every agent is the same small figure. What it wears and has on its desk
+comes from its discipline, which is read from the capabilities the server
+granted it (`disciplineOf`, `apps/web/src/lib/workforce.ts`). Its hair and
+haircut come from a stable hash of its id. With seventy-one agents and
+eighteen in Engineering, the id alone is not enough to tell roommates
+apart, so `castOf` (`apps/web/src/world/sprites.ts`) dresses each room in
+seat order: anyone whose look a roommate of the same discipline already has
+takes the next free hair and haircut. There are twenty-one per discipline.
+The desk, a walk and the details all draw from that one cast, so an agent
+looks the same everywhere. Nothing is random, and an agent whose look
+nobody else in its room shares keeps its own.
+
 ### Rooms
 
 Rooms are the server's rooms, in the server's order: the hall first, then
