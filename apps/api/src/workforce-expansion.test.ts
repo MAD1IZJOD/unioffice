@@ -79,6 +79,9 @@ test("takes nothing already owned by one of the first twenty's specialists", () 
     frontend_development: ["Alex"],
     backend_development: ["Alex", "Liam"],
     infrastructure_operations: ["Ryan", "Ethan", "Olivia", "Noah"],
+    // A second account executive sells; SEO and content strategy make content.
+    sales: ["Grace"],
+    content_creation: ["Zoe", "Caleb"],
   };
 
   for (const capability of ownedByTheTwelve) {
@@ -94,4 +97,6 @@ test("each department has the people it was planned with", () => {
   assert.deepEqual(byRoom.get("engineering"), ["Alex", "Maya", "Leo", "Elena", "Ryan", "Chloe", "Ethan", "Olivia", "Noah", "Arjun", "Sophie", "Liam"]);
   assert.deepEqual(byRoom.get("product"), ["Emma", "Lucas", "Mia", "Daniel", "Ava", "Henry"]);
   assert.deepEqual(byRoom.get("research"), ["Nora", "Adam", "Isabella", "Ethan R", "Clara"]);
+  assert.deepEqual(byRoom.get("revenue-growth"), ["Ryan R", "Grace", "Jack", "Lily", "Max", "Zoe", "Caleb", "Ruby", "Ben", "Ella"]);
+  assert.deepEqual(byRoom.get("operations"), ["Marcus", "Ava O", "Theo", "Grace O", "Isaac", "Lily O"]);
 });
