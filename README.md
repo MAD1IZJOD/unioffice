@@ -403,6 +403,7 @@ API over HTTP with the signed-in user's access token.
 - Membership changes are recorded in the event log as `member.*` and
   `workspace.access_*` events, naming the member rather than their address.
 
-  • 
+
+
 Copyright © 2026 Madhavan Sahu. All rights reserved.
 
