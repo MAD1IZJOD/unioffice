@@ -247,6 +247,32 @@ test("rejects a required tool that does not exist", () => {
   );
 });
 
+test("keeps lengthy tool descriptions out of the planner prompt", async () => {
+  let system = "";
+  const lengthyDescription = "A detailed tool operating manual that belongs to execution. ".repeat(200);
+  const planner = new OllamaPlanner({
+    async generate(request) {
+      system = request.messages[0]!.content;
+      return {
+        model: "test",
+        content: JSON.stringify({ tasks: [{ ref: "compute", title: "Compute", description: "Calculate the total.", ...taskFields(), requiredTools: ["calculator"], dependsOn: [] }] }),
+        metadata: {},
+      };
+    },
+  });
+
+  await planner.plan({
+    workId: "work-1" as WorkId,
+    objective: "Calculate the total.",
+    availableAgentIds: [],
+    availableTools: [{ id: "calculator", name: "Calculator", description: lengthyDescription }],
+    context: {},
+  });
+
+  assert.match(system, /- calculator: Calculator/);
+  assert.doesNotMatch(system, /A detailed tool operating manual that belongs to execution/);
+});
+
 test("drops a required capability outside the known vocabulary instead of failing the plan", () => {
   const plan = parseOllamaPlan(
     JSON.stringify({

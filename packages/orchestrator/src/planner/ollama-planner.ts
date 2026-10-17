@@ -72,7 +72,12 @@ export class OllamaPlanner implements Planner {
               availableTools.length > 0
                 ? [
                     "Available tools (use their exact id in requiredTools):",
-                    ...availableTools.map((tool) => `- ${tool.id}: ${tool.name} - ${tool.description}`),
+                    // Tool descriptions are often full operating manuals.
+                    // Planning selects only an id; the executor validates the
+                    // concrete input contract and permissions. Keeping names
+                    // here preserves meaningful selection without crowding
+                    // the finite model context.
+                    ...availableTools.map((tool) => `- ${tool.id}: ${tool.name}`),
                   ].join("\n")
                 : "No tools are currently available; requiredTools must always be an empty array.",
               availableSkills.length > 0
