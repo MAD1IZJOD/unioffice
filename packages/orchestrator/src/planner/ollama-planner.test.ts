@@ -621,3 +621,36 @@ test("the planner is told skill is part of each task only when skills are offere
   assert.match(prompts[0]!, /- financial-analysis: Financial analysis/);
   assert.doesNotMatch(prompts[1]!, /skill/);
 });
+
+test("keeps lengthy skill descriptions out of the planner prompt", async () => {
+  let system = "";
+  const lengthyDescription = "A detailed procedure that belongs to execution, not planning. ".repeat(200);
+  const planner = new OllamaPlanner({
+    async generate(request) {
+      system = request.messages[0]!.content;
+      return {
+        model: "test",
+        content: JSON.stringify({ tasks: [{ ref: "analyse", title: "Analyse", description: "Analyse the figures.", ...taskFields(), skill: "financial-analysis", dependsOn: [] }] }),
+        metadata: {},
+      };
+    },
+  });
+
+  await planner.plan({
+    workId: "work-1" as WorkId,
+    objective: "Analyse Q3.",
+    availableAgentIds: [agentId],
+    availableSkills: [{
+      slug: "financial-analysis",
+      name: "Financial analysis",
+      description: lengthyDescription,
+      requiredTools: ["calculator"],
+      requiredCapabilities: ["financial_analysis"],
+    }],
+    context: {},
+  });
+
+  assert.match(system, /- financial-analysis: Financial analysis/);
+  assert.doesNotMatch(system, /A detailed procedure that belongs to execution/);
+  assert.match(system, /server resolves each selected skill/i);
+});

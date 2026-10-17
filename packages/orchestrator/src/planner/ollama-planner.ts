@@ -73,9 +73,16 @@ export class OllamaPlanner implements Planner {
                 : "No tools are currently available; requiredTools must always be an empty array.",
               availableSkills.length > 0
                 ? [
-                    "A skill is a way of doing a kind of work that the company has defined. When a task is that kind of work, set its skill to the exact slug from this list - the task is then done the company's way, by an agent that holds the skill. When no skill fits, set skill to null.",
+                    "A skill is a way of doing a kind of work that the company has defined. When a task is that kind of work, set its skill to the exact slug from this list - the task is then done the company's way, by an agent that holds the skill. When no skill fits, set skill to null. The server resolves each selected skill's detailed procedure, capabilities and tools after planning.",
                     "Available skills:",
-                    ...availableSkills.map((skill) => `- ${skill.slug}: ${skill.name} - ${skill.description}`),
+                    // A live company can have many skills with long procedure
+                    // descriptions. Those descriptions are not instructions
+                    // the planner needs: it only chooses a slug, and the
+                    // server resolves its concrete requirements afterwards.
+                    // Keeping the catalogue to stable names leaves room for
+                    // the objective, recalled knowledge, and valid JSON in
+                    // Ollama's finite context window.
+                    ...availableSkills.map((skill) => `- ${skill.slug}: ${skill.name}`),
                   ].join("\n")
                 : "",
               "suggestedAgentType must be specialist, manager, or orchestrator when present.",
