@@ -27,7 +27,12 @@ export interface OllamaModelProviderOptions {
   baseUrl?: string;
 
   defaultModel?: string;
+
+  /** Bounds an unavailable or stalled local model request. */
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 120_000;
 
 export class OllamaModelProvider
   implements ModelProvider
@@ -35,6 +40,8 @@ export class OllamaModelProvider
   private readonly baseUrl: string;
 
   private readonly defaultModel: string;
+
+  private readonly timeoutMs: number;
 
   constructor(
     options: OllamaModelProviderOptions = {},
@@ -56,12 +63,20 @@ export class OllamaModelProvider
     this.defaultModel =
       options.defaultModel ??
       "qwen3:8b";
+
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+    if (!Number.isFinite(this.timeoutMs) || this.timeoutMs <= 0) {
+      throw new Error("Ollama timeoutMs must be a positive finite number.");
+    }
   }
 
   async generate(
     request: ModelRequest,
   ): Promise<ModelResponse> {
     let response: Response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       response = await fetch(
@@ -106,63 +121,80 @@ export class OllamaModelProvider
                 : {}),
             },
           }),
+          signal: controller.signal,
         },
       );
     } catch (error) {
+      clearTimeout(timeout);
+
+      if (controller.signal.aborted) {
+        throw new Error(`Ollama generation timed out after ${this.timeoutMs}ms.`);
+      }
+
       throw new Error(
         `Unable to reach Ollama at ${this.baseUrl}: ${this.errorMessage(error)}`,
       );
     }
 
-    if (!response.ok) {
-      const errorText =
-        await response.text();
+    try {
+      if (!response.ok) {
+        const errorText =
+          await response.text();
 
-      throw new Error(
-        `Ollama request failed (${response.status}): ${errorText}`,
-      );
+        throw new Error(
+          `Ollama request failed (${response.status}): ${errorText}`,
+        );
+      }
+
+      const data =
+        (await response.json()) as
+          OllamaGenerateResponse;
+
+      this.validateResponse(data);
+
+      return {
+        content: data.response,
+
+        model: data.model,
+
+        usage: {
+          inputTokens:
+            data.prompt_eval_count,
+
+          outputTokens:
+            data.eval_count,
+
+          totalTokens:
+            (
+              data.prompt_eval_count ??
+              0
+            ) +
+            (
+              data.eval_count ??
+              0
+            ),
+        },
+
+        metadata: {
+          totalDuration:
+            data.total_duration,
+
+          loadDuration:
+            data.load_duration,
+
+          thinking:
+            data.thinking,
+        },
+      };
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error(`Ollama generation timed out after ${this.timeoutMs}ms.`);
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const data =
-      (await response.json()) as
-        OllamaGenerateResponse;
-
-    this.validateResponse(data);
-
-    return {
-      content: data.response,
-
-      model: data.model,
-
-      usage: {
-        inputTokens:
-          data.prompt_eval_count,
-
-        outputTokens:
-          data.eval_count,
-
-        totalTokens:
-          (
-            data.prompt_eval_count ??
-            0
-          ) +
-          (
-            data.eval_count ??
-            0
-          ),
-      },
-
-      metadata: {
-        totalDuration:
-          data.total_duration,
-
-        loadDuration:
-          data.load_duration,
-
-        thinking:
-          data.thinking,
-      },
-    };
   }
 
   private buildPrompt(
