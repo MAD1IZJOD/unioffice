@@ -198,18 +198,38 @@ export class DefaultAgentRuntime
           // task mandates. Reject the answer and force it to try again
           // instead of silently accepting a guessed/self-computed result -
           // this is the actual enforcement, not just a prompt hint.
-          if (unsatisfiedRequiredTools.length > 0 && !finalTurn) {
-            messages.push({ role: "assistant", content: response.content });
-            messages.push({
-              role: "user",
-              content: [
-                `Your answer is rejected: this task requires calling the tool(s) ${unsatisfiedRequiredTools.join(", ")} before you finish, and you have not called ${unsatisfiedRequiredTools.length === 1 ? "it" : "them"} yet.`,
-                "Do not compute, estimate, or restate this result yourself.",
-                `Call ${unsatisfiedRequiredTools.length === 1 ? "it" : "one of them"} now using the tool_call JSON format.`,
-              ].join(" "),
-            });
-            iteration += 1;
-            continue;
+          if (unsatisfiedRequiredTools.length > 0) {
+            if (!finalTurn) {
+              messages.push({ role: "assistant", content: response.content });
+              messages.push({
+                role: "user",
+                content: [
+                  `Your answer is rejected: this task requires calling the tool(s) ${unsatisfiedRequiredTools.join(", ")} before you finish, and you have not called ${unsatisfiedRequiredTools.length === 1 ? "it" : "them"} yet.`,
+                  "Do not compute, estimate, or restate this result yourself.",
+                  `Call ${unsatisfiedRequiredTools.length === 1 ? "it" : "one of them"} now using the tool_call JSON format.`,
+                ].join(" "),
+              });
+              iteration += 1;
+              continue;
+            }
+
+            return {
+              status: "failed",
+              error: {
+                code: "REQUIRED_TOOL_NOT_CALLED",
+                message: `The task required tool call(s) that did not complete: ${unsatisfiedRequiredTools.join(", ")}.`,
+              },
+              toolCalls,
+              metadata: {
+                model: response.model,
+                usage: response.usage,
+                startedAt,
+                completedAt: new Date(),
+                requiredTools,
+                requiredToolsSatisfied: false,
+                ...response.metadata,
+              },
+            };
           }
 
           return {

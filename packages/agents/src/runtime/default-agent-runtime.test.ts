@@ -371,7 +371,7 @@ test("rejects a plain-text answer that skips a required tool and forces a retry"
   assert.equal(result.output, "The doubled value is 42, confirmed by the tool.");
 });
 
-test("flags non-compliance when the model never calls a required tool within budget", async () => {
+test("fails when the model never calls a required tool within budget", async () => {
   const registry = new DefaultToolRegistry();
   registry.register(echoTool);
   const provider: ModelProvider = {
@@ -389,7 +389,8 @@ test("flags non-compliance when the model never calls a required tool within bud
 
   const result = await runtime.execute(toolDefinition(["double"]), baseContext(["double"]));
 
-  assert.equal(result.status, "completed");
+  assert.equal(result.status, "failed");
+  assert.equal(result.error?.code, "REQUIRED_TOOL_NOT_CALLED");
   assert.equal(result.toolCalls.length, 0);
   assert.equal(result.metadata.requiredToolsSatisfied, false);
   assert.deepEqual(result.metadata.requiredTools, ["double"]);
