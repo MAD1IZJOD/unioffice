@@ -504,6 +504,34 @@ test("plans from what the company already knows, handed over as untrusted refere
   assert.match(user, /standing="proposed, not reviewed"/);
 });
 
+test("bounds recalled knowledge in the planner prompt to leave room for its JSON response", async () => {
+  let user = "";
+  const planner = new OllamaPlanner(planningModel((input) => { user = input.messages[1]!.content; }), "test-model");
+
+  await planner.plan({
+    workId: "work-1" as WorkId,
+    objective: "Prepare the launch.",
+    availableAgentIds: [],
+    knowledge: Array.from({ length: 8 }, (_, index) => ({
+      ref: `K${index + 1}`,
+      id: `00000000-0000-0000-0000-${String(index + 1).padStart(12, "0")}`,
+      type: "insight",
+      status: "active" as const,
+      title: `Launch lesson ${index + 1}`,
+      content: "Relevant planning detail. ".repeat(4),
+      source: "A prior launch task",
+      recordedAt: "2026-09-13T08:00:00.000Z",
+      reviewed: true,
+      stale: false,
+      reasons: ["Matched the launch topic"],
+    })),
+    context: {},
+  });
+
+  assert.match(user, /<company_knowledge>/);
+  assert.ok(user.length <= 1_500, `planner user prompt was ${user.length} characters`);
+});
+
 test("planning output is validated the same way whatever the recalled knowledge says", async () => {
   const planner = new OllamaPlanner({
     async generate() {

@@ -21,7 +21,11 @@ import {
 } from "@unioffice/agents";
 
 /** Planning sees less knowledge than a step does: it needs the gist, not detail. */
-const MAX_PLANNING_KNOWLEDGE_CHARS = 3_000;
+// qwen3:8b is deployed here with a 4,096-token context. Planning also needs
+// room for the capability and skill catalogues and for a JSON response, so
+// keep recalled reference data deliberately smaller than a task-execution
+// knowledge section.
+const MAX_PLANNING_KNOWLEDGE_CHARS = 1_200;
 
 export class OllamaPlanner implements Planner {
   constructor(
