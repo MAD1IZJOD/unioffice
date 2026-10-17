@@ -1,4 +1,4 @@
-import type { ExecutionJob } from "@unioffice/core";
+import type { ExecutionJob, Work } from "@unioffice/core";
 
 import type {
   ExecutionJobRepository,
@@ -67,7 +67,16 @@ export class ExecutionJobRunner {
 
     try {
       await this.reclaimOrphanedTasks(job);
-      await this.workExecutionService.executeWork(job.workId);
+      const execution = await this.workExecutionService.executeWork(job.workId);
+
+      // WorkExecutionService records an objective-level failure as a normal
+      // result so its caller can persist the terminal task and work states.
+      // A completed queue job must not contradict that terminal mission.
+      if (execution.work.status === "failed") {
+        const error = workFailureMessage(execution.work);
+        const failed = await this.executionJobRepository.fail(job.id, error);
+        return { job: failed ?? job, outcome: "failed", error };
+      }
 
       const completed = await this.executionJobRepository.complete(job.id);
 
@@ -266,4 +275,11 @@ export class ExecutionJobRunner {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function workFailureMessage(work: Work): string {
+  const error = work.metadata.executionError;
+  return typeof error === "string" && error.trim().length > 0
+    ? error
+    : "Work execution failed.";
 }

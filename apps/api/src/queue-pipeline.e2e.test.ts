@@ -119,7 +119,9 @@ class ScriptedModelProvider implements ModelProvider {
 
 function harness(
   script: string[],
-  options: { executeWork?: (workId: WorkId) => Promise<unknown> } = {},
+  options: {
+    executeWork?: (workId: WorkId) => ReturnType<WorkExecutionService["executeWork"]>;
+  } = {},
 ) {
   const agents = workforce();
   const works = new Map<WorkId, Work>();
@@ -442,6 +444,27 @@ test("a worker claims a queued job and executes it through the real pipeline", a
   assert.equal(job, null, "the job is settled once the work completes");
 });
 
+test("a task failure settles the durable job as failed", async () => {
+  // Planning succeeds, then the real task runtime hits a provider failure.
+  // That runtime returns a failed task result so the task and mission can be
+  // persisted; the runner must not translate that terminal mission into a
+  // completed queue job.
+  const h = harness([calculationPlan]);
+  const work = await createAndPlan(h);
+  await h.executionQueueService.enqueueWork(work.id, "requested");
+
+  const result = await h.worker("worker-a").tick();
+
+  assert.equal(result.claimed, 1);
+  assert.equal(result.completed, 0);
+  assert.equal(result.failed, 1);
+  assert.equal((await h.workRepository.findById(work.id))!.status, "failed");
+
+  const [job] = h.jobs.all();
+  assert.equal(job!.status, "failed");
+  assert.match(job!.lastError ?? "", /Task failed: Total the figures/);
+});
+
 test("enqueueing the same work twice does not execute it twice", async () => {
   const h = harness([
     calculationPlan,
@@ -551,16 +574,18 @@ test("retrying failed work enqueues a durable job", async () => {
 
 test("a transient failure is requeued and succeeds on the next attempt", async () => {
   let attempts = 0;
+  let executedWork: Work | undefined;
   const h = harness([calculationPlan], {
     executeWork: async () => {
       attempts += 1;
       if (attempts === 1) {
         throw new Error("Ollama is unreachable.");
       }
-      return undefined;
+      return { work: executedWork!, tasks: [] };
     },
   });
   const work = await createAndPlan(h);
+  executedWork = (await h.workRepository.findById(work.id))!;
   await h.executionQueueService.enqueueWork(work.id, "requested");
 
   const first = await h.worker("worker-a").tick();
