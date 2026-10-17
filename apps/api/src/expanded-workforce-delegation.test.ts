@@ -73,7 +73,7 @@ let sequence = 0;
 
 async function route(
   office: Awaited<ReturnType<typeof company>>,
-  step: { capabilities: string[]; tools?: string[]; skill?: string; room?: string },
+  step: { capabilities: readonly string[]; tools?: readonly string[]; skill?: string; room?: string },
 ): Promise<string> {
   sequence += 1;
   const workspaceId = step.room ? office.roomOf(step.room) : undefined;
@@ -92,8 +92,8 @@ async function route(
       ref: "step",
       title: "A step",
       description: "A step of a mission.",
-      requiredCapabilities: step.capabilities,
-      requiredTools: step.tools ?? [],
+      requiredCapabilities: [...step.capabilities],
+      requiredTools: step.tools ? [...step.tools] : [],
       skill: step.skill,
       dependsOn: [],
       metadata: {},
@@ -157,7 +157,7 @@ test("routes each kind of work to someone whose job it is, in the room it belong
     ["the leadership agenda", { capabilities: ["executive_coordination"] }, ["Victor", "Stella", "Adrian"]],
     ["compliance", { capabilities: ["compliance"], room: "compliance-risk" }, ["Victoria"]],
   ] as const) {
-    const who = await route(office, step as { capabilities: string[]; tools?: string[]; room?: string });
+    const who = await route(office, step);
     assert.ok((expected as readonly string[]).includes(who), `${label} went to ${who}, expected one of ${expected.join(", ")}`);
   }
 });
