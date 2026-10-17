@@ -58,14 +58,7 @@ export class OllamaPlanner implements Planner {
                 : "Each task must contain ref, title, description, dependsOn, requiredCapabilities, requiredTools, suggestedAgentType, requiresApproval and approvalReason.",
               "ref must be a unique short identifier such as research or analysis.",
               "dependsOn must contain task refs, never UUIDs.",
-              "assignedAgentId is optional and must be one of the available agent IDs when present.",
-              // Listed here, beside the one rule that uses them, and never in
-              // the request itself: with seventy-one ids in the user message a
-              // company-wide mission's request was mostly UUIDs, and the model
-              // answered about the UUIDs instead of planning the objective.
-              context.availableAgentIds.length > 0
-                ? `Available agent IDs (only for assignedAgentId): ${context.availableAgentIds.join(", ")}.`
-                : "",
+              "Do not include assignedAgentId. The server selects an eligible agent after planning.",
               "requiredCapabilities must be an array containing ONLY capabilities from the list below that the assignee must have; use an empty array when none are mandatory. Never invent a capability that is not in the list.",
               "Keep requiredCapabilities minimal - list at most ONE capability, the single most essential one for the task. Requiring several capabilities at once describes a whole team rather than one assignee, and routes the task to a weaker match.",
               availableCapabilities.length > 0

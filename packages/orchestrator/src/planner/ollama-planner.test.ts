@@ -370,7 +370,7 @@ test("puts the requester's briefing in front of the model, and says so", async (
   assert.match(user, /Budget is capped at 40k\./);
 });
 
-test("keeps the agent ids out of the request the model answers, and beside the rule that uses them", async () => {
+test("keeps agent ids out of the model prompt and leaves routing to the server", async () => {
   // Found live: a company-wide mission with seventy-one agents sent a request
   // that was mostly UUIDs, and the model replied about the UUIDs ("It looks
   // like you've provided a list of UUIDs...") instead of planning.
@@ -398,9 +398,11 @@ test("keeps the agent ids out of the request the model answers, and beside the r
   const user = request?.messages[1]?.content ?? "";
 
   assert.deepEqual(Object.keys(JSON.parse(user)), ["objective", "context"], "the request is the objective and its context");
-  for (const id of agentIds) assert.equal(user.includes(id), false);
-  assert.match(system, /Available agent IDs \(only for assignedAgentId\): e32813a2/);
-  assert.ok(agentIds.every((id) => system.includes(id)), "every id can still be assigned");
+  for (const id of agentIds) {
+    assert.equal(user.includes(id), false);
+    assert.equal(system.includes(id), false);
+  }
+  assert.match(system, /server selects an eligible agent after planning/i);
 });
 
 test("says nothing about a briefing when the requester attached none", async () => {
