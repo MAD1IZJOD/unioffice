@@ -370,6 +370,39 @@ test("puts the requester's briefing in front of the model, and says so", async (
   assert.match(user, /Budget is capped at 40k\./);
 });
 
+test("keeps the agent ids out of the request the model answers, and beside the rule that uses them", async () => {
+  // Found live: a company-wide mission with seventy-one agents sent a request
+  // that was mostly UUIDs, and the model replied about the UUIDs ("It looks
+  // like you've provided a list of UUIDs...") instead of planning.
+  let request: Parameters<ModelProvider["generate"]>[0] | undefined;
+  const agentIds = Array.from({ length: 71 }, (_, index) => `e32813a2-dda6-4a89-a756-c2991510c${String(500 + index)}` as AgentId);
+  const modelProvider: ModelProvider = {
+    async generate(input) {
+      request = input;
+      return {
+        model: "test-model",
+        content: JSON.stringify({ tasks: [{ ref: "plan", title: "Plan", description: "Assess the price change.", ...taskFields(), dependsOn: [] }] }),
+        metadata: {},
+      };
+    },
+  };
+
+  await new OllamaPlanner(modelProvider, "test-model").plan({
+    workId: "work-1" as WorkId,
+    objective: "Assess whether to raise prices by 5%.",
+    availableAgentIds: agentIds,
+    context: {},
+  });
+
+  const system = request?.messages[0]?.content ?? "";
+  const user = request?.messages[1]?.content ?? "";
+
+  assert.deepEqual(Object.keys(JSON.parse(user)), ["objective", "context"], "the request is the objective and its context");
+  for (const id of agentIds) assert.equal(user.includes(id), false);
+  assert.match(system, /Available agent IDs \(only for assignedAgentId\): e32813a2/);
+  assert.ok(agentIds.every((id) => system.includes(id)), "every id can still be assigned");
+});
+
 test("says nothing about a briefing when the requester attached none", async () => {
   let request: Parameters<ModelProvider["generate"]>[0] | undefined;
   const modelProvider: ModelProvider = {
