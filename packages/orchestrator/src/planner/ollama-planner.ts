@@ -57,9 +57,7 @@ export class OllamaPlanner implements Planner {
               "Return ONLY valid JSON.",
               "Do not use markdown.",
               "Return an object with a tasks array.",
-              availableSkills.length > 0
-                ? "Each task must contain ref, title, description, dependsOn, requiredCapabilities, requiredTools, skill, suggestedAgentType, requiresApproval and approvalReason. skill is the slug of one available skill, or null."
-                : "Each task must contain ref, title, description, dependsOn, requiredCapabilities, requiredTools, suggestedAgentType, requiresApproval and approvalReason.",
+              "Each task must contain ref, title, description, dependsOn, requiredCapabilities, requiredTools, suggestedAgentType, requiresApproval and approvalReason.",
               "ref must be a unique short identifier such as research or analysis.",
               "dependsOn must contain task refs, never UUIDs.",
               "Do not include assignedAgentId. The server selects an eligible agent after planning.",
@@ -80,20 +78,7 @@ export class OllamaPlanner implements Planner {
                     ...availableTools.map((tool) => `- ${tool.id}: ${tool.name}`),
                   ].join("\n")
                 : "No tools are currently available; requiredTools must always be an empty array.",
-              availableSkills.length > 0
-                ? [
-                    "A skill is a way of doing a kind of work that the company has defined. When a task is that kind of work, set its skill to the exact slug from this list - the task is then done the company's way, by an agent that holds the skill. When no skill fits, set skill to null. The server resolves each selected skill's detailed procedure, capabilities and tools after planning.",
-                    "Available skills:",
-                    // A live company can have many skills with long procedure
-                    // descriptions. Those descriptions are not instructions
-                    // the planner needs: it only chooses a slug, and the
-                    // server resolves its concrete requirements afterwards.
-                    // Keeping the catalogue to stable names leaves room for
-                    // the objective, recalled knowledge, and valid JSON in
-                    // Ollama's finite context window.
-                    ...availableSkills.map((skill) => `- ${skill.slug}: ${skill.name}`),
-                  ].join("\n")
-                : "",
+              "The server resolves company skills and their detailed procedures after planning. Do not include skill in the JSON.",
               "suggestedAgentType must be specialist, manager, or orchestrator when present.",
               "requiresApproval must be true only when a human decision is required before executing the task. Include approvalReason when true.",
               "Use an empty dependsOn array when a task has no prerequisites.",

@@ -652,14 +652,14 @@ test("a named skill is kept only when offered, and changes nothing else about th
   assert.equal(plan.tasks[2]!.skill, undefined);
 });
 
-test("the planner is told skill is part of each task only when skills are offered", async () => {
+test("the server, rather than the model, resolves eligible skills", async () => {
   const prompts: string[] = [];
   const provider: ModelProvider = {
     async generate(request) {
       prompts.push(request.messages[0]!.content);
       return {
         model: "test",
-        content: JSON.stringify({ tasks: [{ ref: "a", title: "A", description: "a", ...taskFields(), skill: null, dependsOn: [] }] }),
+        content: JSON.stringify({ tasks: [{ ref: "a", title: "A", description: "a", ...taskFields(), dependsOn: [] }] }),
         metadata: {},
       };
     },
@@ -671,12 +671,13 @@ test("the planner is told skill is part of each task only when skills are offere
   await planner.plan({ ...base, availableSkills: [{ slug: "financial-analysis", name: "Financial analysis", description: "Analyse figures.", requiredTools: [], requiredCapabilities: [] }] });
   await planner.plan(base);
 
-  assert.match(prompts[0]!, /requiredTools, skill, suggestedAgentType/);
-  assert.match(prompts[0]!, /- financial-analysis: Financial analysis/);
-  assert.doesNotMatch(prompts[1]!, /skill/);
+  assert.match(prompts[0]!, /server resolves company skills/i);
+  assert.doesNotMatch(prompts[0]!, /Available skills/);
+  assert.doesNotMatch(prompts[0]!, /financial-analysis/);
+  assert.equal(prompts[0], prompts[1], "the model prompt does not grow with the skill catalogue");
 });
 
-test("keeps lengthy skill descriptions out of the planner prompt", async () => {
+test("keeps all skill details out of the planner prompt", async () => {
   let system = "";
   const lengthyDescription = "A detailed procedure that belongs to execution, not planning. ".repeat(200);
   const planner = new OllamaPlanner({
@@ -704,7 +705,7 @@ test("keeps lengthy skill descriptions out of the planner prompt", async () => {
     context: {},
   });
 
-  assert.match(system, /- financial-analysis: Financial analysis/);
+  assert.doesNotMatch(system, /financial-analysis/);
   assert.doesNotMatch(system, /A detailed procedure that belongs to execution/);
-  assert.match(system, /server resolves each selected skill/i);
+  assert.match(system, /server resolves company skills/i);
 });
