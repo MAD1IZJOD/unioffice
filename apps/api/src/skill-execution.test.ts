@@ -270,7 +270,7 @@ test("planning offers only skills an available agent holds, and records the rout
   );
 });
 
-test("a step says plainly when its agent can no longer follow the skill", async () => {
+test("a step stops before execution when its agent loses a required skill tool", async () => {
   const base = systemSkills().find((skill) => skill.slug === "candidate-screening")!;
   const harness = executionHarness(
     [{ ...base, version: 1, requiredTools: ["calculator"] }],
@@ -279,11 +279,9 @@ test("a step says plainly when its agent can no longer follow the skill", async 
   );
 
   harness.tasks.set("task-1" as TaskId, step({ slug: "candidate-screening", name: base.name, version: 1, scope: "system", approval: "none", memory: "none" }));
-  const result = await harness.service.executeTask("task-1" as TaskId);
-
-  assert.equal(harness.handed()?.task.skill, undefined);
-  assert.equal(
-    (result.metadata.execution as { skillNote: string }).skillNote,
-    "Harvey could not follow Candidate screening because calculator access is no longer available.",
+  await assert.rejects(
+    harness.service.executeTask("task-1" as TaskId),
+    /Agent is no longer authorized for required tool\(s\): calculator/,
   );
+  assert.equal(harness.handed(), undefined);
 });
