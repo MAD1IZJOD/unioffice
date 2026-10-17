@@ -543,6 +543,116 @@ test("persists failed agent execution", async () => {
   );
 });
 
+test("refuses stale workspace, tool and capability assignments before invoking the agent", async () => {
+  const cases = [
+    {
+      name: "tool grant",
+      task: makeTask("task-tool-grant" as TaskId, {
+        status: "ready",
+        metadata: { routing: { requiredTools: ["calculator"] } },
+      }),
+      agent: makeAgent(),
+      work: makeWork(),
+      error: /no longer authorized for required tool\(s\): calculator/,
+    },
+    {
+      name: "capability",
+      task: makeTask("task-capability" as TaskId, {
+        status: "ready",
+        metadata: { routing: { requiredCapabilities: ["planning"] } },
+      }),
+      agent: { ...makeAgent(), capabilities: [] },
+      work: makeWork(),
+      error: /no longer has required capability\/capabilities: planning/,
+    },
+    {
+      name: "workspace",
+      task: makeTask("task-workspace" as TaskId, { status: "ready" }),
+      agent: { ...makeAgent(), workspaceId: "workspace-b" as Agent["workspaceId"] },
+      work: { ...makeWork(), workspaceId: "workspace-a" as Work["workspaceId"] },
+      error: /does not work where this mission runs/,
+    },
+  ];
+
+  for (const current of cases) {
+    const taskRepository = new MemoryTaskRepository();
+    const artifactRepository = new MemoryArtifactRepository();
+    const workRepository = new MemoryWorkRepository();
+    const agentRepository = new MemoryAgentRepository();
+    const { recorder } = createRecorder();
+    let calls = 0;
+    const engine: ExecutionEngine = {
+      async execute() {
+        calls += 1;
+        throw new Error("The model must not be reached for a stale assignment.");
+      },
+    };
+
+    await taskRepository.create(current.task);
+    await workRepository.create(current.work);
+    await agentRepository.create(current.agent);
+
+    const service = new TaskExecutionService(
+      taskRepository,
+      artifactRepository,
+      workRepository,
+      agentRepository,
+      engine,
+      recorder,
+    );
+
+    await assert.rejects(
+      () => service.executeTask(current.task.id),
+      current.error,
+      current.name,
+    );
+    assert.equal(calls, 0, current.name);
+  }
+});
+
+test("keeps a known capability shortfall executable", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder } = createRecorder();
+  const task = makeTask("task-known-shortfall" as TaskId, {
+    status: "ready",
+    metadata: {
+      routing: { requiredCapabilities: ["research"] },
+      delegation: { unmatchedCapabilities: ["research"] },
+    },
+  });
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: "Closest available agent completed the limited step.",
+        toolCalls: [],
+        metadata: {},
+      };
+    },
+  };
+
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const service = new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+  );
+
+  assert.equal((await service.executeTask(task.id)).status, "completed");
+});
+
 test("retains a completed task result when artifact projection fails", async () => {
   const taskRepository = new MemoryTaskRepository();
   const workRepository = new MemoryWorkRepository();
@@ -1457,7 +1567,10 @@ test("a step is handed only the external writes a person approved for it", async
   const handed: Array<string[] | undefined> = [];
 
   await workRepository.create(makeWork());
-  await agentRepository.create(makeAgent());
+  await agentRepository.create({
+    ...makeAgent(),
+    toolIds: ["github_create_issue", "github_create_branch"],
+  });
 
   const engine: ExecutionEngine = {
     async execute(request) {

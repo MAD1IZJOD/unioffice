@@ -35,6 +35,11 @@ import type {
 } from "@unioffice/orchestrator";
 
 import {
+  hasTools,
+  isWorkspaceCompatible,
+} from "@unioffice/orchestrator";
+
+import {
   agentToDefinition,
 } from "./agent-definition.js";
 
@@ -163,6 +168,8 @@ export class TaskExecutionService {
         `Agent does not belong to the work's organization: ${agent.id}`,
       );
     }
+
+    this.requireCurrentAssignment(work, task, agent);
 
     // An approval was granted against one concrete action. If the step no
     // longer describes that action - a different agent, a different skill or
@@ -607,6 +614,61 @@ export class TaskExecutionService {
     );
   }
 
+  /**
+   * Planning records which hard requirements were satisfied when it assigned
+   * a step. That assignment can become stale before a queued, retried or
+   * scheduled run reaches a worker. The preflight catches this for an
+   * interactive start, but these checks are the execution boundary: no path
+   * may run a step after its agent loses its workspace, tool grant, or a
+   * capability it had when the plan was made.
+   *
+   * A capability the agent never had is deliberately different. Delegation
+   * records that known shortfall in unmatchedCapabilities and the mission may
+   * run as limited; only a capability missing without that record was lost
+   * after planning and blocks execution.
+   */
+  private requireCurrentAssignment(
+    work: Work,
+    task: Task,
+    agent: Agent,
+  ): void {
+    if (!isWorkspaceCompatible(agent, work.workspaceId)) {
+      throw new Error(
+        `Agent does not work where this mission runs: ${agent.id}`,
+      );
+    }
+
+    const requiredTools = requiredToolsFromTask(task);
+
+    if (!hasTools(agent, requiredTools)) {
+      const held = new Set(agent.toolIds);
+      const missing = requiredTools.filter((toolId) => !held.has(toolId));
+      throw new Error(
+        `Agent is no longer authorized for required tool(s): ${missing.join(", ")}.`,
+      );
+    }
+
+    const routing = recordOf(task.metadata.routing);
+    const delegation = recordOf(task.metadata.delegation);
+    const acceptedShortfall = new Set(
+      stringsOf(delegation?.unmatchedCapabilities)
+        .map((capability) => capability.toLocaleLowerCase()),
+    );
+    const missing = stringsOf(routing?.requiredCapabilities)
+      .filter((capability) =>
+        !acceptedShortfall.has(capability.toLocaleLowerCase()) &&
+        !agent.capabilities.some(
+          (held) => held.toLocaleLowerCase() === capability.toLocaleLowerCase(),
+        ),
+      );
+
+    if (missing.length > 0) {
+      throw new Error(
+        `Agent no longer has required capability/capabilities: ${missing.join(", ")}.`,
+      );
+    }
+  }
+
   private async persistResultArtifact(
     task: Task,
     agent: Agent,
@@ -757,16 +819,18 @@ function toolCallEvent(toolCall: AgentToolCall): {
 }
 
 function requiredToolsFromTask(task: Task): string[] {
-  const routing = task.metadata.routing;
+  return stringsOf(recordOf(task.metadata.routing)?.requiredTools);
+}
 
-  if (typeof routing !== "object" || routing === null) {
-    return [];
-  }
+function recordOf(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null
+    ? value as Record<string, unknown>
+    : undefined;
+}
 
-  const requiredTools = (routing as Record<string, unknown>).requiredTools;
-
-  return Array.isArray(requiredTools)
-    ? requiredTools.filter((tool): tool is string => typeof tool === "string")
+function stringsOf(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
     : [];
 }
 
