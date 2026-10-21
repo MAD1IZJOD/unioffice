@@ -23,8 +23,17 @@ interface AgentAudit {
   skills: string[];
   eligibleNow: boolean;
   classification: Classification;
+  liveExecution?: LiveExecutionEvidence;
   evidence: string[];
   recommendedNextFix?: string;
+}
+
+interface LiveExecutionEvidence {
+  taskId: string;
+  workId: string;
+  completedAt: string;
+  artifactIds: string[];
+  artifactCreatedAt: string[];
 }
 
 const organizationSlug =
@@ -85,16 +94,20 @@ async function auditAgent(agent: Agent): Promise<AgentAudit> {
   const workspaceMissing = agent.workspaceId !== undefined && workspaceName === undefined;
   const tasks = await runtime.taskRepository.findByAgent(agent.id, 50);
   const artifacts = await artifactsForCompletedTasks(tasks);
-  const verifiedTask = tasks.find((task) =>
+  const verified = tasks.map((task) => ({
+    task,
+    artifacts: artifactsForTask(task, agent, artifacts),
+  })).find(({ task, artifacts: taskArtifacts }) =>
     task.status === "completed" &&
     hasCompletedExecution(task) &&
     taskUsesAgentCapability(task, agent) &&
-    artifacts.some((artifact) => artifact.taskId === task.id && artifactHasContent(artifact)),
+    taskArtifacts.some(artifactHasContent),
   );
+  const verifiedTask = verified?.task;
   const completedTask = tasks.find((task) =>
     task.status === "completed" &&
     hasCompletedExecution(task) &&
-    artifacts.some((artifact) => artifact.taskId === task.id && artifactHasContent(artifact)),
+    artifactsForTask(task, agent, artifacts).some(artifactHasContent),
   );
 
   const evidence = [
@@ -150,6 +163,17 @@ async function auditAgent(agent: Agent): Promise<AgentAudit> {
     skills: agent.skills ?? [],
     eligibleNow: agent.status === "active" && !configurationBroken,
     classification,
+    ...(verified?.task.completedAt
+      ? {
+          liveExecution: {
+            taskId: verified.task.id,
+            workId: verified.task.workId,
+            completedAt: verified.task.completedAt.toISOString(),
+            artifactIds: verified.artifacts.map((artifact) => artifact.id),
+            artifactCreatedAt: verified.artifacts.map((artifact) => artifact.createdAt.toISOString()),
+          },
+        }
+      : {}),
     evidence,
     ...(classification === "PARTIALLY VERIFIED"
       ? { recommendedNextFix: "Run a bounded representative live task for this agent." }
@@ -168,6 +192,12 @@ async function artifactsForCompletedTasks(tasks: Task[]): Promise<Artifact[]> {
   );
 
   return byTask.flat();
+}
+
+function artifactsForTask(task: Task, agent: Agent, artifacts: Artifact[]): Artifact[] {
+  return artifacts.filter((artifact) =>
+    artifact.taskId === task.id && artifact.createdByAgentId === agent.id,
+  );
 }
 
 function hasCompletedExecution(task: Task): boolean {
