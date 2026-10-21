@@ -57,6 +57,8 @@ import type {
   KnowledgeRecallService,
 } from "./knowledge-recall-service.js";
 
+const DEFAULT_KNOWLEDGE_CAPTURE_TIMEOUT_MS = 5_000;
+
 /**
  * What a step needs from company knowledge: something to recall before it
  * runs, and somewhere to put what it learned afterwards. Narrowed to the two
@@ -100,6 +102,9 @@ export class TaskExecutionService {
 
     /** Tool ids as people know them, for what an approval says. */
     private readonly toolName?: (toolId: string) => string,
+
+    /** Learning must never hold up a durable task result or its dependants. */
+    private readonly knowledgeCaptureTimeoutMs = DEFAULT_KNOWLEDGE_CAPTURE_TIMEOUT_MS,
   ) {}
 
   async executeTask(
@@ -577,13 +582,16 @@ export class TaskExecutionService {
     }
 
     try {
-      await this.knowledge.capture.captureFromTask({
-        work,
-        task,
-        agent,
-        output,
-        artifactId,
-      });
+      await within(
+        this.knowledge.capture.captureFromTask({
+          work,
+          task,
+          agent,
+          output,
+          artifactId,
+        }),
+        this.knowledgeCaptureTimeoutMs,
+      );
     } catch {
       // Best-effort: the completed task and its artifact are the source of
       // truth whether or not anything was learned from them.
@@ -742,6 +750,23 @@ export class TaskExecutionService {
       return { task };
     }
   }
+}
+
+function within<T>(operation: Promise<T>, milliseconds: number): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, milliseconds);
+
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 function isStructured(value: unknown): boolean {

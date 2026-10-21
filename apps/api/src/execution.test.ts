@@ -1484,6 +1484,51 @@ test("a knowledge outage never fails the step it was meant to inform", async () 
   assert.equal(artifactRepository.artifacts.size, 1);
 });
 
+test("a stalled knowledge capture cannot hold up a completed step", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder } = createRecorder();
+  const task = makeTask("task-knowledge-stall" as TaskId, { status: "ready" });
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const engine: ExecutionEngine = {
+    async execute(request) {
+      return {
+        workId: request.workId,
+        taskId: request.taskId,
+        agentId: request.agentId,
+        status: "completed",
+        output: onboardingFinding,
+        toolCalls: [],
+        metadata: {},
+      };
+    },
+  };
+
+  const result = await new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+    {
+      recall: { async recallForStep() { return { items: [], ranked: [], withheldCount: 0 }; } },
+      capture: { async captureFromTask() { return new Promise<never>(() => {}); } },
+    },
+    undefined,
+    undefined,
+    1,
+  ).executeTask(task.id);
+
+  assert.equal(result.status, "completed");
+  assert.equal(artifactRepository.artifacts.size, 1);
+});
+
 test("an external call is audited by what happened, never by what was read or written", async () => {
   const taskRepository = new MemoryTaskRepository();
   const artifactRepository = new MemoryArtifactRepository();
