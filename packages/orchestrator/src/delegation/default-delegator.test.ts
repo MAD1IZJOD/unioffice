@@ -130,6 +130,22 @@ test("excludes workspace-incompatible agents", async () => {
   assert.equal(result.agentId, forgeId);
 });
 
+test("prefers a required capability over workspace affinity", async () => {
+  const workspaceId = "workspace-1";
+  const delegator = new DefaultDelegator(repository([
+    agent(atlasId, "active", { workspaceId: workspaceId as never }),
+    agent(forgeId, "active", { capabilities: ["coding"] }),
+  ]));
+
+  const result = await delegator.delegate(context({
+    workspaceId,
+    requiredCapabilities: ["coding"],
+  }));
+
+  assert.equal(result.agentId, forgeId);
+  assert.equal(result.metadata.capabilityFit, "exact");
+});
+
 test("routes to the closest match instead of failing when no agent has every required capability", async () => {
   // The planner regularly over-specifies capabilities (e.g. "planning" AND
   // "coding" on one task). Failing the whole objective over that is worse

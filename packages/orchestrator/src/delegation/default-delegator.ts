@@ -15,8 +15,10 @@ import type {
 
 /**
  * Routes a task to an active agent using a deterministic, explainable rank.
- * Workspace affinity takes precedence over capability count, role suitability,
- * and reported load. Agent IDs provide a stable final tie-breaker.
+ * A stated capability is stronger evidence than workspace affinity; otherwise
+ * a local generalist can displace the organization-wide specialist the step
+ * explicitly requires. Workspace, role suitability and reported load break
+ * capability ties. Agent IDs provide a stable final tie-breaker.
  */
 export class DefaultDelegator implements Delegator {
   constructor(
@@ -245,8 +247,8 @@ function compareCandidates(
   right: { agent: Agent; score: DelegationScore },
 ): number {
   const rankDifference =
-    right.score.workspace - left.score.workspace ||
     right.score.capabilities - left.score.capabilities ||
+    right.score.workspace - left.score.workspace ||
     right.score.agentType - left.score.agentType ||
     right.score.availability - left.score.availability;
 
