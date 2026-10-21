@@ -1529,6 +1529,44 @@ test("a stalled knowledge capture cannot hold up a completed step", async () => 
   assert.equal(artifactRepository.artifacts.size, 1);
 });
 
+test("a stalled agent execution becomes a failed task", async () => {
+  const taskRepository = new MemoryTaskRepository();
+  const artifactRepository = new MemoryArtifactRepository();
+  const workRepository = new MemoryWorkRepository();
+  const agentRepository = new MemoryAgentRepository();
+  const { recorder } = createRecorder();
+  const task = makeTask("task-execution-stall" as TaskId, { status: "ready" });
+  await taskRepository.create(task);
+  await workRepository.create(makeWork());
+  await agentRepository.create(makeAgent());
+
+  const engine: ExecutionEngine = {
+    async execute() {
+      return new Promise<never>(() => {});
+    },
+  };
+
+  const result = await new TaskExecutionService(
+    taskRepository,
+    artifactRepository,
+    workRepository,
+    agentRepository,
+    engine,
+    recorder,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    1,
+  ).executeTask(task.id);
+
+  assert.equal(result.status, "failed");
+  assert.match(
+    String((result.metadata.execution as { error?: { message?: string } }).error?.message),
+    /timed out/,
+  );
+});
+
 test("an external call is audited by what happened, never by what was read or written", async () => {
   const taskRepository = new MemoryTaskRepository();
   const artifactRepository = new MemoryArtifactRepository();

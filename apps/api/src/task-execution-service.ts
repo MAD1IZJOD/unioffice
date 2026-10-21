@@ -58,6 +58,7 @@ import type {
 } from "./knowledge-recall-service.js";
 
 const DEFAULT_KNOWLEDGE_CAPTURE_TIMEOUT_MS = 5_000;
+const DEFAULT_TASK_EXECUTION_TIMEOUT_MS = 120_000;
 
 /**
  * What a step needs from company knowledge: something to recall before it
@@ -105,6 +106,9 @@ export class TaskExecutionService {
 
     /** Learning must never hold up a durable task result or its dependants. */
     private readonly knowledgeCaptureTimeoutMs = DEFAULT_KNOWLEDGE_CAPTURE_TIMEOUT_MS,
+
+    /** A model or tool call must not leave the mission running indefinitely. */
+    private readonly taskExecutionTimeoutMs = DEFAULT_TASK_EXECUTION_TIMEOUT_MS,
   ) {}
 
   async executeTask(
@@ -229,8 +233,8 @@ export class TaskExecutionService {
             agent,
           );
 
-      const result =
-        await this.executionEngine.execute({
+      const result = await within(
+        this.executionEngine.execute({
           workId: runningTask.workId,
           taskId: runningTask.id,
           agentId: agent.id,
@@ -263,7 +267,15 @@ export class TaskExecutionService {
             taskMetadata: runningTask.metadata,
           },
           knowledge,
-        });
+        }),
+        this.taskExecutionTimeoutMs,
+      );
+
+      if (!result) {
+        throw new Error(
+          `Task execution timed out after ${this.taskExecutionTimeoutMs}ms.`,
+        );
+      }
 
       for (const toolCall of result.toolCalls) {
         await this.eventRecorder.record({
