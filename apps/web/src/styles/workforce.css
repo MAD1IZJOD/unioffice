@@ -29,7 +29,7 @@
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius);
   background: var(--surface-1);
-  box-shadow: var(--elev-1);
+  box-shadow: none;
   grid-template-areas:
     "mark who status"
     "now now now"
@@ -40,6 +40,7 @@
     transform var(--duration-slow) var(--ease-settle),
     box-shadow var(--duration-slow) var(--ease-standard),
     border-color var(--duration) var(--ease-standard);
+  border-color: var(--line);
 }
 
 .worker:hover {
@@ -50,7 +51,7 @@
 
 .worker.tone-active {
   border-color: var(--tone-line);
-  background: linear-gradient(180deg, var(--tone-soft), transparent 60%), var(--surface-2);
+  background: var(--surface-2);
   box-shadow: var(--elev-2);
   transform: translateZ(14px) translateY(-2px);
 }
@@ -61,10 +62,9 @@
   inset: -1px -1px auto;
   height: 2px;
   border-radius: var(--radius) var(--radius) 0 0;
-  background: linear-gradient(90deg, transparent, var(--tone), transparent);
+  background: var(--line-strong);
   background-repeat: no-repeat;
   background-size: 50% 100%;
-  animation: edgeRun 2.6s var(--ease-standard) infinite;
 }
 
 .worker.tone-warning {
@@ -121,14 +121,14 @@
 .worker-name {
   color: var(--ink-primary);
   font-size: var(--text-base);
-  font-weight: 620;
+  font-weight: 610;
   letter-spacing: -0.012em;
   transition: color 130ms ease;
 }
 
 .worker-role {
   margin-top: 3px;
-  color: var(--ink-faint);
+  color: var(--ink-secondary);
   font-family: var(--mono);
   font-size: var(--text-3xs);
   letter-spacing: 0.14em;
@@ -184,6 +184,7 @@
   min-width: 0;
   flex-direction: column;
   gap: 5px;
+  border-color: var(--line);
 }
 
 .worker-tokens {
