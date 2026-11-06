@@ -59,6 +59,47 @@ function baseContext(requiredTools?: string[]) {
   };
 }
 
+test("lease cancellation stops the loop after an in-flight tool and before another model or tool call", async () => {
+  const controller = new AbortController();
+  let toolStarted!: () => void;
+  const called = new Promise<void>((resolve) => { toolStarted = resolve; });
+  let finishTool!: (value: { doubled: number }) => void;
+  const finish = new Promise<{ doubled: number }>((resolve) => { finishTool = resolve; });
+  const registry = new DefaultToolRegistry();
+  let tools = 0;
+  registry.register({
+    ...echoTool,
+    async execute(_input, context) {
+      assert.equal(context.signal, controller.signal);
+      tools += 1;
+      toolStarted();
+      return finish;
+    },
+  });
+  let turns = 0;
+  const runtime = new DefaultAgentRuntime({
+    async generate() {
+      turns += 1;
+      return {
+        model: "test",
+        content: JSON.stringify({ tool_call: { id: "double", input: { value: 21 } } }),
+        metadata: {},
+      };
+    },
+  }, { toolRegistry: registry });
+
+  const result = runtime.execute(toolDefinition(["double"]), {
+    ...baseContext(),
+    signal: controller.signal,
+  });
+  await called;
+  controller.abort(new Error("Claim lost"));
+  finishTool({ doubled: 42 });
+  await assert.rejects(result, /Claim lost/);
+  assert.equal(turns, 1);
+  assert.equal(tools, 1);
+});
+
 test("provides the model with structured work and dependency context", async () => {
   let request: ModelRequest | undefined;
   const provider: ModelProvider = {

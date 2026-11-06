@@ -9,6 +9,7 @@ import type {
 import type { EventRecorder } from "./event-recorder.js";
 
 import type { WorkExecutionService } from "./work-execution-service.js";
+import { runInExecutionAttempt } from "./execution-attempt.js";
 
 export interface RunJobOutcome {
   job: ExecutionJob;
@@ -19,6 +20,7 @@ export interface RunJobOutcome {
 export interface ExecutionJobRunnerOptions {
   /** Delay before a requeued job becomes eligible again. */
   retryBackoffMs?: number;
+  assertClaim?: () => Promise<void>;
 
   /**
    * Plans a mission. A scheduled run arrives unplanned - nobody held a
@@ -28,7 +30,7 @@ export interface ExecutionJobRunnerOptions {
    */
   planner?: {
     beginPlanning(workId: ExecutionJob["workId"]): Promise<boolean>;
-    planWork(workId: ExecutionJob["workId"]): Promise<{ work: { status: string } }>;
+    planWork(workId: ExecutionJob["workId"], signal?: AbortSignal): Promise<{ work: { status: string } }>;
   };
 }
 
@@ -46,6 +48,7 @@ const DEFAULT_RETRY_BACKOFF_MS = 15_000;
 export class ExecutionJobRunner {
   private readonly retryBackoffMs: number;
   private readonly planner?: ExecutionJobRunnerOptions["planner"];
+  private readonly assertClaim?: ExecutionJobRunnerOptions["assertClaim"];
 
   constructor(
     private readonly workExecutionService: WorkExecutionService,
@@ -57,17 +60,26 @@ export class ExecutionJobRunner {
   ) {
     this.retryBackoffMs = options.retryBackoffMs ?? DEFAULT_RETRY_BACKOFF_MS;
     this.planner = options.planner;
+    this.assertClaim = options.assertClaim;
   }
 
-  async run(job: ExecutionJob): Promise<RunJobOutcome | null> {
-    if (job.reason === "scheduled" && this.planner) {
-      const planned = await this.planScheduledRun(job);
-      if (planned !== undefined) return planned;
-    }
+  async run(job: ExecutionJob, controller = new AbortController()): Promise<RunJobOutcome | null> {
+    return runInExecutionAttempt(job, controller, () => this.runAttempt(job, controller.signal));
+  }
 
+  private async runAttempt(job: ExecutionJob, signal: AbortSignal): Promise<RunJobOutcome | null> {
     try {
-      await this.reclaimOrphanedTasks(job);
-      const execution = await this.workExecutionService.executeWork(job.workId);
+      signal.throwIfAborted();
+      await this.assertClaim?.();
+      signal.throwIfAborted();
+      if (job.reason === "scheduled" && this.planner) {
+        const planned = await this.planScheduledRun(job, signal);
+        if (planned !== undefined) return planned;
+      }
+
+      await this.reclaimOrphanedTasks(job, signal);
+      const execution = await this.workExecutionService.executeWork(job.workId, signal);
+      signal.throwIfAborted();
 
       // WorkExecutionService records an objective-level failure as a normal
       // result so its caller can persist the terminal task and work states.
@@ -82,7 +94,8 @@ export class ExecutionJobRunner {
 
       return completed && { job: completed, outcome: "completed" };
     } catch (error) {
-      return this.handleFailure(job, errorMessage(error));
+      if (signal.aborted) return null;
+      return this.handleFailure(job, errorMessage(error), signal);
     }
   }
 
@@ -100,9 +113,10 @@ export class ExecutionJobRunner {
    * steps - is ended the same way rather than planned a second time on top of
    * the steps it already has.
    */
-  private async planScheduledRun(job: ExecutionJob): Promise<RunJobOutcome | null | undefined> {
+  private async planScheduledRun(job: ExecutionJob, signal: AbortSignal): Promise<RunJobOutcome | null | undefined> {
     const planner = this.planner!;
     const work = await this.workRepository.findById(job.workId);
+    signal.throwIfAborted();
 
     if (!work) {
       const error = "The run's mission no longer exists.";
@@ -113,20 +127,23 @@ export class ExecutionJobRunner {
     if (work.status !== "queued" && work.status !== "planning") return undefined;
 
     const tasks = await this.taskRepository.findByWork(job.workId);
+    signal.throwIfAborted();
 
     if (tasks.length > 0) {
       if (work.status === "queued") return undefined;
 
       const reason = "Planning this run was interrupted part-way, so it was stopped rather than planned twice.";
+      await this.recordWorkFailure(job, reason, signal, "planning");
+      signal.throwIfAborted();
       const failed = await this.executionJobRepository.fail(job, reason);
-      if (!failed) return null;
-      await this.recordWorkFailure(job, reason, "planning");
-      return { job: failed, outcome: "failed", error: reason };
+      return failed && { job: failed, outcome: "failed", error: reason };
     }
 
     try {
       if (work.status === "queued") await planner.beginPlanning(job.workId);
-      const planned = await planner.planWork(job.workId);
+      signal.throwIfAborted();
+      const planned = await planner.planWork(job.workId, signal);
+      signal.throwIfAborted();
 
       // Cancelled while the plan was being written: the cancellation stands
       // and nothing runs.
@@ -137,6 +154,7 @@ export class ExecutionJobRunner {
 
       return undefined;
     } catch (error) {
+      signal.throwIfAborted();
       // Planning records its own failure on the mission, where the run's
       // page and the schedule read it from.
       const message = errorMessage(error);
@@ -156,11 +174,13 @@ export class ExecutionJobRunner {
    *
    * The new claim owns recovery of running tasks left by earlier attempts.
    */
-  private async reclaimOrphanedTasks(job: ExecutionJob): Promise<void> {
+  private async reclaimOrphanedTasks(job: ExecutionJob, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
     const tasks = await this.taskRepository.findByWork(job.workId);
     const orphaned = tasks.filter((task) => task.status === "running");
 
     for (const task of orphaned) {
+      signal.throwIfAborted();
       const now = new Date();
 
       await this.taskRepository.update({
@@ -181,6 +201,7 @@ export class ExecutionJobRunner {
         },
       });
 
+      signal.throwIfAborted();
       await this.eventRecorder.record({
         organizationId: job.organizationId,
         workId: job.workId,
@@ -204,6 +225,7 @@ export class ExecutionJobRunner {
   private async handleFailure(
     job: ExecutionJob,
     error: string,
+    signal: AbortSignal,
   ): Promise<RunJobOutcome | null> {
     const attemptsRemain = job.attempts < job.maxAttempts;
 
@@ -218,11 +240,11 @@ export class ExecutionJobRunner {
       return requeued && { job: requeued, outcome: "requeued", error };
     }
 
+    await this.recordWorkFailure(job, error, signal);
+    if (signal.aborted) return null;
     const failed = await this.executionJobRepository.fail(job, error);
-    if (!failed) return null;
-    await this.recordWorkFailure(job, error);
 
-    return { job: failed, outcome: "failed", error };
+    return failed && { job: failed, outcome: "failed", error };
   }
 
   /**
@@ -233,10 +255,15 @@ export class ExecutionJobRunner {
   private async recordWorkFailure(
     job: ExecutionJob,
     error: string,
+    signal: AbortSignal,
     stage: "execution" | "planning" = "execution",
   ): Promise<void> {
     try {
+      const current = await this.executionJobRepository.findById(job.id);
+      if (current?.status !== "running" || current.attempts !== job.attempts) return;
+      signal.throwIfAborted();
       const work = await this.workRepository.findById(job.workId);
+      signal.throwIfAborted();
 
       if (!work || work.status === "completed" || work.status === "failed") {
         return;
@@ -254,6 +281,7 @@ export class ExecutionJobRunner {
         },
       });
 
+      signal.throwIfAborted();
       await this.eventRecorder.record({
         organizationId: failedWork.organizationId,
         workId: failedWork.id,
@@ -266,8 +294,7 @@ export class ExecutionJobRunner {
         },
       });
     } catch {
-      // The runner must never throw: the job is already settled, and the
-      // worker has to stay alive for the next one.
+      // The queue can still record a terminal error if mission storage failed.
     }
   }
 }

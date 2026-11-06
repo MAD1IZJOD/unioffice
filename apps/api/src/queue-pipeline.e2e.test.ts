@@ -359,6 +359,7 @@ function harness(
     workApprovalService,
     workRecoveryService,
     executionQueueService,
+    modelProvider,
     worker,
   };
 }
@@ -369,6 +370,12 @@ function plan(tasks: Array<Record<string, unknown>>): string {
 
 function toolCall(id: string, input: unknown): string {
   return JSON.stringify({ tool_call: { id, input } });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
 }
 
 const calculationPlan = plan([{
@@ -644,6 +651,127 @@ test("a worker that loses its last claim cannot report or record a late failure"
   assert.match((await h.jobs.findById(job.id))?.lastError ?? "", /lease expired/);
   assert.equal((await h.workRepository.findById(work.id))?.status, "queued");
   assert.ok(!h.events.some((event) => event.type === "work.failed"));
+});
+
+test("confirmed lease loss stops an approved attempt and its replacement completes it", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const h = harness([
+    plan([{
+      ref: "approved",
+      title: "Prepare the approved note",
+      description: "Write a short note.",
+      requiredCapabilities: [],
+      requiredTools: [],
+      requiresApproval: true,
+      approvalReason: "The owner must review it first.",
+      dependsOn: [],
+    }]),
+    "Result from the replacement worker.",
+  ]);
+  const work = await createAndPlan(h);
+  await h.executionQueueService.enqueueWork(work.id, "requested");
+  await h.worker("worker-a").tick();
+  const [approval] = h.approvals.values();
+  assert.equal(approval?.status, "pending");
+  await h.workApprovalService.approve(approval.id, "resolver-1", organizationId);
+  const { job } = await h.executionQueueService.enqueueWork(work.id, "approval_resumed");
+
+  const entered = deferred<AbortSignal>();
+  const late = deferred<Awaited<ReturnType<ModelProvider["generate"]>>>();
+  const generate = h.modelProvider.generate.bind(h.modelProvider);
+  let first = true;
+  t.mock.method(h.modelProvider, "generate", (request: ModelRequest) => {
+    if (first) {
+      first = false;
+      assert.ok(request.signal);
+      entered.resolve(request.signal);
+      return late.promise;
+    }
+    return generate(request);
+  });
+
+  const oldTick = h.worker("worker-a").tick();
+  const signal = await entered.promise;
+  const claimed = await h.jobs.findById(job.id);
+  assert.ok(claimed?.leaseExpiresAt);
+  const afterExpiry = new Date(claimed.leaseExpiresAt.getTime() + 1);
+  const recovered = await h.jobs.recoverExpiredLeases(afterExpiry);
+  assert.equal(recovered.requeued.length, 1);
+  const claimNext = h.jobs.claimNext.bind(h.jobs);
+  t.mock.method(h.jobs, "claimNext", (input: Parameters<typeof claimNext>[0]) =>
+    claimNext({ ...input, now: afterExpiry }),
+  );
+
+  // Keep the replacement active when the old heartbeat returns null.
+  const replacementEntered = deferred<void>();
+  const finishReplacement = deferred<void>();
+  t.mock.method(h.modelProvider, "generate", async (request: ModelRequest) => {
+    replacementEntered.resolve();
+    await finishReplacement.promise;
+    return generate(request);
+  });
+  const newTick = h.worker("worker-b").tick();
+  await replacementEntered.promise;
+  t.mock.timers.tick(20_000);
+  const abandoned = await oldTick;
+  assert.equal(signal.aborted, true);
+  assert.deepEqual(abandoned, { claimed: 1, completed: 0, requeued: 0, failed: 0 });
+  assert.equal(h.artifacts.size, 0);
+  assert.equal((await h.workRepository.findById(work.id))?.status, "executing");
+
+  finishReplacement.resolve();
+  assert.equal((await newTick).completed, 1);
+  late.resolve({ model: "scripted", content: "Late stale result", metadata: {} });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  const [task] = await h.taskRepository.findByWork(work.id);
+  assert.equal(task?.result, "Result from the replacement worker.");
+  assert.equal((await h.workRepository.findById(work.id))?.status, "completed");
+  assert.equal(h.approvals.get(approval.id)?.status, "approved");
+  assert.equal(h.approvals.size, 1);
+  assert.equal(h.artifacts.size, 1);
+  assert.equal(h.events.filter((event) => event.type === "task.completed").length, 1);
+  assert.equal(h.events.filter((event) => event.type === "work.completed").length, 1);
+  assert.equal(h.events.some((event) => event.type === "task.failed" || event.type === "work.failed"), false);
+});
+
+test("a transient heartbeat error does not cancel work and the next heartbeat renews it", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const h = harness([calculationPlan, toolCall("calculator", { expression: "3 + 3" }), "Total is 6."]);
+  const work = await createAndPlan(h);
+  await h.executionQueueService.enqueueWork(work.id, "requested");
+
+  const entered = deferred<AbortSignal>();
+  const resume = deferred<void>();
+  const generate = h.modelProvider.generate.bind(h.modelProvider);
+  t.mock.method(h.modelProvider, "generate", async (request: ModelRequest) => {
+    if (request.signal) entered.resolve(request.signal);
+    await resume.promise;
+    return generate(request);
+  });
+  const heartbeat = h.jobs.heartbeat.bind(h.jobs);
+  let heartbeatCalls = 0;
+  const renewed = deferred<void>();
+  t.mock.method(h.jobs, "heartbeat", async (...args: Parameters<typeof heartbeat>) => {
+    if (++heartbeatCalls === 1) throw new Error("Temporary network error");
+    assert.ok(await heartbeat(...args));
+    renewed.resolve();
+    return h.jobs.findById(args[0].id);
+  });
+
+  const tick = h.worker("worker-a").tick();
+  const signal = await entered.promise;
+  t.mock.timers.tick(20_000);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(heartbeatCalls, 1);
+  assert.equal(signal.aborted, false);
+
+  t.mock.timers.tick(20_000);
+  await renewed.promise;
+  resume.resolve();
+  assert.equal((await tick).completed, 1);
+  t.mock.timers.tick(20_000);
+  assert.equal(heartbeatCalls, 2, "the completed attempt cleared its heartbeat timer");
 });
 
 test("a job abandoned by a dead worker is recovered and finished by another", async () => {

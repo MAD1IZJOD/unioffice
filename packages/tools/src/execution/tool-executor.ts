@@ -78,6 +78,7 @@ export class ToolExecutor {
     input: unknown,
     context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
+    context.signal?.throwIfAborted();
     const startedAt = new Date();
 
     const tool = this.registry.get(toolId) as
@@ -124,6 +125,7 @@ export class ToolExecutor {
       try {
         decision = await this.guard.check(toolId, context);
       } catch (error) {
+        context.signal?.throwIfAborted();
         // A guard that cannot answer must not be treated as consent. The only
         // safe reading of "governance is unavailable" is that the call does
         // not happen.
@@ -137,6 +139,7 @@ export class ToolExecutor {
         );
       }
 
+      context.signal?.throwIfAborted();
       if (decision.outcome === "deny") {
         return {
           ...this.failed(
@@ -178,12 +181,14 @@ export class ToolExecutor {
       );
     }
 
+    context.signal?.throwIfAborted();
     try {
       const output = await tool.execute(
         validation.value,
         context,
       );
 
+      context.signal?.throwIfAborted();
       return {
         toolId,
         status: "completed",
@@ -193,6 +198,7 @@ export class ToolExecutor {
         completedAt: new Date(),
       };
     } catch (error) {
+      context.signal?.throwIfAborted();
       return this.failed(
         toolId,
         startedAt,

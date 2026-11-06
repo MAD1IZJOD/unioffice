@@ -115,12 +115,15 @@ export class WorkService {
 
   async planWork(
     workId: WorkId,
+    signal?: AbortSignal,
   ): Promise<PlanWorkResult> {
+    signal?.throwIfAborted();
     const work =
       await this.workRepository.findById(
         workId,
       );
 
+    signal?.throwIfAborted();
     if (!work) {
       throw new Error(
         `Work not found: ${workId}`,
@@ -227,8 +230,10 @@ export class WorkService {
         ),
       );
 
+      signal?.throwIfAborted();
       const plan =
         await this.planner.plan({
+          signal,
           workId: updatedWork.id,
 
           objective:
@@ -267,6 +272,7 @@ export class WorkService {
       // The model has been thinking for a minute or two. If the mission was
       // cancelled in that time, nothing is created for it and it is not
       // put back to waiting: the cancellation stands.
+      signal?.throwIfAborted();
       const current = await this.workRepository.findById(updatedWork.id);
 
       if (!current || current.status !== "planning") {
@@ -293,6 +299,7 @@ export class WorkService {
       const skillCandidates = inRoom.length > 0 && !requestedSkill ? inRoom : availableAgents;
 
       for (const plannedTask of plan.tasks) {
+        signal?.throwIfAborted();
         // The server decides the skill, before anyone is given the step: the
         // step's own words and stated needs, against the skills that apply
         // here and the agents that could take it. What it decides is what the
@@ -440,6 +447,7 @@ export class WorkService {
           },
         };
 
+        signal?.throwIfAborted();
         const createdTask =
           await this.taskRepository.create(
             task,
@@ -479,6 +487,7 @@ export class WorkService {
         });
       }
 
+      signal?.throwIfAborted();
       const plannedWork =
         await this.workRepository.update({
           ...updatedWork,
@@ -521,6 +530,7 @@ export class WorkService {
         tasks,
       };
     } catch (error) {
+      signal?.throwIfAborted();
       const failedWork =
         await this.workRepository.update({
           ...updatedWork,

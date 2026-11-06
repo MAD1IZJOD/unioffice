@@ -132,6 +132,7 @@ export interface ToolGuard {
 
 export interface ToolExecutionContext {
   organizationId: string;
+  signal?: AbortSignal;
 
   agentId?: string;
 

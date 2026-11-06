@@ -17,6 +17,7 @@ import type {
 
 export interface ExecutionRequest {
   workId: WorkId;
+  signal?: AbortSignal;
 
   taskId: TaskId;
 
@@ -94,6 +95,7 @@ export class DefaultExecutionEngine
     request: ExecutionRequest,
   ): Promise<ExecutionResult> {
     const context: AgentExecutionContext = {
+      signal: request.signal,
       agentId: request.agentId,
       taskId: request.taskId,
       workId: request.workId,

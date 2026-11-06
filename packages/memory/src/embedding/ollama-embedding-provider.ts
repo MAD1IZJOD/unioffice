@@ -4,6 +4,7 @@ import type {
 } from "./embedding-provider.js";
 
 export interface OllamaEmbeddingProviderOptions {
+  fetch?: typeof fetch;
   baseUrl?: string;
 
   model?: string;
@@ -49,6 +50,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
   private readonly queryPrefix: string;
 
   private readonly timeoutMs: number;
+  private readonly fetchImpl?: typeof fetch;
 
   constructor(options: OllamaEmbeddingProviderOptions = {}) {
     try {
@@ -64,6 +66,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     this.documentPrefix = options.documentPrefix ?? "search_document: ";
     this.queryPrefix = options.queryPrefix ?? "search_query: ";
     this.timeoutMs = options.timeoutMs ?? 20_000;
+    this.fetchImpl = options.fetch;
   }
 
   async embed(
@@ -95,7 +98,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     let response: Response;
 
     try {
-      response = await fetch(`${this.baseUrl}/api/embed`, {
+      response = await (this.fetchImpl ?? fetch)(`${this.baseUrl}/api/embed`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

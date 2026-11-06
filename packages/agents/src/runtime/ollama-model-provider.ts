@@ -24,6 +24,7 @@ interface OllamaGenerateResponse {
 }
 
 export interface OllamaModelProviderOptions {
+  fetch?: typeof fetch;
   baseUrl?: string;
 
   defaultModel?: string;
@@ -42,6 +43,7 @@ export class OllamaModelProvider
   private readonly defaultModel: string;
 
   private readonly timeoutMs: number;
+  private readonly fetchImpl?: typeof fetch;
 
   constructor(
     options: OllamaModelProviderOptions = {},
@@ -65,6 +67,7 @@ export class OllamaModelProvider
       "qwen3:8b";
 
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.fetchImpl = options.fetch;
 
     if (!Number.isFinite(this.timeoutMs) || this.timeoutMs <= 0) {
       throw new Error("Ollama timeoutMs must be a positive finite number.");
@@ -74,12 +77,13 @@ export class OllamaModelProvider
   async generate(
     request: ModelRequest,
   ): Promise<ModelResponse> {
+    request.signal?.throwIfAborted();
     let response: Response;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      response = await fetch(
+      response = await (this.fetchImpl ?? fetch)(
         `${this.baseUrl}/api/generate`,
         {
           method: "POST",
@@ -121,11 +125,12 @@ export class OllamaModelProvider
                 : {}),
             },
           }),
-          signal: controller.signal,
+          signal: request.signal ? AbortSignal.any([controller.signal, request.signal]) : controller.signal,
         },
       );
     } catch (error) {
       clearTimeout(timeout);
+      request.signal?.throwIfAborted();
 
       if (controller.signal.aborted) {
         throw new Error(`Ollama generation timed out after ${this.timeoutMs}ms.`);
@@ -150,6 +155,7 @@ export class OllamaModelProvider
         (await response.json()) as
           OllamaGenerateResponse;
 
+      request.signal?.throwIfAborted();
       this.validateResponse(data);
 
       return {
@@ -187,6 +193,7 @@ export class OllamaModelProvider
         },
       };
     } catch (error) {
+      request.signal?.throwIfAborted();
       if (controller.signal.aborted) {
         throw new Error(`Ollama generation timed out after ${this.timeoutMs}ms.`);
       }

@@ -11,6 +11,7 @@ export interface ModelMessage {
 
 export interface ModelRequest {
   model: string;
+  signal?: AbortSignal;
 
   messages: ModelMessage[];
 

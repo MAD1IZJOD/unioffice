@@ -17,6 +17,7 @@ import type {
 
 export interface AgentExecutionContext {
   agentId: AgentId;
+  signal?: AbortSignal;
 
   taskId: TaskId;
 

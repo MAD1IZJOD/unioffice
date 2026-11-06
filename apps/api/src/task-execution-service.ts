@@ -113,7 +113,9 @@ export class TaskExecutionService {
 
   async executeTask(
     taskId: TaskId,
+    signal?: AbortSignal,
   ): Promise<Task> {
+    signal?.throwIfAborted();
     const task =
       await this.taskRepository.findById(
         taskId,
@@ -156,6 +158,7 @@ export class TaskExecutionService {
       await this.agentRepository.findById(
         task.assignedAgentId,
       );
+    signal?.throwIfAborted();
 
     if (!agent) {
       throw new Error(
@@ -187,7 +190,7 @@ export class TaskExecutionService {
     const drifted = approvalDrift({ work, task, agent, toolName: this.toolName });
 
     if (drifted) {
-      return this.stopForNewApproval(work, task, agent, drifted);
+      return this.stopForNewApproval(work, task, agent, drifted, signal);
     }
 
     const startedAt = new Date();
@@ -207,6 +210,7 @@ export class TaskExecutionService {
       return current;
     }
 
+    signal?.throwIfAborted();
     await this.eventRecorder.record({
       organizationId: agent.organizationId,
       workId: runningTask.workId,
@@ -233,8 +237,11 @@ export class TaskExecutionService {
             agent,
           );
 
+      signal?.throwIfAborted();
+      const dependencies = await this.dependencyResults(runningTask);
       const result = await within(
-        this.executionEngine.execute({
+        (taskSignal) => this.executionEngine.execute({
+          signal: taskSignal,
           workId: runningTask.workId,
           taskId: runningTask.id,
           agentId: agent.id,
@@ -249,7 +256,7 @@ export class TaskExecutionService {
           task: {
             title: runningTask.title,
             description: runningTask.description,
-            dependencies: await this.dependencyResults(runningTask),
+            dependencies,
             requiredTools: requiredToolsFromTask(runningTask),
             approvedTools: approvedExternalWrites(runningTask),
             skill: skill
@@ -269,15 +276,11 @@ export class TaskExecutionService {
           knowledge,
         }),
         this.taskExecutionTimeoutMs,
+        signal,
       );
 
-      if (!result) {
-        throw new Error(
-          `Task execution timed out after ${this.taskExecutionTimeoutMs}ms.`,
-        );
-      }
-
       for (const toolCall of result.toolCalls) {
+        signal?.throwIfAborted();
         await this.eventRecorder.record({
           organizationId: agent.organizationId,
           workId: runningTask.workId,
@@ -345,6 +348,7 @@ export class TaskExecutionService {
         },
       };
 
+      signal?.throwIfAborted();
       const persistedTask =
         await this.taskRepository.update(finalTask);
 
@@ -355,10 +359,12 @@ export class TaskExecutionService {
           persistedTask,
           agent,
           result.metadata,
+          signal,
         );
 
         resolvedTask = persisted.task;
 
+        signal?.throwIfAborted();
         await this.eventRecorder.record({
           organizationId: agent.organizationId,
           workId: resolvedTask.workId,
@@ -382,9 +388,11 @@ export class TaskExecutionService {
             agent,
             result.output,
             persisted.artifactId,
+            signal,
           );
         }
       } else if (persistedTask.status === "failed") {
+        signal?.throwIfAborted();
         await this.eventRecorder.record({
           organizationId: agent.organizationId,
           workId: persistedTask.workId,
@@ -398,8 +406,10 @@ export class TaskExecutionService {
         });
       }
 
+      signal?.throwIfAborted();
       return resolvedTask;
     } catch (error) {
+      signal?.throwIfAborted();
       const failedAt = new Date();
       const failedTask: Task = {
         ...runningTask,
@@ -421,6 +431,7 @@ export class TaskExecutionService {
       const persistedTask =
         await this.taskRepository.update(failedTask);
 
+      signal?.throwIfAborted();
       await this.eventRecorder.record({
         organizationId: agent.organizationId,
         workId: persistedTask.workId,
@@ -450,6 +461,7 @@ export class TaskExecutionService {
     task: Task,
     agent: Agent,
     reason: string,
+    signal?: AbortSignal,
   ): Promise<Task> {
     const now = new Date();
     const approval = task.metadata.approval as Record<string, unknown>;
@@ -472,6 +484,7 @@ export class TaskExecutionService {
       },
     });
 
+    signal?.throwIfAborted();
     await this.eventRecorder.record({
       organizationId: work.organizationId,
       workId: work.id,
@@ -588,14 +601,16 @@ export class TaskExecutionService {
     agent: Agent,
     output: unknown,
     artifactId: ArtifactId | undefined,
+    signal?: AbortSignal,
   ): Promise<void> {
-    if (!this.knowledge) {
+    const knowledge = this.knowledge;
+    if (!knowledge) {
       return;
     }
 
     try {
       await within(
-        this.knowledge.capture.captureFromTask({
+        () => knowledge.capture.captureFromTask({
           work,
           task,
           agent,
@@ -603,6 +618,7 @@ export class TaskExecutionService {
           artifactId,
         }),
         this.knowledgeCaptureTimeoutMs,
+        signal,
       );
     } catch {
       // Best-effort: the completed task and its artifact are the source of
@@ -693,7 +709,9 @@ export class TaskExecutionService {
     task: Task,
     agent: Agent,
     executionMetadata: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<{ task: Task; artifactId?: ArtifactId }> {
+    signal?.throwIfAborted();
     if (task.result === undefined) {
       return { task };
     }
@@ -724,6 +742,7 @@ export class TaskExecutionService {
       const createdArtifact =
         await this.artifactRepository.create(artifact);
 
+      signal?.throwIfAborted();
       await this.eventRecorder.record({
         organizationId: agent.organizationId,
         workId: task.workId,
@@ -739,6 +758,7 @@ export class TaskExecutionService {
 
       return { task, artifactId: createdArtifact.id };
     } catch (error) {
+      signal?.throwIfAborted();
       // Task completion remains durable even if a secondary artifact projection
       // cannot be written. Preserve that degradation on the task for operators.
       try {
@@ -764,21 +784,32 @@ export class TaskExecutionService {
   }
 }
 
-function within<T>(operation: Promise<T>, milliseconds: number): Promise<T | undefined> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, milliseconds);
-
-    operation.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
+async function within<T>(
+  start: (signal: AbortSignal) => Promise<T>,
+  milliseconds: number,
+  parent?: AbortSignal,
+): Promise<T> {
+  const deadline = new AbortController();
+  const signal = parent ? AbortSignal.any([parent, deadline.signal]) : deadline.signal;
+  signal.throwIfAborted();
+  const timer = setTimeout(() => {
+    deadline.abort(new Error(`Task execution timed out after ${milliseconds}ms.`));
+  }, milliseconds);
+  let onAbort!: () => void;
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
   });
+
+  try {
+    return await Promise.race([Promise.resolve().then(() => {
+      signal.throwIfAborted();
+      return start(signal);
+    }), aborted]);
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", onAbort);
+  }
 }
 
 function isStructured(value: unknown): boolean {

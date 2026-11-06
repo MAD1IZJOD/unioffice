@@ -87,6 +87,19 @@ independently. Jobs are claimed with a conditional update, so more than one
 worker is safe; the API is not, because stream tickets and rate limiting are
 per-process - one API instance is the supported shape.
 
+### Rolling out execution claim guards
+
+Stop the existing workers and apply the execution attempt write-guard migration
+before starting workers from the new revision. A worker verifies its claim
+before running a job and before each provider request. PostgreSQL also checks
+the claim in the same transaction as each guarded worker write. A rejected
+claim or heartbeat that returns no row cancels the attempt. A heartbeat
+transport error leaves the attempt running while ownership is checked again.
+
+Cancellation stops further provider requests and discards late results. An
+external write already accepted by the provider may still take effect. Check
+the provider before repeating an uncertain external write.
+
 ### Listening
 
 `HOST` decides the address. It defaults to `127.0.0.1`, so a development

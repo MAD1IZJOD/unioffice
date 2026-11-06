@@ -35,6 +35,7 @@ export interface PlanningSkillDescriptor {
 
 export interface PlanningContext {
   workId: WorkId;
+  signal?: AbortSignal;
 
   objective: string;
 

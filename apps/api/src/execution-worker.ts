@@ -5,6 +5,7 @@ import type { ExecutionJob } from "@unioffice/core";
 import type { ExecutionJobRepository } from "@unioffice/database";
 
 import type { ExecutionJobRunner } from "./execution-job-runner.js";
+import { loseExecutionClaim } from "./execution-attempt.js";
 
 export interface ExecutionWorkerOptions {
   /** How long to wait after finding nothing to do. */
@@ -199,19 +200,24 @@ export class ExecutionWorker {
     job: ExecutionJob,
     result: WorkerTickResult,
   ): Promise<void> {
-    // A real objective takes minutes, comfortably longer than any sane lease,
-    // so the claim is kept alive while the work is genuinely progressing.
-    const heartbeat = setInterval(() => {
-      void this.executionJobRepository
-        .heartbeat(job, this.workerId, this.leaseMs)
-        .catch(() => {
-          // A missed heartbeat is not fatal on its own; the lease only
-          // matters once it actually expires.
-        });
-    }, Math.max(1000, Math.floor(this.leaseMs / HEARTBEAT_DIVISOR)));
+    const controller = new AbortController();
+    let finished = false;
+    let checking = false;
+    const heartbeat = setInterval(async () => {
+      if (checking || controller.signal.aborted) return;
+      checking = true;
+      try {
+        const current = await this.executionJobRepository.heartbeat(job, this.workerId, this.leaseMs);
+        if (!current && !finished) loseExecutionClaim(controller);
+      } catch {
+        // A transport error is not evidence that another worker owns the job.
+      } finally {
+        checking = false;
+      }
+    }, Math.max(1, Math.floor(this.leaseMs / HEARTBEAT_DIVISOR)));
 
     try {
-      const outcome = await this.executionJobRunner.run(job);
+      const outcome = await this.executionJobRunner.run(job, controller);
       if (!outcome) {
         this.log(`Job ${job.id} attempt ${job.attempts} lost its claim before settlement.`);
         return;
@@ -227,6 +233,7 @@ export class ExecutionWorker {
         }`,
       );
     } finally {
+      finished = true;
       clearInterval(heartbeat);
     }
   }

@@ -50,14 +50,17 @@ export class WorkExecutionService {
 
   async executeWork(
     workId: WorkId,
+    signal?: AbortSignal,
   ): Promise<ExecuteWorkResult> {
+    signal?.throwIfAborted();
     const work = await this.requireWork(workId);
+    signal?.throwIfAborted();
 
     if (
       work.status !== "queued" &&
       work.status !== "executing"
     ) {
-      if (work.status === "completed") {
+      if (work.status === "completed" || work.status === "waiting_approval") {
         return {
           work,
           tasks: await this.taskRepository.findByWork(workId),
@@ -80,6 +83,7 @@ export class WorkExecutionService {
         updatedAt: startedAt,
       });
 
+      signal?.throwIfAborted();
       await this.eventRecorder.record({
         organizationId: executingWork.organizationId,
         workId: executingWork.id,
@@ -97,10 +101,12 @@ export class WorkExecutionService {
         executingWork,
         tasks,
         "Cannot execute work without planned tasks.",
+        signal,
       );
     }
 
     while (true) {
+      signal?.throwIfAborted();
       const failedTask = tasks.find(
         (task) => task.status === "failed",
       );
@@ -110,6 +116,7 @@ export class WorkExecutionService {
           executingWork,
           tasks,
           `Task failed: ${failedTask.title}`,
+          signal,
         );
       }
 
@@ -149,6 +156,7 @@ export class WorkExecutionService {
             completedAt,
           });
 
+        signal?.throwIfAborted();
         await this.eventRecorder.record({
           organizationId: completedWork.organizationId,
           workId: completedWork.id,
@@ -167,7 +175,9 @@ export class WorkExecutionService {
       tasks = await this.markReadyTasks(
         executingWork,
         tasks,
+        signal,
       );
+      signal?.throwIfAborted();
 
       if (tasks.some((task) => task.status === "waiting")) {
         continue;
@@ -189,12 +199,14 @@ export class WorkExecutionService {
           executingWork,
           tasks,
           "No task is ready; dependencies are unresolved.",
+          signal,
         );
       }
 
       await this.executeReadyTasks(
         executingWork,
         readyTasks.slice(0, this.maxConcurrentTasks),
+        signal,
       );
 
       tasks = await this.taskRepository.findByWork(workId);
@@ -204,19 +216,23 @@ export class WorkExecutionService {
   private async executeReadyTasks(
     work: Work,
     tasks: Task[],
+    signal?: AbortSignal,
   ): Promise<void> {
+    signal?.throwIfAborted();
     const executions = await Promise.allSettled(
       tasks.map((task) =>
-        this.taskExecutionService.executeTask(task.id),
+        this.taskExecutionService.executeTask(task.id, signal),
       ),
     );
 
+    signal?.throwIfAborted();
     await Promise.all(executions.map(async (execution, index) => {
       if (execution.status === "rejected") {
         await this.recordExecutionFailure(
           work,
           tasks[index]!,
           execution.reason,
+          signal,
         );
       }
     }));
@@ -226,8 +242,10 @@ export class WorkExecutionService {
     work: Work,
     task: Task,
     error: unknown,
+    signal?: AbortSignal,
   ): Promise<void> {
     const current = await this.taskRepository.findById(task.id);
+    signal?.throwIfAborted();
 
     // A concurrent executor may have atomically claimed this task after this
     // runner observed it as ready. Do not overwrite that execution state.
@@ -250,6 +268,7 @@ export class WorkExecutionService {
       },
     });
 
+    signal?.throwIfAborted();
     await this.eventRecorder.record({
       organizationId: work.organizationId,
       workId: work.id,
@@ -266,12 +285,14 @@ export class WorkExecutionService {
   private async markReadyTasks(
     work: Work,
     tasks: Task[],
+    signal?: AbortSignal,
   ): Promise<Task[]> {
     const tasksById = new Map(
       tasks.map((task) => [task.id, task]),
     );
 
     for (const task of tasks) {
+      signal?.throwIfAborted();
       if (task.status !== "pending") {
         continue;
       }
@@ -291,9 +312,10 @@ export class WorkExecutionService {
       const governed = this.governanceGate
         ? await this.governanceGate.evaluate(work, task)
         : undefined;
+      signal?.throwIfAborted();
 
       if (governed?.outcome === "deny") {
-        await this.denyTask(work, task, governed);
+        await this.denyTask(work, task, governed, signal);
         continue;
       }
 
@@ -332,6 +354,7 @@ export class WorkExecutionService {
         updatedAt: new Date(),
       });
 
+      signal?.throwIfAborted();
       await this.eventRecorder.record({
         organizationId: work.organizationId,
         workId: work.id,
@@ -366,6 +389,7 @@ export class WorkExecutionService {
       policyId?: string;
       policyName?: string;
     },
+    signal?: AbortSignal,
   ): Promise<void> {
     const now = new Date();
 
@@ -394,6 +418,7 @@ export class WorkExecutionService {
       },
     });
 
+    signal?.throwIfAborted();
     await this.eventRecorder.record({
       organizationId: work.organizationId,
       workId: work.id,
@@ -417,7 +442,9 @@ export class WorkExecutionService {
     work: Work,
     tasks: Task[],
     reason: string,
+    signal?: AbortSignal,
   ): Promise<ExecuteWorkResult> {
+    signal?.throwIfAborted();
     const completedAt = new Date();
     const failedWork =
       await this.workRepository.update({
@@ -431,6 +458,7 @@ export class WorkExecutionService {
         },
       });
 
+    signal?.throwIfAborted();
     await this.eventRecorder.record({
       organizationId: failedWork.organizationId,
       workId: failedWork.id,

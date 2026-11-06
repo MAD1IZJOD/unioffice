@@ -12,11 +12,12 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
-export function createSupabaseAdminClient() {
+export function createSupabaseAdminClient(fetchImpl: typeof fetch = fetch) {
   return createClient(
     getRequiredEnv("SUPABASE_URL"),
     getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
     {
+      global: { fetch: fetchImpl },
       auth: {
         autoRefreshToken: false,
         persistSession: false,

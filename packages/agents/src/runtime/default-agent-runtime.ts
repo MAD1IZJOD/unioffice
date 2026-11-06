@@ -117,6 +117,7 @@ export class DefaultAgentRuntime
     definition: AgentDefinition,
     context: AgentExecutionContext,
   ): Promise<AgentExecutionResult> {
+    context.signal?.throwIfAborted();
     const startedAt = new Date();
     const availableTools = this.toolRegistry
       ? this.toolRegistry.getMany(definition.toolIds)
@@ -161,6 +162,7 @@ export class DefaultAgentRuntime
       let iteration = 0;
 
       for (;;) {
+        context.signal?.throwIfAborted();
         const finalTurn = iteration >= this.maxToolCalls;
 
         if (finalTurn) {
@@ -173,6 +175,7 @@ export class DefaultAgentRuntime
         }
 
         const response = await this.modelProvider.generate({
+          signal: context.signal,
           model: this.model,
           messages,
           temperature: this.temperature,
@@ -185,6 +188,7 @@ export class DefaultAgentRuntime
           },
         });
 
+        context.signal?.throwIfAborted();
         const toolCallRequest = finalTurn
           ? null
           : parseToolCallRequest(response.content, availableTools);
@@ -251,6 +255,7 @@ export class DefaultAgentRuntime
         messages.push({ role: "assistant", content: response.content });
 
         const toolContext = {
+          signal: context.signal,
           organizationId: context.work.organizationId,
           agentId: context.agentId,
           workId: context.workId,
@@ -340,6 +345,7 @@ export class DefaultAgentRuntime
         iteration += 1;
       }
     } catch (error) {
+      context.signal?.throwIfAborted();
       return {
         status: "failed",
 

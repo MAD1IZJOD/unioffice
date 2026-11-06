@@ -69,6 +69,7 @@ export class ConnectionResolver implements ConnectionAccess {
     need: ConnectionNeed,
     run: (session: ConnectionSession) => Promise<T>,
   ): Promise<T> {
+    context.signal?.throwIfAborted();
     const oauth = this.providers.get(need.provider);
 
     if (!oauth || !this.providers.cipher) {
@@ -88,6 +89,7 @@ export class ConnectionResolver implements ConnectionAccess {
     this.limiter.take(connection.id);
 
     let credentials = await this.credentials(connection);
+    context.signal?.throwIfAborted();
     let refreshed = false;
 
     if (oauth.refresh && credentials.expiresAt !== undefined && credentials.expiresAt - this.now() < REFRESH_MARGIN_MS) {
@@ -98,8 +100,10 @@ export class ConnectionResolver implements ConnectionAccess {
     let result: T;
 
     try {
+      context.signal?.throwIfAborted();
       result = await run({ accessToken: credentials.accessToken });
     } catch (error) {
+      context.signal?.throwIfAborted();
       if (!isCredentialFailure(error)) {
         throw error;
       }
@@ -112,8 +116,10 @@ export class ConnectionResolver implements ConnectionAccess {
       credentials = await this.refresh(context, connection, credentials);
 
       try {
+        context.signal?.throwIfAborted();
         result = await run({ accessToken: credentials.accessToken });
       } catch (retryError) {
+        context.signal?.throwIfAborted();
         if (isCredentialFailure(retryError)) {
           await this.needsAttention(context, connection, (retryError as ConnectorError).code);
         }
@@ -122,6 +128,7 @@ export class ConnectionResolver implements ConnectionAccess {
       }
     }
 
+    context.signal?.throwIfAborted();
     await this.touch(connection);
     return result;
   }

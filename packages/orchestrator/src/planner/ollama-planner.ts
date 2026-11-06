@@ -46,6 +46,7 @@ export class OllamaPlanner implements Planner {
 
     const response =
       await this.modelProvider.generate({
+        signal: context.signal,
         model: this.model,
 
         messages: [

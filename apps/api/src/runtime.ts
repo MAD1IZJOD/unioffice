@@ -64,6 +64,7 @@ import { ContinuousMissionScheduler } from "./continuous-mission-scheduler.js";
 import { ContinuousMissionService } from "./continuous-mission-service.js";
 import { MissionIntelligenceService } from "./mission-intelligence-service.js";
 import { EventRecorder } from "./event-recorder.js";
+import { executionDatabaseFetch, executionProviderFetch } from "./execution-attempt.js";
 import { KnowledgeCaptureService } from "./knowledge-capture-service.js";
 import { KnowledgeGovernance } from "./knowledge-governance.js";
 import { KnowledgeRecallService } from "./knowledge-recall-service.js";
@@ -94,7 +95,12 @@ import type { ApiConfig } from "./config.js";
  * copied into each process where the two copies could drift apart.
  */
 export function createExecutionRuntime(config: ApiConfig) {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseAdminClient(executionDatabaseFetch());
+  const assertClaim = async () => {
+    const { error } = await supabase.rpc("assert_execution_job_claim");
+    if (error) throw new Error(`Could not verify execution job ownership: ${error.message}`);
+  };
+  const providerFetch = executionProviderFetch(assertClaim);
 
   const organizationRepository = new SupabaseOrganizationRepository(supabase);
   const agentRepository = new SupabaseAgentRepository(supabase);
@@ -105,7 +111,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const eventRepository = new SupabaseEventRepository(supabase);
   const memoryRepository = new SupabaseMemoryRepository(supabase);
   const knowledgeLinkRepository = new SupabaseKnowledgeLinkRepository(supabase);
-  const executionJobRepository = new SupabaseExecutionJobRepository(supabase);
+  const executionJobRepository = new SupabaseExecutionJobRepository(createSupabaseAdminClient());
   const policyRepository = new SupabasePolicyRepository(supabase);
   const workspaceRepository = new SupabaseWorkspaceRepository(supabase);
   const membershipRepository = new SupabaseMembershipRepository(supabase);
@@ -135,7 +141,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   // executor. What makes them external - a connection resolved from the
   // mission's own organization at call time - lives behind the resolver, and
   // a tool has no way to name a connection of its own choosing.
-  const connectionProviders = createConnectionProviders(config.connect);
+  const connectionProviders = createConnectionProviders(config.connect, providerFetch);
   const connectionResolver = new ConnectionResolver(
     connectionRepository,
     connectionProviders,
@@ -143,8 +149,8 @@ export function createExecutionRuntime(config: ApiConfig) {
   );
 
   for (const tool of [
-    ...createGitHubTools(connectionResolver),
-    ...createDriveTools(connectionResolver),
+    ...createGitHubTools(connectionResolver, providerFetch),
+    ...createDriveTools(connectionResolver, providerFetch),
   ]) {
     toolRegistry.register(tool);
   }
@@ -191,6 +197,7 @@ export function createExecutionRuntime(config: ApiConfig) {
   const modelProvider = new OllamaModelProvider({
     baseUrl: config.ollamaBaseUrl,
     defaultModel: config.ollamaModel,
+    fetch: providerFetch,
   });
   const planner = new OllamaPlanner(modelProvider, config.ollamaModel);
   const delegator = new DefaultDelegator(agentRepository);
@@ -213,6 +220,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     ? new OllamaEmbeddingProvider({
         baseUrl: config.ollamaBaseUrl,
         model: config.embeddingModel,
+        fetch: providerFetch,
       })
     : undefined;
 
@@ -375,7 +383,7 @@ export function createExecutionRuntime(config: ApiConfig) {
     workRepository,
     taskRepository,
     eventRecorder,
-    { planner: workService },
+    { planner: workService, assertClaim },
   );
 
   // One read for one operation. Everything the execution room renders comes
