@@ -215,6 +215,14 @@ describe("the execution room's start", () => {
       .toBe(`/missions/${MISSION}/brief`);
   });
 
+  it("keeps execution unavailable until the server confirms readiness", async () => {
+    open(room());
+
+    expect(await screen.findByText("Start readiness is unavailable.")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Run it|Resume it/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeDefined();
+  });
+
   it("offers nothing to someone whose role can only follow the mission", async () => {
     open(room({ startability: { startable: true, mode: "start" } }), "viewer");
 
