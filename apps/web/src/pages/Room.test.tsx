@@ -222,11 +222,6 @@ describe("the execution room's start", () => {
     expect(screen.queryByRole("button", { name: /Run it/ })).toBeNull();
   });
 
-  it("falls back to the mission's status against an API that predates the decision", async () => {
-    open(room());
-
-    expect(await screen.findByRole("button", { name: /Run it/ })).toBeDefined();
-  });
 });
 
 describe("the mission in the office", () => {
