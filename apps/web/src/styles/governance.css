@@ -29,32 +29,15 @@
   overflow: hidden;
   border-bottom: 1px solid var(--line);
   background:
-    radial-gradient(
-      110% 85% at 6% -15%,
-      rgba(255, 255, 255, 0.03),
-      transparent 60%
-    ),
-    var(--surface-0);
+    var(--surface-1);
+  padding-block: clamp(26px, 4vw, 46px);
 }
 
 /* A vertical rule down the left edge: the boundary, drawn once. Blue only
    when something is genuinely being enforced. */
-.control-open::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 2px;
-  content: "";
-  background: linear-gradient(
-    to bottom,
-    var(--line-strong),
-    transparent 70%
-  );
-}
 
 .control-open-live::before {
-  background: linear-gradient(to bottom, var(--blue), transparent 70%);
+  background: var(--line-strong);
 }
 
 .control-open-live::after {
@@ -62,11 +45,7 @@
   inset: 0;
   pointer-events: none;
   content: "";
-  background: radial-gradient(
-    65% 110% at 0% 0%,
-    rgba(59, 130, 246, 0.08),
-    transparent 58%
-  );
+  background: var(--line-strong);
 }
 
 .control-open-inner {
@@ -94,10 +73,11 @@
 .control-statement {
   max-width: 16ch;
   margin: 0;
-  font-size: clamp(30px, 4.4vw, 58px);
+  font-size: clamp(29px, 5vw, 50px);
   font-weight: 600;
   letter-spacing: -0.036em;
-  line-height: 1.02;
+  line-height: 1.07;
+  text-transform: none;
 }
 
 .control-statement-line {
@@ -115,7 +95,7 @@
 }
 
 .control-lead {
-  max-width: 62ch;
+  max-width: 60ch;
   margin: 26px 0 0;
   color: var(--ink-secondary);
   font-size: var(--text-md);
@@ -193,7 +173,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-1);
-  box-shadow: var(--elev-1);
+  box-shadow: none;
   transition:
     border-color var(--duration) var(--ease-standard),
     background var(--duration) var(--ease-standard),
@@ -235,7 +215,6 @@
    rail carries a little of its own light to say so. */
 .policy-live .policy-rail {
   background: var(--tone, var(--blue));
-  box-shadow: 0 0 10px var(--tone, var(--blue));
 }
 
 .policy-name-row {
@@ -360,12 +339,7 @@
   border: 1px solid var(--blue-line);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(
-      70% 120% at 0% 0%,
-      rgba(59, 130, 246, 0.06),
-      transparent 60%
-    ),
-    var(--surface-2);
+    var(--surface-overlay);
 }
 
 .composer-sheet-head {
@@ -1022,11 +996,6 @@
   border-left: 2px solid var(--blue);
   border-radius: var(--radius);
   background:
-    radial-gradient(
-      60% 130% at 0% 0%,
-      rgba(59, 130, 246, 0.06),
-      transparent 60%
-    ),
     var(--surface-1);
 }
 
