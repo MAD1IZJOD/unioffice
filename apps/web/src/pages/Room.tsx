@@ -480,17 +480,11 @@ export default function Room() {
               </span>
             )}
 
-            {/* Offered only when the server's start decision - the one the
-                brief shows and the execute route enforces - says it can
-                run. An API that predates the decision falls back to the
-                mission's status, as this room always did. */}
             {canOperate &&
               !opening &&
               plan.totalCount > 0 &&
               !executionJob &&
-              (startability
-                ? startability.startable
-                : work.status === "queued" || work.status === "executing") && (
+              startability?.startable === true && (
                 <button
                   type="button"
                   disabled={busy}
@@ -500,10 +494,18 @@ export default function Room() {
                   <Play size={13} />
                   {action === "execute"
                     ? "Starting…"
-                    : (startability?.startable ? startability.mode === "resume" : work.status === "executing")
+                    : startability.mode === "resume"
                       ? "Resume it"
                       : "Run it"}
                 </button>
+              )}
+
+            {canOperate && !opening && !executionJob && !startability &&
+              plan.totalCount > 0 && (work.status === "queued" || work.status === "executing") && (
+                <span className="operation-note" role="status">
+                  Start readiness is unavailable.{" "}
+                  <button type="button" onClick={reload} className="button-quiet">Check again</button>
+                </span>
               )}
 
             {/* A run that is allowed but will be limited, or will stop for a
