@@ -1,84 +1,68 @@
-/* ==========================================================================
-   UNIOFFICE 2.0 design tokens
-
-   Black carries the interface. Blue and red are semantic, never decorative:
-   blue is the system thinking - agents working, data moving, state that is
-   live. Red is pressure - a decision waiting on a person, something blocked,
-   something that failed. If a colour appears, it means something.
-
-   Every value a surface needs comes from here: colour, type, space, radius,
-   elevation, motion, focus, layering and density. A component reaching for a
-   raw hex or pixel value is a component the system cannot change later.
-   ========================================================================== */
+/* Shared color, typography, spacing and interaction tokens. */
 
 :root {
   color-scheme: dark;
 
-  /* Tinted surfaces: a region the system is working in (blue) or one that
-     needs a person (red). Used sparingly, for the one region that matters. */
-  --surface-active-soft: #090e13;
-  --surface-active: #101c22;
-  --surface-active-strong: #1a242e;
-  --surface-alert: #0c0709;
+  /* Quiet fills for active and attention states. */
+  --surface-active-soft: #191b19;
+  --surface-active: #202320;
+  --surface-active-strong: #292d28;
+  --surface-alert: #211917;
 
   /* Surfaces. Near-black through graphite; each step is deliberately small so
      elevation reads as depth rather than as a stack of floating cards. */
-  --surface-0: #06070a;
-  --surface-1: #0a0c11;
-  --surface-2: #0e1116;
-  --surface-3: #13171e;
-  --surface-4: #191e26;
+  --surface-0: #171816;
+  --surface-1: #1d1e1b;
+  --surface-2: #232420;
+  --surface-3: #2a2b26;
+  --surface-4: #33342e;
   /* Things that float above the page: the palette, drawers, menus. */
-  --surface-overlay: #0c0f14;
+  --surface-overlay: #242520;
 
-  --line-subtle: #161a21;
-  --line: #1e232b;
-  --line-strong: #2a313c;
+  --line-subtle: #2e2f29;
+  --line: #393a33;
+  --line-strong: #55564c;
 
   /* Text, in five steps of emphasis. Ghost is for the quietest machine facts
      and never for anything a person has to read to act. */
-  --ink-primary: #f2f4f7;
-  --ink-secondary: #a7b0bd;
-  /* Muted clears 4.5:1 on every surface, so secondary copy passes WCAG AA
-     wherever it lands; faint clears 3.6:1 and is for labels and metadata that
-     sit beside something primary. Both were darker, and faint in particular
-     fell under 3:1 - legible on a bright monitor in a dark room, not
-     otherwise. */
-  --ink-muted: #7d8696;
-  --ink-faint: #687182;
-  --ink-ghost: #3a4250;
-  --ink-inverse: #06070a;
+  --ink-primary: #f0ede5;
+  --ink-secondary: #cbc7bb;
+  /* Secondary copy and metadata stay readable on the raised surfaces. */
+  --ink-muted: #aaa79b;
+  --ink-faint: #969489;
+  --ink-ghost: #77796d;
+  --ink-inverse: #191a16;
 
   /* Blue - intelligence, activity, live system state. */
-  --blue: #3b82f6;
-  --blue-ink: #84b4fb;
-  --blue-soft: rgba(59, 130, 246, 0.10);
-  --blue-line: rgba(59, 130, 246, 0.28);
+  --blue: #52696b;
+  --blue-ink: #a8c0be;
+  --blue-soft: rgba(168, 192, 190, 0.09);
+  --blue-line: rgba(168, 192, 190, 0.29);
 
   /* Red - attention and failure. The brighter tone is "a person is needed",
      the base tone is "this did not work". Same hue so the interface never
      turns into a colour wheel; the difference is weight and motion. */
-  --red: #e5484d;
-  --red-ink: #ff7176;
-  --red-muted: #c9868a;
-  --red-pale: #f8a4a4;
-  --red-whisper: #ffd9da;
-  --red-soft: rgba(229, 72, 77, 0.10);
-  --red-line: rgba(229, 72, 77, 0.30);
+  --red: #bc736a;
+  --red-ink: #e7a39a;
+  --red-muted: #c7958d;
+  --red-pale: #e8aaa0;
+  --red-whisper: #f4cec7;
+  --red-soft: rgba(231, 163, 154, 0.08);
+  --red-line: rgba(231, 163, 154, 0.27);
 
   /* Restrained positive. Deliberately quiet: finished work should not shout
      louder than work that needs something. */
-  --success: #2f9e6b;
-  --success-ink: #56c193;
-  --success-soft: rgba(47, 158, 107, 0.09);
-  --success-line: rgba(47, 158, 107, 0.24);
+  --success: #759679;
+  --success-ink: #a9c7a4;
+  --success-soft: rgba(169, 199, 164, 0.08);
+  --success-line: rgba(169, 199, 164, 0.26);
 
   /* Caution that is not yet a demand on anyone - limited features, drafts. */
-  --warning: #d99a2b;
-  --warning-muted: #c9a06a;
-  --warning-ink: #f2c97d;
-  --warning-soft: rgba(217, 154, 43, 0.09);
-  --warning-line: rgba(217, 154, 43, 0.24);
+  --warning: #b39266;
+  --warning-muted: #bea782;
+  --warning-ink: #dec49b;
+  --warning-soft: rgba(222, 196, 155, 0.08);
+  --warning-line: rgba(222, 196, 155, 0.27);
 
   /* Semantic names, so a surface says what it means rather than which hue
      it happens to be. */
@@ -89,12 +73,11 @@
   --error-soft: var(--red-soft);
   --error-line: var(--red-line);
 
-  /* Kept as aliases for the handful of rules that still reach for the old
-     accent; they resolve to blue. */
-  --accent: var(--blue);
-  --accent-ink: var(--blue-ink);
-  --accent-soft: var(--blue-soft);
-  --accent-line: var(--blue-line);
+  /* Warm emphasis for actions and focus. Slate remains a status color. */
+  --accent: #ded1b8;
+  --accent-ink: #e3d5bd;
+  --accent-soft: rgba(222, 209, 184, 0.10);
+  --accent-line: rgba(222, 209, 184, 0.30);
 
   /* Type. Hierarchy is carried by size, weight and colour rather than boxes.
      Geist is shipped with the app rather than hoped for: naming a face the
@@ -103,26 +86,23 @@
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: "Geist Mono Variable", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
-  /* One scale, ten steps. Every font-size in the product is one of these; a
-     page that needs a size between two steps needs a different hierarchy,
-     not a new number. The floor is 10px because the smallest things here -
-     machine labels, timestamps - are still things people read. */
-  --text-3xs: 10px;
-  --text-2xs: 10.5px;
-  --text-xs: 11.5px;
-  --text-sm: 12.5px;
-  --text-md: 13.5px;
-  --text-base: 14.5px;
+  /* The compact text scale starts at 11px for labels and timestamps. */
+  --text-3xs: 11px;
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-base: 15px;
   --text-lg: 16px;
   --text-title: 18px;
   --text-xl: 22px;
-  --text-2xl: 28px;
-  --text-display: clamp(34px, 5.2vw, 64px);
+  --text-2xl: 30px;
+  --text-display: clamp(30px, 4vw, 52px);
   --leading-tight: 1.15;
   --leading-snug: 1.4;
   --leading-body: 1.65;
   --tracking-tight: -0.028em;
-  --tracking-label: 0.18em;
+  --tracking-label: 0.09em;
 
   /* Space, on a 4px grid. */
   --space-1: 4px;
@@ -146,16 +126,13 @@
   --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line);
   --shadow-raised: 0 8px 24px rgba(0, 0, 0, 0.35);
 
-  /* Depth. A surface that sits above the page catches a hairline of light on
-     its top edge and casts a short, soft shadow below - the way a physical
-     panel does - instead of glowing or blurring what is behind it. Three
-     steps: resting on the page, lifted under the pointer, and floating. */
-  --edge-light: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  --elev-1: var(--edge-light), 0 1px 2px rgba(0, 0, 0, 0.35);
-  --elev-2: var(--edge-light), 0 2px 4px rgba(0, 0, 0, 0.3), 0 10px 28px -8px rgba(0, 0, 0, 0.6);
-  --elev-3: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 10px rgba(0, 0, 0, 0.35), 0 28px 64px -16px rgba(0, 0, 0, 0.75);
+  /* Short shadows distinguish floating controls from the canvas. */
+  --edge-light: 0 0 0 transparent;
+  --elev-1: 0 1px 2px rgb(0 0 0 / 14%);
+  --elev-2: 0 4px 12px rgb(0 0 0 / 20%);
+  --elev-3: 0 12px 28px rgb(0 0 0 / 30%);
   /* How far a surface travels toward you when it becomes the thing in hand. */
-  --lift: -2px;
+  --lift: 0px;
   /* The camera for the few surfaces that use real perspective. Far enough
      away that nothing looks distorted - depth, not a fisheye. */
   --perspective: 1400px;
@@ -165,21 +142,21 @@
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --duration-fast: 120ms;
   --duration: 200ms;
-  --duration-slow: 360ms;
+  --duration-slow: 240ms;
   /* Arrivals decelerate hard - most of the travel happens in the first
      frames, so something new is readable almost at once and then settles. */
   --ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
   /* A small overshoot, for the rare moment a state change should feel
      physical: a mission accepted, a decision recorded. */
   --ease-settle: cubic-bezier(0.34, 1.36, 0.64, 1);
-  --duration-enter: 440ms;
+  --duration-enter: 180ms;
   /* The delay between siblings arriving one after another. Short enough that
      a list of twenty is complete in well under a second. */
-  --stagger: 36ms;
+  --stagger: 0ms;
 
   /* Focus is always visible for keyboard users, and always the same. */
-  --focus: var(--blue-ink);
-  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--blue-ink);
+  --focus: var(--accent-ink);
+  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent-ink);
 
   --disabled-opacity: 0.45;
 
@@ -190,11 +167,11 @@
   --z-toast: 80;
 
   /* Density: the height of one row of information. */
-  --row-height: 40px;
-  --row-height-compact: 32px;
+  --row-height: 44px;
+  --row-height-compact: 36px;
 
-  --rail-width: 236px;
-  --header-height: 56px;
+  --rail-width: 224px;
+  --header-height: 58px;
 }
 
 /* Keyboard focus, everywhere, from one rule. Components with their own focus
@@ -347,24 +324,6 @@
   flex-shrink: 0;
   border-radius: 50%;
   background: var(--tone);
-  box-shadow: 0 0 8px var(--tone);
-}
-
-.pill-dot-pulse {
-  animation: pulseDot 1.9s ease-in-out infinite;
-}
-
-@keyframes pulseDot {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 0.45;
-    transform: scale(0.82);
-  }
 }
 
 .tone-icon {
@@ -417,11 +376,7 @@
    panels claim urgency at once, neither reads as urgent. */
 .panel-attention {
   border-color: var(--red-line);
-  background: linear-gradient(
-    180deg,
-    var(--red-soft) 0%,
-    var(--surface-1) 90px
-  );
+  background: var(--surface-alert);
 }
 
 .panel-header {
@@ -671,20 +626,8 @@
 
 .skeleton-row {
   height: 11px;
-  border-radius: 5px;
-  background: linear-gradient(90deg, var(--surface-active) 25%, var(--surface-active-strong) 50%, var(--surface-active) 75%);
-  background-size: 240% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  from {
-    background-position: 200% 0;
-  }
-
-  to {
-    background-position: -60% 0;
-  }
+  border-radius: 3px;
+  background: var(--surface-3);
 }
 
 /* --------------------------------------------------------------------------
@@ -706,8 +649,8 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 34px;
-  padding: 0 14px;
+  min-height: 38px;
+  padding: 0 15px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
@@ -723,18 +666,14 @@
 }
 
 .button-primary {
-  border-color: rgba(132, 180, 251, 0.35);
-  background: var(--blue);
-  box-shadow: var(--elev-1), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--ink-inverse);
 }
 
 .button-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--blue) 88%, white);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 6px 18px -6px rgba(59, 130, 246, 0.6);
-  transform: translateY(-1px);
+  background: var(--ink-primary);
+  border-color: var(--ink-primary);
 }
 
 .button-ghost {
@@ -2014,39 +1953,9 @@
   border-bottom: 1px solid var(--line-subtle);
 }
 
-/* The mood tints the whole opening, not individual widgets inside it. */
-.dispatch-waiting {
-  background:
-    radial-gradient(
-      120% 90% at 8% 0%,
-      rgba(229, 72, 77, 0.16),
-      transparent 62%
-    ),
-    var(--surface-0);
-}
-
-.dispatch-moving {
-  background:
-    radial-gradient(
-      120% 90% at 8% 0%,
-      rgba(59, 130, 246, 0.15),
-      transparent 62%
-    ),
-    var(--surface-0);
-}
-
-.dispatch-broken {
-  background:
-    radial-gradient(
-      120% 90% at 8% 0%,
-      rgba(229, 72, 77, 0.11),
-      transparent 58%
-    ),
-    var(--surface-0);
-}
-
-.dispatch-quiet {
-  background: var(--surface-0);
+.dispatch {
+  background: var(--surface-1);
+  padding-block: clamp(28px, 5vw, 58px) clamp(24px, 4vw, 42px);
 }
 
 .signal-field {
@@ -2055,33 +1964,6 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
-}
-
-/* A trace only travels while a real objective is executing, and there are
-   exactly as many travelling traces as there are running objectives. This is
-   the only ambient motion in the product; when the company is idle the field
-   is completely still. */
-.signal-trace-running {
-  stroke-dasharray: 6 14;
-  animation: traceTravel 5.5s linear infinite;
-  animation-delay: calc(var(--trace-index, 0) * -0.7s);
-}
-
-@keyframes traceTravel {
-  from {
-    stroke-dashoffset: 40;
-  }
-
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .signal-trace-running {
-    stroke-dasharray: none;
-    animation: none;
-  }
 }
 
 .dispatch-inner {
@@ -2095,11 +1977,12 @@
 .statement {
   margin: 0;
   color: var(--ink-primary);
-  font-size: clamp(38px, 7.4vw, 92px);
-  font-weight: 680;
-  letter-spacing: -0.045em;
-  line-height: 0.94;
-  text-transform: uppercase;
+  max-width: 20ch;
+  font-size: var(--text-display);
+  font-weight: 630;
+  letter-spacing: -0.042em;
+  line-height: 1.06;
+  text-wrap: balance;
 }
 
 .statement-line {
@@ -2485,38 +2368,6 @@
    Each of these marks a real state change rather than decorating a hover.
    -------------------------------------------------------------------------- */
 
-/* A row that is genuinely executing gets a travelling highlight along its
-   status rail - the only continuously moving thing in the product, and it
-   only exists while something really is running. */
-.op-rail-running {
-  position: relative;
-  overflow: hidden;
-}
-
-.op-rail-running::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    var(--ink-primary),
-    transparent
-  );
-  opacity: 0.55;
-  animation: railTravel 2.4s ease-in-out infinite;
-}
-
-@keyframes railTravel {
-  0% {
-    transform: translateY(-100%);
-  }
-
-  100% {
-    transform: translateY(100%);
-  }
-}
-
 /* Reveals the objective's full text on hover when it was clamped. */
 .op-row:hover .op-row-title {
   -webkit-line-clamp: 4;
@@ -2579,33 +2430,6 @@
   color: var(--ink-muted);
 }
 
-/* --------------------------------------------------------------------------
-   Arrival
-
-   A list comes in in reading order, each row a beat behind the one above.
-   It plays when a row mounts - on the first render, and again only for a row
-   that a live refresh genuinely added - so the motion answers "what just
-   appeared" and a list that is merely re-polled stays still. Rows past the
-   twelfth arrive together; nobody waits on a long list.
-   -------------------------------------------------------------------------- */
-
-.ledger > *,
-.stagger > * {
-  animation: itemArrive var(--duration-enter) var(--ease-arrive) backwards;
-}
-
-.ledger > :nth-child(2), .stagger > :nth-child(2) { animation-delay: calc(var(--stagger) * 1); }
-.ledger > :nth-child(3), .stagger > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
-.ledger > :nth-child(4), .stagger > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
-.ledger > :nth-child(5), .stagger > :nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
-.ledger > :nth-child(6), .stagger > :nth-child(6) { animation-delay: calc(var(--stagger) * 5); }
-.ledger > :nth-child(7), .stagger > :nth-child(7) { animation-delay: calc(var(--stagger) * 6); }
-.ledger > :nth-child(8), .stagger > :nth-child(8) { animation-delay: calc(var(--stagger) * 7); }
-.ledger > :nth-child(9), .stagger > :nth-child(9) { animation-delay: calc(var(--stagger) * 8); }
-.ledger > :nth-child(10), .stagger > :nth-child(10) { animation-delay: calc(var(--stagger) * 9); }
-.ledger > :nth-child(11), .stagger > :nth-child(11) { animation-delay: calc(var(--stagger) * 10); }
-.ledger > :nth-child(n + 12), .stagger > :nth-child(n + 12) { animation-delay: calc(var(--stagger) * 11); }
-
 /* A band of light running along an edge, for as long as something is really
    in progress: a step executing, a request in flight. Used on a pseudo-element
    whose background is a narrow gradient. */
@@ -2616,19 +2440,5 @@
 
   to {
     background-position: 160% 0;
-  }
-}
-
-@keyframes itemArrive {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ledger > *,
-  .stagger > * {
-    animation: none;
   }
 }
