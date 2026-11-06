@@ -551,8 +551,6 @@ export function createExecutionRuntime(config: ApiConfig) {
 
   const staleRunReconciler = new StaleRunReconciler(
     workRepository,
-    taskRepository,
-    eventRecorder,
     config.staleRunAfterMs,
   );
 

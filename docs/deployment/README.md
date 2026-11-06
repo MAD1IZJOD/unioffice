@@ -89,8 +89,8 @@ per-process - one API instance is the supported shape.
 
 ### Rolling out execution claim guards
 
-Stop the existing workers and apply the execution attempt write-guard migration
-before starting workers from the new revision. A worker verifies its claim
+Stop the existing workers and apply the execution lease migrations in order
+before starting the API and workers from the new revision. A worker verifies its claim
 before running a job and before each provider request. PostgreSQL also checks
 the claim in the same transaction as each guarded worker write. A rejected
 claim or heartbeat that returns no row cancels the attempt. A heartbeat
@@ -105,6 +105,11 @@ When the last lease expires, one database transaction fails that exact job
 attempt, closes the unfinished mission and its interrupted steps, and records
 the failure event. Finished missions and missions awaiting a person keep their
 recorded state.
+
+API startup handles only abandoned work with no queued or running job. Its
+database transaction rechecks the mission's age and status and whether the
+queue owns it before changing tasks or mission state. The worker still owns
+recovery for an expired running job.
 
 ### Listening
 

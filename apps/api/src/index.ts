@@ -19,9 +19,8 @@ export async function createApiServer() {
   const config = loadApiConfig();
   const runtime = createExecutionRuntime(config);
 
-  // Work interrupted by a previous restart is put back on a recoverable
-  // footing. The worker owns queue-level lease recovery; this handles work
-  // rows left mid-run by a process that predates the queue.
+  // Startup reconciles only abandoned work with no active queue job.
+  // The worker owns recovery for every queued or running job.
   try {
     const reconciled = await runtime.staleRunReconciler.reconcile();
 

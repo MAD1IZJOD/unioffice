@@ -178,6 +178,24 @@ export class SupabaseWorkRepository
     return (data as WorkRow[] ?? []).map(toWork);
   }
 
+  async reconcileAbandonedRun(
+    work: Pick<Work, "id" | "status">,
+    cutoff: Date,
+    detectedAt: Date,
+  ): Promise<{ work: Work; interruptedTaskCount: number } | null> {
+    const { data, error } = await this.supabase
+      .rpc("reconcile_abandoned_work", {
+        p_work_id: work.id,
+        p_status: work.status,
+        p_cutoff: cutoff.toISOString(),
+        p_detected_at: detectedAt.toISOString(),
+      })
+      .maybeSingle<{ work: WorkRow; interrupted_task_count: number }>();
+
+    if (error) throw new Error(`Failed to reconcile abandoned work: ${error.message}`);
+    return data ? { work: toWork(data.work), interruptedTaskCount: data.interrupted_task_count } : null;
+  }
+
   async findByOrganization(
     organizationId: OrganizationId,
   ): Promise<Work[]> {
