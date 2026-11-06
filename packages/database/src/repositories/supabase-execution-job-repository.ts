@@ -366,12 +366,17 @@ export class SupabaseExecutionJobRepository
         continue;
       }
 
-      const abandoned = await this.settle(
-        job,
-        failedJobPatch(`${reason} No attempts remain.`, now),
-        expiredLease,
-      );
-      if (abandoned) failed.push(abandoned);
+      const { data: abandoned, error: recoveryError } = await this.client
+        .rpc("fail_expired_execution_job", {
+          p_job_id: job.id,
+          p_attempts: job.attempts,
+          p_observed_lease: expiredLease.observed,
+          p_cutoff: expiredLease.cutoff,
+          p_error: `${reason} No attempts remain.`,
+        })
+        .maybeSingle();
+      if (recoveryError) throw new Error(`Failed to close an expired execution job: ${recoveryError.message}`);
+      if (abandoned) failed.push(fromRow(abandoned as ExecutionJobRow));
     }
 
     return { requeued, failed };

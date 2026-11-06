@@ -100,6 +100,12 @@ Cancellation stops further provider requests and discards late results. An
 external write already accepted by the provider may still take effect. Check
 the provider before repeating an uncertain external write.
 
+The queue owns lease recovery. A recoverable lease goes back to the queue.
+When the last lease expires, one database transaction fails that exact job
+attempt, closes the unfinished mission and its interrupted steps, and records
+the failure event. Finished missions and missions awaiting a person keep their
+recorded state.
+
 ### Listening
 
 `HOST` decides the address. It defaults to `127.0.0.1`, so a development

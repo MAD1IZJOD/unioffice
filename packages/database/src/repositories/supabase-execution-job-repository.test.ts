@@ -31,6 +31,7 @@ function fixture(maxAttempts = 3) {
     metadata: {},
   };
   const updates: URLSearchParams[] = [];
+  const terminalRecoveries: Record<string, unknown>[] = [];
   let afterRecoveryRead: (() => Promise<void>) | undefined;
 
   const client = createClient("http://fixture.invalid", "fixture-key", {
@@ -38,6 +39,22 @@ function fixture(maxAttempts = 3) {
     global: {
       fetch: async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : input);
+        if (url.pathname === "/rest/v1/rpc/fail_expired_execution_job") {
+          assert.equal(init?.method, "POST");
+          assert.equal(typeof init.body, "string");
+          const parameters = JSON.parse(init.body as string);
+          terminalRecoveries.push(parameters);
+          if (row.status !== "running" || row.attempts !== parameters.p_attempts ||
+              row.lease_expires_at !== parameters.p_observed_lease) return Response.json([]);
+          Object.assign(row, {
+            status: "failed",
+            lease_expires_at: null,
+            last_error: parameters.p_error,
+            completed_at: parameters.p_cutoff,
+            updated_at: parameters.p_cutoff,
+          });
+          return Response.json([row]);
+        }
         assert.equal(url.pathname, "/rest/v1/execution_jobs");
         const query = url.searchParams;
         const matches = [...query].every(([column, filter]) => {
@@ -75,6 +92,7 @@ function fixture(maxAttempts = 3) {
   return {
     repository: new SupabaseExecutionJobRepository(client),
     updates,
+    terminalRecoveries,
     afterRecoveryRead(renew: () => Promise<void>) { afterRecoveryRead = renew; },
   };
 }
@@ -93,9 +111,17 @@ function assertRecoveryGuard(query: URLSearchParams) {
   ]);
 }
 
+function assertTerminalRecovery(parameters: Record<string, unknown>) {
+  assert.equal(parameters.p_job_id, jobId);
+  assert.equal(parameters.p_attempts, 1);
+  assert.equal(parameters.p_observed_lease, expiredAt);
+  assert.equal(parameters.p_cutoff, now.toISOString());
+  assert.match(String(parameters.p_error), /No attempts remain/);
+}
+
 for (const maxAttempts of [1, 3]) {
   test(`a renewed lease survives recovery with an attempt limit of ${maxAttempts}`, async () => {
-    const { repository, updates, afterRecoveryRead } = fixture(maxAttempts);
+    const { repository, updates, terminalRecoveries, afterRecoveryRead } = fixture(maxAttempts);
     const attempt = await repository.findById(jobId);
     assert.ok(attempt);
     afterRecoveryRead(async () => {
@@ -110,8 +136,14 @@ for (const maxAttempts of [1, 3]) {
     assert.equal(job.claimedBy, "worker-a");
     assert.equal(job.attempts, 1);
     assert.equal(job.leaseExpiresAt?.getTime(), now.getTime() + 60_000);
-    assert.equal(updates.length, 2);
-    assertRecoveryGuard(updates[1]!);
+    if (maxAttempts === 1) {
+      assert.equal(updates.length, 1);
+      assert.equal(terminalRecoveries.length, 1);
+      assertTerminalRecovery(terminalRecoveries[0]!);
+    } else {
+      assert.equal(updates.length, 2);
+      assertRecoveryGuard(updates[1]!);
+    }
   });
 }
 
@@ -131,13 +163,15 @@ test("an unchanged expired lease is recovered and can be claimed again", async (
 });
 
 test("an unchanged expired lease with no attempts left is failed", async () => {
-  const { repository, updates } = fixture(1);
+  const { repository, updates, terminalRecoveries } = fixture(1);
   const { requeued, failed } = await repository.recoverExpiredLeases(now);
   assert.equal(requeued.length, 0);
   assert.equal(failed.length, 1);
   assert.equal(failed[0]?.status, "failed");
   assert.match(failed[0]?.lastError ?? "", /No attempts remain/);
-  assertRecoveryGuard(updates[0]!);
+  assert.equal(updates.length, 0);
+  assert.equal(terminalRecoveries.length, 1);
+  assertTerminalRecovery(terminalRecoveries[0]!);
 });
 
 test("an earlier attempt cannot settle or renew a replacement claim", async () => {
