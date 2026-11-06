@@ -26,26 +26,12 @@
   padding: 46px var(--brain-gutter) 40px;
   overflow: hidden;
   border-bottom: 1px solid var(--line);
-  background: var(--surface-0);
+  background: var(--surface-1);
+  padding-block: clamp(26px, 4vw, 46px);
 }
 
 /* Strata: faint horizontal bands that deepen toward the bottom, the page's one
    decorative gesture - layers of what has been learned. */
-.brain-open::before {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  content: "";
-  background:
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 27px,
-      rgba(255, 255, 255, 0.022) 27px,
-      rgba(255, 255, 255, 0.022) 28px
-    );
-  mask-image: linear-gradient(to bottom, transparent 10%, #000 100%);
-}
 
 /* Only when semantic recall is genuinely available does the room light up.
    It is lit, not pulsing: recall being available is a standing fact, and a
@@ -55,11 +41,7 @@
   inset: 0;
   pointer-events: none;
   content: "";
-  background: radial-gradient(
-    60% 90% at 92% 0%,
-    rgba(59, 130, 246, 0.1),
-    transparent 62%
-  );
+  background: var(--line-strong);
 }
 
 .brain-open-inner {
@@ -89,10 +71,11 @@
 .brain-statement {
   max-width: 14ch;
   margin: 0;
-  font-size: clamp(34px, 5.2vw, 72px);
+  font-size: clamp(29px, 5vw, 50px);
   font-weight: 640;
   letter-spacing: -0.045em;
-  line-height: 0.98;
+  line-height: 1.07;
+  text-transform: none;
 }
 
 /* Each line is balanced on its own, so the last line never strands a single
@@ -108,7 +91,7 @@
 }
 
 .brain-lead {
-  max-width: 64ch;
+  max-width: 62ch;
   margin: 24px 0 0;
   color: var(--ink-secondary);
   font-size: var(--text-md);
@@ -311,6 +294,7 @@
   gap: 0 22px;
   padding: 20px 0;
   border-bottom: 1px solid var(--line-subtle);
+  border-color: var(--line);
 }
 
 .knowledge-row-weight {
@@ -347,7 +331,7 @@
 
 .knowledge-relevance-fill {
   width: 100%;
-  background: linear-gradient(to top, var(--blue), var(--blue-ink));
+  background: var(--blue-ink);
   transform-origin: bottom;
 }
 
@@ -371,7 +355,7 @@
   overflow: hidden;
   color: var(--ink-muted);
   font-size: var(--text-md);
-  line-height: 1.7;
+  line-height: var(--leading-body);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
