@@ -91,6 +91,7 @@
   font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 590;
 }
 
 /* The continuous mission and run an entry belongs to, linked to it. */
@@ -185,7 +186,7 @@
 .control-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0 36px;
+  gap: clamp(20px, 3vw, 36px);
 }
 
 .control-grid .section-head-title {
@@ -200,6 +201,7 @@
   font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 575;
 }
 
 .mission-row-stage {
@@ -469,12 +471,13 @@ a.outcome-text:hover {
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius);
   background: var(--surface-1);
-  box-shadow: var(--elev-1);
+  box-shadow: none;
   transition:
     transform var(--duration-slow) var(--ease-settle),
     box-shadow var(--duration-slow) var(--ease-standard),
     border-color var(--duration) var(--ease-standard),
     opacity var(--duration) var(--ease-standard);
+  border-color: var(--line);
 }
 
 .floor-tile:hover {
@@ -487,7 +490,7 @@ a.outcome-text:hover {
 .floor-tile-working,
 .floor-tile-working:hover {
   border-color: var(--tone-line);
-  background: linear-gradient(180deg, var(--tone-soft), transparent 70%), var(--surface-2);
+  background: var(--surface-2);
   box-shadow: var(--elev-2), 0 0 0 1px color-mix(in srgb, var(--tone) 10%, transparent);
   transform: translateZ(18px) translateY(-3px);
 }
@@ -512,10 +515,9 @@ a.outcome-text:hover {
   inset: -1px -1px auto;
   height: 2px;
   border-radius: var(--radius) var(--radius) 0 0;
-  background: linear-gradient(90deg, transparent, var(--tone), transparent);
+  background: var(--line-strong);
   background-repeat: no-repeat;
   background-size: 50% 100%;
-  animation: edgeRun 2.6s var(--ease-standard) infinite;
 }
 
 .floor-tile-head {
@@ -534,8 +536,8 @@ a.outcome-text:hover {
   justify-content: center;
   border: 1px solid var(--tone-line);
   border-radius: var(--radius-sm);
-  background: var(--tone-soft);
-  box-shadow: var(--edge-light);
+  background: var(--surface-3);
+  box-shadow: none;
   color: var(--tone);
   font-size: var(--text-base);
   font-weight: 650;
