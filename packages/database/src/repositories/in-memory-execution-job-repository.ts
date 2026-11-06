@@ -9,6 +9,7 @@ import {
 import type {
   ClaimExecutionJobInput,
   EnqueueExecutionJobInput,
+  ExecutionJobAttempt,
   ExecutionJobRepository,
 } from "./execution-job-repository.js";
 
@@ -123,14 +124,14 @@ export class InMemoryExecutionJobRepository
   }
 
   async heartbeat(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     workerId: string,
     leaseMs: number,
     now = new Date(),
   ): Promise<ExecutionJob | null> {
-    const job = this.jobs.get(id);
+    const job = this.jobs.get(attempt.id);
 
-    if (!job || job.status !== "running" || job.claimedBy !== workerId) {
+    if (!job || job.status !== "running" || job.attempts !== attempt.attempts || job.claimedBy !== workerId) {
       return null;
     }
 
@@ -140,15 +141,15 @@ export class InMemoryExecutionJobRepository
       updatedAt: now,
     };
 
-    this.jobs.set(id, extended);
+    this.jobs.set(extended.id, extended);
     return extended;
   }
 
   async complete(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     now = new Date(),
   ): Promise<ExecutionJob | null> {
-    return this.settle(id, (job) => ({
+    return this.settle(attempt, (job) => ({
       ...job,
       status: "completed",
       completedAt: now,
@@ -159,11 +160,11 @@ export class InMemoryExecutionJobRepository
   }
 
   async fail(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     error: string,
     now = new Date(),
   ): Promise<ExecutionJob | null> {
-    return this.settle(id, (job) => ({
+    return this.settle(attempt, (job) => ({
       ...job,
       status: "failed",
       completedAt: now,
@@ -174,12 +175,12 @@ export class InMemoryExecutionJobRepository
   }
 
   async requeue(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     error: string,
     runAt = new Date(),
     now = new Date(),
   ): Promise<ExecutionJob | null> {
-    return this.settle(id, (job) => ({
+    return this.settle(attempt, (job) => ({
       ...job,
       status: "queued",
       runAt,
@@ -216,17 +217,17 @@ export class InMemoryExecutionJobRepository
   }
 
   private settle(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     transition: (job: ExecutionJob) => ExecutionJob,
   ): ExecutionJob | null {
-    const job = this.jobs.get(id);
+    const job = this.jobs.get(attempt.id);
 
-    if (!job || job.status !== "running") {
+    if (!job || job.status !== "running" || job.attempts !== attempt.attempts) {
       return null;
     }
 
     const settled = transition(job);
-    this.jobs.set(id, settled);
+    this.jobs.set(settled.id, settled);
     return settled;
   }
 
@@ -252,13 +253,13 @@ export class InMemoryExecutionJobRepository
         }).`;
 
       if (job.attempts < job.maxAttempts) {
-        const recovered = await this.requeue(job.id, reason, now, now);
+        const recovered = await this.requeue(job, reason, now, now);
         if (recovered) requeued.push(recovered);
         continue;
       }
 
       const abandoned = await this.fail(
-        job.id,
+        job,
         `${reason} No attempts remain.`,
         now,
       );

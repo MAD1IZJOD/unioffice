@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ClaimExecutionJobInput,
   EnqueueExecutionJobInput,
+  ExecutionJobAttempt,
   ExecutionJobRepository,
 } from "./execution-job-repository.js";
 
@@ -210,7 +211,7 @@ export class SupabaseExecutionJobRepository
   }
 
   async heartbeat(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     workerId: string,
     leaseMs: number,
     now = new Date(),
@@ -221,8 +222,9 @@ export class SupabaseExecutionJobRepository
         lease_expires_at: new Date(now.getTime() + leaseMs).toISOString(),
         updated_at: now.toISOString(),
       })
-      .eq("id", id)
+      .eq("id", attempt.id)
       .eq("status", "running")
+      .eq("attempts", attempt.attempts)
       // Only the holder may extend the lease; a worker whose job was
       // recovered from under it must not be able to reclaim it by heartbeat.
       .eq("claimed_by", workerId)
@@ -237,10 +239,10 @@ export class SupabaseExecutionJobRepository
   }
 
   async complete(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     now = new Date(),
   ): Promise<ExecutionJob | null> {
-    return this.settle(id, {
+    return this.settle(attempt, {
       status: "completed",
       completed_at: now.toISOString(),
       lease_expires_at: null,
@@ -250,34 +252,20 @@ export class SupabaseExecutionJobRepository
   }
 
   async fail(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     error: string,
     now = new Date(),
   ): Promise<ExecutionJob | null> {
-    return this.settle(id, {
-      status: "failed",
-      completed_at: now.toISOString(),
-      lease_expires_at: null,
-      last_error: error,
-      updated_at: now.toISOString(),
-    });
+    return this.settle(attempt, failedJobPatch(error, now));
   }
 
   async requeue(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     error: string,
     runAt = new Date(),
     now = new Date(),
   ): Promise<ExecutionJob | null> {
-    return this.settle(id, {
-      status: "queued",
-      run_at: runAt.toISOString(),
-      lease_expires_at: null,
-      claimed_by: null,
-      claimed_at: null,
-      last_error: error,
-      updated_at: now.toISOString(),
-    });
+    return this.settle(attempt, requeuedJobPatch(error, runAt, now));
   }
 
   async cancel(
@@ -308,18 +296,28 @@ export class SupabaseExecutionJobRepository
     return data ? fromRow(data as ExecutionJobRow) : null;
   }
 
-  /** Transitions a job out of running; a job already settled is left alone. */
+  /** Transitions only the running attempt that the caller observed. */
   private async settle(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     patch: Record<string, unknown>,
+    expiredLease?: { observed: string; cutoff: string },
   ): Promise<ExecutionJob | null> {
-    const { data, error } = await this.client
+    let update = this.client
       .from("execution_jobs")
       .update(patch)
-      .eq("id", id)
+      .eq("id", attempt.id)
       .eq("status", "running")
-      .select()
-      .maybeSingle();
+      .eq("attempts", attempt.attempts);
+
+    if (expiredLease) {
+      // Match the observed timestamp on the update itself so a heartbeat
+      // between the read and this write wins over recovery.
+      update = update
+        .eq("lease_expires_at", expiredLease.observed)
+        .lt("lease_expires_at", expiredLease.cutoff);
+    }
+
+    const { data, error } = await update.select().maybeSingle();
 
     if (error) {
       throw new Error(`Failed to settle execution job: ${error.message}`);
@@ -332,11 +330,12 @@ export class SupabaseExecutionJobRepository
     requeued: ExecutionJob[];
     failed: ExecutionJob[];
   }> {
+    const cutoff = now.toISOString();
     const { data, error } = await this.client
       .from("execution_jobs")
       .select("*")
       .eq("status", "running")
-      .lt("lease_expires_at", now.toISOString());
+      .lt("lease_expires_at", cutoff);
 
     if (error) {
       throw new Error(
@@ -348,7 +347,11 @@ export class SupabaseExecutionJobRepository
     const failed: ExecutionJob[] = [];
 
     for (const row of (data as ExecutionJobRow[] | null) ?? []) {
+      if (!row.lease_expires_at) continue;
+
       const job = fromRow(row);
+      // Keep Postgres's timestamp precision for the compare-and-swap.
+      const expiredLease = { observed: row.lease_expires_at, cutoff };
       const reason =
         `The worker holding this job stopped responding (lease expired at ${
           job.leaseExpiresAt?.toISOString() ?? "unknown"
@@ -358,15 +361,15 @@ export class SupabaseExecutionJobRepository
       // point of recovery is that another worker finishes the job. Only a
       // job that has burned through its attempts is given up on.
       if (job.attempts < job.maxAttempts) {
-        const recovered = await this.requeue(job.id, reason, now, now);
+        const recovered = await this.settle(job, requeuedJobPatch(reason, now, now), expiredLease);
         if (recovered) requeued.push(recovered);
         continue;
       }
 
-      const abandoned = await this.fail(
-        job.id,
-        `${reason} No attempts remain.`,
-        now,
+      const abandoned = await this.settle(
+        job,
+        failedJobPatch(`${reason} No attempts remain.`, now),
+        expiredLease,
       );
       if (abandoned) failed.push(abandoned);
     }
@@ -393,4 +396,26 @@ export class SupabaseExecutionJobRepository
 
     return ((data as ExecutionJobRow[] | null) ?? []).map(fromRow);
   }
+}
+
+function failedJobPatch(error: string, now: Date) {
+  return {
+    status: "failed",
+    completed_at: now.toISOString(),
+    lease_expires_at: null,
+    last_error: error,
+    updated_at: now.toISOString(),
+  };
+}
+
+function requeuedJobPatch(error: string, runAt: Date, now: Date) {
+  return {
+    status: "queued",
+    run_at: runAt.toISOString(),
+    lease_expires_at: null,
+    claimed_by: null,
+    claimed_at: null,
+    last_error: error,
+    updated_at: now.toISOString(),
+  };
 }

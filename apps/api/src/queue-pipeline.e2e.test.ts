@@ -623,6 +623,29 @@ test("work is only marked failed once the queue has given up on it", async () =>
   assert.match(String(failed!.metadata.executionError), /Ollama is unreachable/);
 });
 
+test("a worker that loses its last claim cannot report or record a late failure", async () => {
+  let expireClaim: () => Promise<void>;
+  const h = harness([calculationPlan], {
+    executeWork: async () => {
+      await expireClaim();
+      throw new Error("Late error from the old attempt.");
+    },
+  });
+  expireClaim = async () => {
+    const recovered = await h.jobs.recoverExpiredLeases(new Date(Date.now() + 120_000));
+    assert.equal(recovered.failed.length, 1);
+  };
+
+  const work = await createAndPlan(h);
+  const job = await h.jobs.enqueue({ organizationId, workId: work.id, reason: "requested", maxAttempts: 1 });
+
+  const result = await h.worker("worker-a").tick();
+  assert.deepEqual(result, { claimed: 1, completed: 0, requeued: 0, failed: 0 });
+  assert.match((await h.jobs.findById(job.id))?.lastError ?? "", /lease expired/);
+  assert.equal((await h.workRepository.findById(work.id))?.status, "queued");
+  assert.ok(!h.events.some((event) => event.type === "work.failed"));
+});
+
 test("a job abandoned by a dead worker is recovered and finished by another", async () => {
   const h = harness([
     calculationPlan,

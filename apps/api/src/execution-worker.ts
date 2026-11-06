@@ -203,7 +203,7 @@ export class ExecutionWorker {
     // so the claim is kept alive while the work is genuinely progressing.
     const heartbeat = setInterval(() => {
       void this.executionJobRepository
-        .heartbeat(job.id, this.workerId, this.leaseMs)
+        .heartbeat(job, this.workerId, this.leaseMs)
         .catch(() => {
           // A missed heartbeat is not fatal on its own; the lease only
           // matters once it actually expires.
@@ -212,6 +212,10 @@ export class ExecutionWorker {
 
     try {
       const outcome = await this.executionJobRunner.run(job);
+      if (!outcome) {
+        this.log(`Job ${job.id} attempt ${job.attempts} lost its claim before settlement.`);
+        return;
+      }
 
       if (outcome.outcome === "completed") result.completed += 1;
       if (outcome.outcome === "requeued") result.requeued += 1;

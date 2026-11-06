@@ -23,6 +23,9 @@ export interface ClaimExecutionJobInput {
   now?: Date;
 }
 
+/** The job ID and claim generation returned by claimNext. */
+export type ExecutionJobAttempt = Pick<ExecutionJob, "id" | "attempts">;
+
 export interface ExecutionJobRepository {
   /**
    * Puts work on the queue, or returns the job already queued or running for
@@ -44,26 +47,27 @@ export interface ExecutionJobRepository {
    */
   claimNext(input: ClaimExecutionJobInput): Promise<ExecutionJob | null>;
 
-  /** Extends the lease on a job this worker still holds. */
+  /** Extends the lease only while this worker still holds the same attempt. */
   heartbeat(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     workerId: string,
     leaseMs: number,
     now?: Date,
   ): Promise<ExecutionJob | null>;
 
-  complete(id: ExecutionJobId, now?: Date): Promise<ExecutionJob | null>;
+  /** Settlement methods return null if the attempt no longer owns the job. */
+  complete(attempt: ExecutionJobAttempt, now?: Date): Promise<ExecutionJob | null>;
 
   /** Ends the job permanently; the work keeps its own failure state. */
   fail(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     error: string,
     now?: Date,
   ): Promise<ExecutionJob | null>;
 
   /** Puts a recoverable failure back on the queue, optionally after a delay. */
   requeue(
-    id: ExecutionJobId,
+    attempt: ExecutionJobAttempt,
     error: string,
     runAt?: Date,
     now?: Date,

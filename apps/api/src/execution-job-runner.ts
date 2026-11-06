@@ -59,10 +59,10 @@ export class ExecutionJobRunner {
     this.planner = options.planner;
   }
 
-  async run(job: ExecutionJob): Promise<RunJobOutcome> {
+  async run(job: ExecutionJob): Promise<RunJobOutcome | null> {
     if (job.reason === "scheduled" && this.planner) {
       const planned = await this.planScheduledRun(job);
-      if (planned) return planned;
+      if (planned !== undefined) return planned;
     }
 
     try {
@@ -74,13 +74,13 @@ export class ExecutionJobRunner {
       // A completed queue job must not contradict that terminal mission.
       if (execution.work.status === "failed") {
         const error = workFailureMessage(execution.work);
-        const failed = await this.executionJobRepository.fail(job.id, error);
-        return { job: failed ?? job, outcome: "failed", error };
+        const failed = await this.executionJobRepository.fail(job, error);
+        return failed && { job: failed, outcome: "failed", error };
       }
 
-      const completed = await this.executionJobRepository.complete(job.id);
+      const completed = await this.executionJobRepository.complete(job);
 
-      return { job: completed ?? job, outcome: "completed" };
+      return completed && { job: completed, outcome: "completed" };
     } catch (error) {
       return this.handleFailure(job, errorMessage(error));
     }
@@ -89,9 +89,8 @@ export class ExecutionJobRunner {
   /**
    * Plans a scheduled run that has not been planned yet.
    *
-   * Returns an outcome when the job ends here - planning failed, or the run
-   * was cancelled while it was being planned - and undefined when the run is
-   * planned and should go on to execute in this same job.
+   * Returns an outcome when the job ends here, null when ownership was lost,
+   * and undefined when the run should go on to execute in this same attempt.
    *
    * A run that was already planned (an approval put it back on the queue, or
    * this is a later attempt after planning finished) goes straight on.
@@ -101,13 +100,14 @@ export class ExecutionJobRunner {
    * steps - is ended the same way rather than planned a second time on top of
    * the steps it already has.
    */
-  private async planScheduledRun(job: ExecutionJob): Promise<RunJobOutcome | undefined> {
+  private async planScheduledRun(job: ExecutionJob): Promise<RunJobOutcome | null | undefined> {
     const planner = this.planner!;
     const work = await this.workRepository.findById(job.workId);
 
     if (!work) {
-      const failed = await this.executionJobRepository.fail(job.id, "The run's mission no longer exists.");
-      return { job: failed ?? job, outcome: "failed", error: "The run's mission no longer exists." };
+      const error = "The run's mission no longer exists.";
+      const failed = await this.executionJobRepository.fail(job, error);
+      return failed && { job: failed, outcome: "failed", error };
     }
 
     if (work.status !== "queued" && work.status !== "planning") return undefined;
@@ -118,9 +118,10 @@ export class ExecutionJobRunner {
       if (work.status === "queued") return undefined;
 
       const reason = "Planning this run was interrupted part-way, so it was stopped rather than planned twice.";
+      const failed = await this.executionJobRepository.fail(job, reason);
+      if (!failed) return null;
       await this.recordWorkFailure(job, reason, "planning");
-      const failed = await this.executionJobRepository.fail(job.id, reason);
-      return { job: failed ?? job, outcome: "failed", error: reason };
+      return { job: failed, outcome: "failed", error: reason };
     }
 
     try {
@@ -130,8 +131,8 @@ export class ExecutionJobRunner {
       // Cancelled while the plan was being written: the cancellation stands
       // and nothing runs.
       if (planned.work.status !== "queued") {
-        const completed = await this.executionJobRepository.complete(job.id);
-        return { job: completed ?? job, outcome: "completed" };
+        const completed = await this.executionJobRepository.complete(job);
+        return completed && { job: completed, outcome: "completed" };
       }
 
       return undefined;
@@ -139,8 +140,8 @@ export class ExecutionJobRunner {
       // Planning records its own failure on the mission, where the run's
       // page and the schedule read it from.
       const message = errorMessage(error);
-      const failed = await this.executionJobRepository.fail(job.id, message);
-      return { job: failed ?? job, outcome: "failed", error: message };
+      const failed = await this.executionJobRepository.fail(job, message);
+      return failed && { job: failed, outcome: "failed", error: message };
     }
   }
 
@@ -153,10 +154,7 @@ export class ExecutionJobRunner {
    * complete while the work sat unfinished forever. This was found by pulling
    * the plug on a worker mid-run.
    *
-   * Any running task found here is an orphan, whichever attempt or job left
-   * it behind: holding this job means no other worker can be executing this
-   * work, because the queue allows one active job per work item and one
-   * worker per job. So if a task says running, nothing is running it.
+   * The new claim owns recovery of running tasks left by earlier attempts.
    */
   private async reclaimOrphanedTasks(job: ExecutionJob): Promise<void> {
     const tasks = await this.taskRepository.findByWork(job.workId);
@@ -206,24 +204,25 @@ export class ExecutionJobRunner {
   private async handleFailure(
     job: ExecutionJob,
     error: string,
-  ): Promise<RunJobOutcome> {
+  ): Promise<RunJobOutcome | null> {
     const attemptsRemain = job.attempts < job.maxAttempts;
 
     if (attemptsRemain) {
       const runAt = new Date(Date.now() + this.retryBackoffMs);
       const requeued = await this.executionJobRepository.requeue(
-        job.id,
+        job,
         error,
         runAt,
       );
 
-      return { job: requeued ?? job, outcome: "requeued", error };
+      return requeued && { job: requeued, outcome: "requeued", error };
     }
 
-    const failed = await this.executionJobRepository.fail(job.id, error);
+    const failed = await this.executionJobRepository.fail(job, error);
+    if (!failed) return null;
     await this.recordWorkFailure(job, error);
 
-    return { job: failed ?? job, outcome: "failed", error };
+    return { job: failed, outcome: "failed", error };
   }
 
   /**

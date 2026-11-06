@@ -44,12 +44,13 @@ test("a queued job can be cancelled, and the work can be queued again afterwards
 test("cancelling never takes a job away from the worker running it", async () => {
   const jobs = repository();
   const job = await enqueue(jobs);
-  await jobs.claimNext({ workerId: "worker-a", leaseMs: 1000 });
+  const claimed = await jobs.claimNext({ workerId: "worker-a", leaseMs: 1000 });
+  assert.ok(claimed);
 
   assert.equal(await jobs.cancel(job.id, "Too late."), null);
   assert.equal((await jobs.findById(job.id))?.status, "running");
 
-  await jobs.complete(job.id);
+  await jobs.complete(claimed);
   assert.equal(await jobs.cancel(job.id, "Already done."), null);
   assert.equal((await jobs.findById(job.id))?.status, "completed");
 });
@@ -79,8 +80,9 @@ test("enqueuing the same work twice returns the job that already owns it", async
 test("work can be queued again once its previous job has settled", async () => {
   const jobs = repository();
   const first = await enqueue(jobs);
-  await jobs.claimNext({ workerId: "worker-a", leaseMs: 1000 });
-  await jobs.complete(first.id);
+  const claimed = await jobs.claimNext({ workerId: "worker-a", leaseMs: 1000 });
+  assert.ok(claimed);
+  await jobs.complete(claimed);
 
   const second = await enqueue(jobs);
 
@@ -167,10 +169,11 @@ test("a job scheduled for later is not claimable yet", async () => {
 
 test("completing a job clears its lease", async () => {
   const jobs = repository();
-  const queued = await enqueue(jobs);
-  await jobs.claimNext({ workerId: "worker-a", leaseMs: 30_000 });
+  await enqueue(jobs);
+  const claimed = await jobs.claimNext({ workerId: "worker-a", leaseMs: 30_000 });
+  assert.ok(claimed);
 
-  const completed = await jobs.complete(queued.id);
+  const completed = await jobs.complete(claimed);
 
   assert.ok(completed);
   assert.equal(completed.status, "completed");
@@ -180,10 +183,11 @@ test("completing a job clears its lease", async () => {
 
 test("failing a job records why and ends it", async () => {
   const jobs = repository();
-  const queued = await enqueue(jobs);
-  await jobs.claimNext({ workerId: "worker-a", leaseMs: 30_000 });
+  await enqueue(jobs);
+  const claimed = await jobs.claimNext({ workerId: "worker-a", leaseMs: 30_000 });
+  assert.ok(claimed);
 
-  const failed = await jobs.fail(queued.id, "Ollama is unreachable.");
+  const failed = await jobs.fail(claimed, "Ollama is unreachable.");
 
   assert.ok(failed);
   assert.equal(failed.status, "failed");
@@ -192,10 +196,11 @@ test("failing a job records why and ends it", async () => {
 
 test("requeueing returns a job to the queue for another attempt", async () => {
   const jobs = repository();
-  const queued = await enqueue(jobs);
-  await jobs.claimNext({ workerId: "worker-a", leaseMs: 30_000 });
+  await enqueue(jobs);
+  const claimed = await jobs.claimNext({ workerId: "worker-a", leaseMs: 30_000 });
+  assert.ok(claimed);
 
-  const requeued = await jobs.requeue(queued.id, "A transient failure.");
+  const requeued = await jobs.requeue(claimed, "A transient failure.");
 
   assert.ok(requeued);
   assert.equal(requeued.status, "queued");
@@ -215,7 +220,7 @@ test("settling a job that is not running changes nothing", async () => {
   const jobs = repository();
   const queued = await enqueue(jobs);
 
-  assert.equal(await jobs.complete(queued.id), null);
+  assert.equal(await jobs.complete(queued), null);
   assert.equal((await jobs.findById(queued.id))!.status, "queued");
 });
 
@@ -290,7 +295,7 @@ test("a job that has burned through its attempts is failed rather than requeued 
 test("heartbeat extends the lease only for the worker holding it", async () => {
   const jobs = repository();
   const now = new Date("2026-09-06T12:00:00Z");
-  const queued = await enqueue(jobs, { runAt: now });
+  await enqueue(jobs, { runAt: now });
   const claimed = await jobs.claimNext({
     workerId: "worker-a",
     leaseMs: 1000,
@@ -298,8 +303,8 @@ test("heartbeat extends the lease only for the worker holding it", async () => {
   });
   assert.ok(claimed);
 
-  const stolen = await jobs.heartbeat(queued.id, "worker-b", 60_000, now);
-  const extended = await jobs.heartbeat(queued.id, "worker-a", 60_000, now);
+  const stolen = await jobs.heartbeat(claimed, "worker-b", 60_000, now);
+  const extended = await jobs.heartbeat(claimed, "worker-a", 60_000, now);
 
   assert.equal(stolen, null);
   assert.ok(extended);
