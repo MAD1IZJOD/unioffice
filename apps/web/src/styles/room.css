@@ -29,31 +29,13 @@
   overflow: hidden;
   border-bottom: 1px solid var(--line);
   background:
-    radial-gradient(
-      120% 90% at 8% -10%,
-      rgba(255, 255, 255, 0.035),
-      transparent 62%
-    ),
-    var(--surface-0);
+    var(--surface-1);
+  padding-block: clamp(24px, 4vw, 44px);
 }
 
 /* The wash is the operation's state, not decoration. A live operation is lit
    from the left in blue; one waiting on a person is lit in red; a finished
    one is not lit at all. */
-.operation::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 2px;
-  content: "";
-  background: linear-gradient(
-    to bottom,
-    var(--tone, transparent),
-    transparent 72%
-  );
-  opacity: 0.6;
-}
 
 .operation-live::after,
 .operation-waiting::after {
@@ -61,15 +43,10 @@
   inset: 0;
   pointer-events: none;
   content: "";
-  background: radial-gradient(
-    70% 120% at 0% 0%,
-    var(--tone-soft, transparent),
-    transparent 58%
-  );
+  background: var(--line-strong);
 }
 
 .operation-live::after {
-  animation: room-breathe 7s ease-in-out infinite;
 }
 
 @keyframes room-breathe {
@@ -98,7 +75,7 @@
   font-family: var(--mono);
   font-size: var(--text-2xs);
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
 }
 
@@ -135,8 +112,6 @@
 
 .pulse-live .pulse-dot {
   background: var(--blue-ink);
-  box-shadow: 0 0 0 0 rgba(132, 180, 251, 0.5);
-  animation: pulse-ring 2.4s ease-out infinite;
 }
 
 .pulse-live {
@@ -145,18 +120,14 @@
 
 .pulse-connecting .pulse-dot {
   background: var(--warning);
-  animation: pulse-fade 1.4s ease-in-out infinite;
 }
 
 @keyframes pulse-ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(132, 180, 251, 0.45);
   }
   70% {
-    box-shadow: 0 0 0 7px rgba(132, 180, 251, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(132, 180, 251, 0);
   }
 }
 
@@ -176,10 +147,10 @@
   max-width: 20ch;
   margin: 0;
   color: var(--ink-primary);
-  font-size: clamp(27px, 3.7vw, 50px);
+  font-size: clamp(26px, 4vw, 44px);
   font-weight: 600;
-  letter-spacing: -0.033em;
-  line-height: 1.07;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
   text-wrap: balance;
 }
 
@@ -220,7 +191,7 @@
 .operation-note {
   max-width: 72ch;
   margin: 8px 0 0;
-  color: var(--ink-muted);
+  color: var(--ink-secondary);
   font-size: var(--text-sm);
   line-height: 1.6;
 }
@@ -282,7 +253,7 @@
 }
 
 .station-passed::before {
-  background: linear-gradient(90deg, var(--ink-muted), var(--line-strong));
+  background: var(--line-strong);
 }
 
 .station-node {
@@ -298,6 +269,7 @@
     transform var(--duration-slow) var(--ease-settle),
     background var(--duration) var(--ease-standard),
     border-color var(--duration) var(--ease-standard);
+  box-shadow: none;
 }
 
 .station-passed .station-node {
@@ -309,7 +281,6 @@
 .station-now .station-node {
   border-color: var(--tone, var(--blue));
   background: var(--tone, var(--blue));
-  box-shadow: 0 0 0 4px var(--tone-soft, var(--blue-soft)), 0 0 14px var(--tone, var(--blue));
   transform: scale(1.12);
 }
 
@@ -374,7 +345,7 @@
   }
 
   .station-passed::before {
-    background: linear-gradient(180deg, var(--ink-muted), var(--line-strong));
+    background: var(--line-strong);
   }
 }
 
@@ -421,7 +392,7 @@
   right: 0;
   left: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--tone), transparent);
+  background: var(--line-strong);
   background-repeat: no-repeat;
   background-size: 45% 100%;
   animation: settleSweep 1.2s var(--ease-arrive) both;
@@ -518,11 +489,6 @@
   padding: 30px var(--room-gutter) 32px;
   border-bottom: 1px solid var(--red-line);
   background:
-    radial-gradient(
-      80% 140% at 0% 0%,
-      rgba(229, 72, 77, 0.13),
-      transparent 60%
-    ),
     var(--surface-alert);
 }
 
@@ -558,7 +524,6 @@
   height: 6px;
   border-radius: 50%;
   background: var(--red);
-  animation: pulse-fade 1.8s ease-in-out infinite;
 }
 
 .decision + .decision {
@@ -664,7 +629,7 @@
 
 .room-layout {
   display: grid;
-  gap: 0 46px;
+  gap: clamp(20px, 3vw, 34px);
   max-width: 1340px;
   margin: 0 auto;
   padding-top: 34px;
@@ -749,11 +714,7 @@
   width: 1px;
   flex: 1;
   margin: 6px 0 0;
-  background: linear-gradient(
-    to bottom,
-    var(--line-strong),
-    var(--line-subtle) 80%
-  );
+  background: var(--surface-1);
 }
 
 .lane-body {
@@ -817,20 +778,12 @@
 
 .step-running {
   border-left-color: var(--blue);
-  background: linear-gradient(
-    to right,
-    rgba(59, 130, 246, 0.06),
-    transparent 38%
-  );
+  background: var(--surface-1);
 }
 
 .step-holding {
   border-left-color: var(--red);
-  background: linear-gradient(
-    to right,
-    rgba(229, 72, 77, 0.07),
-    transparent 38%
-  );
+  background: var(--surface-1);
 }
 
 .step-head {
