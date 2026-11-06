@@ -24,7 +24,7 @@ Company
    ├── Company Brain
    │      └── organizational knowledge / memory / context
    │
-   ├── Atlas
+   ├── tyrion
    │      └── orchestration / planning / coordination
    │
    ├── Specialist Agents
