@@ -302,7 +302,6 @@
   color: var(--ink-faint);
   font-family: var(--mono);
   font-size: var(--text-2xs);
-  opacity: 0.75;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -706,7 +705,6 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   line-height: 1.9;
-  opacity: 0.55;
 }
 
 /* The thread between lanes is the dependency itself: the plan flows down it. */
