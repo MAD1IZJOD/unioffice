@@ -28,30 +28,11 @@
   padding: 44px 22px 30px;
   border-bottom: 1px solid var(--line-subtle);
   background:
-    radial-gradient(
-      120% 150% at 8% 0%,
-      var(--mission-wash, rgba(59, 130, 246, 0.11)) 0%,
-      rgba(6, 7, 10, 0) 62%
-    ),
-    var(--surface-0);
+    var(--surface-1);
 }
 
 /* The one rule that carries the mission's temperature across the whole
    header, so the state is legible from the edge of the screen. */
-.mission-open::before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    var(--tone) 0%,
-    color-mix(in srgb, var(--tone) 24%, transparent) 48%,
-    transparent 100%
-  );
-  content: "";
-}
 
 .mission-open-waiting {
   --mission-wash: rgba(229, 72, 77, 0.13);
@@ -98,10 +79,10 @@
   max-width: 22ch;
   margin: 0;
   color: var(--ink-primary);
-  font-size: clamp(28px, 4.6vw, 54px);
+  font-size: clamp(26px, 4.5vw, 45px);
   font-weight: 640;
   letter-spacing: -0.036em;
-  line-height: 1.06;
+  line-height: 1.12;
   text-wrap: balance;
 }
 
@@ -223,7 +204,7 @@
   border: 1px solid var(--red-line);
   border-left: 3px solid var(--red);
   border-radius: var(--radius);
-  background: var(--red-soft);
+  background: var(--surface-alert);
 }
 
 .mission-decision-label {
@@ -346,7 +327,7 @@
   color: var(--ink-primary);
   font-size: var(--text-md);
   font-weight: 600;
-  letter-spacing: 0.13em;
+  letter-spacing: var(--tracking-tight);
   text-transform: uppercase;
 }
 
@@ -408,6 +389,8 @@
   color: inherit;
   text-decoration: none;
   transition: background 150ms ease;
+  box-shadow: none;
+  border-color: var(--line);
 }
 
 .mission-member:hover {
@@ -884,10 +867,9 @@
   inset: -1px -1px auto;
   height: 2px;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background: linear-gradient(90deg, transparent, var(--blue-ink), transparent);
+  background: var(--line-strong);
   background-repeat: no-repeat;
   background-size: 40% 100%;
-  animation: edgeRun 1.4s var(--ease-standard) infinite;
 }
 
 @media (max-width: 640px) {
