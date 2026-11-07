@@ -10,20 +10,20 @@
    ========================================================================== */
 
 .world {
-  --world-ground: #07080b;
-  --world-floor-a: #10141b;
-  --world-floor-b: #0e1218;
-  --world-band: #151a22;
-  --world-wall: #2b323d;
-  --world-plank: #0c0f14;
-  --world-seam: #090b0f;
-  --world-desk-top: #464e5c;
-  --world-desk-edge: #313744;
-  --world-desk-front: #232833;
-  --world-chair: #1b2029;
-  --world-chair-top: #282e39;
-  --world-monitor: #2c3340;
-  --world-screen-off: #10141b;
+  --world-ground: #171816;
+  --world-floor-a: #242520;
+  --world-floor-b: #20211d;
+  --world-band: #2a2b26;
+  --world-wall: #55564c;
+  --world-plank: #1b1c18;
+  --world-seam: #171816;
+  --world-desk-top: #5a5a4e;
+  --world-desk-edge: #45463d;
+  --world-desk-front: #33342e;
+  --world-chair: #2a2b26;
+  --world-chair-top: #393a33;
+  --world-monitor: #55564c;
+  --world-screen-off: #1d1e1b;
 
   display: grid;
   gap: var(--space-5);
@@ -478,10 +478,10 @@
 
 /* The screen. Lit only while there is work on it. */
 .world-screen { fill: var(--world-screen-off); }
-.world-screen-working { fill: #173a73; }
-.world-screen-elsewhere { fill: #1a2331; }
-.world-screen-waiting { fill: #2a1216; }
-.world-screen-planning { fill: #122640; }
+.world-screen-working { fill: #354d49; }
+.world-screen-elsewhere { fill: #2a2b26; }
+.world-screen-waiting { fill: #503831; }
+.world-screen-planning { fill: #3b4847; }
 .world-code rect { fill: var(--blue-ink); }
 .world-lock rect { fill: var(--ink-muted); }
 
@@ -505,7 +505,7 @@
 /* Bubbles over the head. */
 .world-bubble-waiting > rect:not(.world-bubble-glyph) { fill: var(--red); }
 .world-bubble-waiting .world-bubble-glyph { fill: #fff; }
-.world-bubble-planning > rect:not(.world-bubble-glyph) { fill: #13223a; }
+.world-bubble-planning > rect:not(.world-bubble-glyph) { fill: #303c39; }
 .world-bubble-planning .world-bubble-glyph { fill: var(--blue-ink); }
 .world-bubble-paused .world-bubble-glyph { fill: var(--ink-faint); }
 
