@@ -89,7 +89,7 @@ button {
 
 ::selection {
   color: var(--ink-primary);
-  background: rgba(59, 130, 246, 0.3);
+  background: var(--accent-soft);
 }
 
 ::-webkit-scrollbar {
@@ -139,17 +139,14 @@ button {
 
 .status-dot-live {
   background: var(--success-ink);
-  box-shadow: 0 0 8px rgba(47, 158, 107, 0.5);
 }
 
 .status-dot-warning {
-  background: var(--red-ink);
-  box-shadow: 0 0 8px rgba(229, 72, 77, 0.5);
+  background: var(--warning-ink);
 }
 
 .status-dot-error {
-  background: var(--red);
-  box-shadow: 0 0 8px rgba(229, 72, 77, 0.55);
+  background: var(--red-ink);
 }
 
 .text-primary {
