@@ -27,21 +27,7 @@
   overflow: hidden;
   border-bottom: 1px solid var(--line);
   background: var(--surface-1);
-  padding-block: clamp(26px, 4vw, 46px);
-}
-
-/* Strata: faint horizontal bands that deepen toward the bottom, the page's one
-   decorative gesture - layers of what has been learned. */
-
-/* Only when semantic recall is genuinely available does the room light up.
-   It is lit, not pulsing: recall being available is a standing fact, and a
-   standing fact that throbs forever reads as activity that is not there. */
-.brain-open-semantic::after {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  content: "";
-  background: var(--line-strong);
+  padding-block: 28px;
 }
 
 .brain-open-inner {
@@ -69,12 +55,12 @@
 }
 
 .brain-statement {
-  max-width: 14ch;
+  max-width: 25ch;
   margin: 0;
-  font-size: clamp(29px, 5vw, 50px);
+  font-size: clamp(28px, 3.5vw, 40px);
   font-weight: 640;
   letter-spacing: -0.045em;
-  line-height: 1.07;
+  line-height: 1.15;
   text-transform: none;
 }
 
@@ -92,10 +78,10 @@
 
 .brain-lead {
   max-width: 62ch;
-  margin: 24px 0 0;
+  margin: 18px 0 0;
   color: var(--ink-secondary);
   font-size: var(--text-md);
-  line-height: 1.75;
+  line-height: var(--leading-body);
 }
 
 .brain-readout {
@@ -1021,12 +1007,6 @@ a.provenance-name:hover {
 
   .entry-facts dd {
     margin-bottom: 8px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brain-open-semantic::after {
-    animation: none;
   }
 }
 
