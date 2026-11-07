@@ -148,6 +148,7 @@ const DETAIL_PAGES: Array<{ prefix: string; area: FeatureArea; title: string }> 
   { prefix: "/missions/new/", area: "work", title: "Start from a template" },
   { prefix: "/missions/", area: "work", title: "Execution room" },
 
+  { prefix: "/schedules/", area: "work", title: "Schedule" },
   { prefix: "/workforce/", area: "workforce", title: "Agent" },
   { prefix: "/skills/", area: "workforce", title: "Skill" },
   { prefix: "/brain/", area: "knowledge", title: "Knowledge" },
