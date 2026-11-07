@@ -23,7 +23,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { fetchFeatures, type AttentionItem, type FeatureCatalog } from "./lib/api";
 import {
@@ -196,6 +196,7 @@ export default function App() {
   const navigate = useNavigate();
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileNavigation = useRef<HTMLElement>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
@@ -227,11 +228,46 @@ export default function App() {
   const outletContext: ShellOutletContext = { missionControl };
 
   useEffect(() => {
+    if (!mobileOpen) return;
+    const panel = mobileNavigation.current;
+    if (!panel) return;
+    const previous = document.activeElement;
+    const controls = () => Array.from(panel.querySelectorAll<HTMLElement>(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]',
+    )).filter((element) => element.getClientRects().length > 0);
+    controls()[0]?.focus();
+
+    function containFocus(event: KeyboardEvent) {
+      if (event.key !== "Tab") return;
+      const available = controls();
+      const first = available[0];
+      const last = available.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !panel!.contains(document.activeElement))) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !panel!.contains(document.activeElement))) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = () => { if (desktop.matches) setMobileOpen(false); };
+    document.addEventListener("keydown", containFocus);
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => {
+      document.removeEventListener("keydown", containFocus);
+      desktop.removeEventListener("change", closeOnDesktop);
+      if (previous instanceof HTMLElement && previous.isConnected && !document.querySelector('[role="dialog"]:not(#mobile-navigation)')) previous.focus();
+    };
+  }, [mobileOpen]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const key = event.key.toLowerCase();
 
       if ((event.metaKey || event.ctrlKey) && key === "k") {
         event.preventDefault();
+        setMobileOpen(false);
         setCommandOpen(true);
         setPaletteIndex(0);
       }
@@ -246,6 +282,7 @@ export default function App() {
       }
 
       if (event.key === "Escape") {
+        setMobileOpen(false);
         setCommandOpen(false);
         setAttentionOpen(false);
         setPaletteQuery("");
@@ -376,6 +413,12 @@ export default function App() {
       )}
 
       <aside
+        id="mobile-navigation"
+        ref={mobileNavigation}
+        role={mobileOpen ? "dialog" : undefined}
+        aria-label="Navigation"
+        aria-modal={mobileOpen || undefined}
+        inert={!mobileOpen}
         className={`mobile-sidebar ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className="sidebar-brand justify-between">
@@ -407,6 +450,8 @@ export default function App() {
           onClick={() => setMobileOpen(true)}
           className="icon-button"
           aria-label="Open navigation"
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-navigation"
         >
           <Menu size={17} />
         </button>
