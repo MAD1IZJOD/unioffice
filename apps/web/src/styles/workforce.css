@@ -73,7 +73,7 @@
 }
 
 .worker.tone-idle {
-  opacity: 0.66;
+  background: var(--surface-0);
 }
 
 @media (prefers-reduced-motion: reduce) {
