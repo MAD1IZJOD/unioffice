@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
@@ -31,13 +31,54 @@ export function ArtifactSheet({
   producedBy?: string;
   onClose: () => void;
 }) {
+  const sheet = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const panel = sheet.current;
+    if (!panel) return;
+    const previous = document.activeElement;
+    const controls = () => Array.from(panel.querySelectorAll<HTMLElement>(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]',
+    )).filter((element) => element.getClientRects().length > 0);
+    (controls()[0] ?? panel).focus();
+
+    function containFocus(event: KeyboardEvent) {
+      if (event.key !== "Tab") return;
+      // A command palette opened above the artifact owns focus until it closes.
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      if (dialogs[dialogs.length - 1] !== panel) return;
+      const available = controls();
+      const first = available[0] ?? panel!;
+      const last = available.at(-1) ?? panel!;
+      if (event.shiftKey && (document.activeElement === first || !panel!.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !panel!.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", containFocus);
+    return () => {
+      document.removeEventListener("keydown", containFocus);
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, []);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        const dialogs = document.querySelectorAll('[role="dialog"]');
+        if (dialogs[dialogs.length - 1] === sheet.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }
     }
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [onClose]);
 
   const content = artifact.metadata.content;
@@ -62,6 +103,8 @@ export function ArtifactSheet({
   return (
     <div
       className="sheet-overlay"
+      ref={sheet}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label={artifact.name}
