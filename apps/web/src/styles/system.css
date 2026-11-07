@@ -97,7 +97,7 @@
   --text-title: 18px;
   --text-xl: 22px;
   --text-2xl: 30px;
-  --text-display: clamp(30px, 4vw, 52px);
+  --text-display: clamp(29px, 3.4vw, 44px);
   --leading-tight: 1.15;
   --leading-snug: 1.4;
   --leading-body: 1.65;
@@ -1947,7 +1947,7 @@
 
 .dispatch {
   background: var(--surface-1);
-  padding-block: clamp(28px, 5vw, 58px) clamp(24px, 4vw, 42px);
+  padding-block: 32px 28px;
 }
 
 .signal-field {
@@ -2230,22 +2230,6 @@
   transform: scale(1.1);
 }
 
-/* Only a genuinely working agent's core breathes. */
-.agent-mark-active .mark-core {
-  animation: markPulse 2.2s ease-in-out infinite;
-}
-
-@keyframes markPulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.4;
-  }
-}
-
 @media (max-width: 640px) {
   .dispatch {
     margin: -18px -14px 0;
@@ -2279,8 +2263,8 @@
   /* Breaks out of the page's centred column so the opening runs to the edges
      of the working surface, while its own content stays aligned with the
      column below it. */
-  margin: -24px 0 28px;
-  padding: 44px 0 30px;
+  margin: -24px 0 24px;
+  padding: 28px 0 24px;
   border-radius: 0;
 }
 
@@ -2289,7 +2273,8 @@
 }
 
 .statement-page {
-  font-size: clamp(30px, 4.6vw, 54px);
+  font-size: clamp(27px, 3.5vw, 40px);
+  max-width: 28ch;
 }
 
 .dispatch-page .statement-detail {
@@ -2311,47 +2296,6 @@
   .statement-page {
     font-size: clamp(24px, 8vw, 34px);
   }
-}
-
-/* --------------------------------------------------------------------------
-   Transitions
-
-   Moving between surfaces should read as turning a page, not as loading a
-   different app. The statement lifts into place first and the body follows a
-   beat later, so the eye lands on the headline before the detail arrives.
-   Everything is transform and opacity only, and it runs once per navigation.
-   -------------------------------------------------------------------------- */
-
-.statement-line {
-  animation: lineRise 460ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
-}
-
-.statement-line:nth-child(2) {
-  animation-delay: 70ms;
-}
-
-.dispatch .statement-detail,
-.dispatch .dispatch-meta {
-  animation: lineRise 460ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
-  animation-delay: 130ms;
-}
-
-@keyframes lineRise {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* The body of the page arrives just behind its opening. */
-.fade-up {
-  animation: fadeUp 300ms ease-out both;
-  animation-delay: 60ms;
 }
 
 /* --------------------------------------------------------------------------
