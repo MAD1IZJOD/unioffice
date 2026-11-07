@@ -73,7 +73,7 @@
   margin: 2px 0 0;
   color: var(--ink-secondary);
   font-size: var(--text-md);
-  line-height: var(--leading-snug);
+  line-height: var(--leading-body);
 }
 
 .story-meta {
@@ -124,6 +124,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface-1);
+  border-color: var(--line);
 }
 
 .handoff-head {
@@ -219,7 +220,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface-1);
-  box-shadow: var(--elev-2), inset 0 2px 0 var(--brief-edge, transparent);
+  box-shadow: none;
   animation: briefSurface 560ms var(--ease-arrive) backwards;
 }
 
@@ -285,7 +286,7 @@
   font-size: clamp(17px, 2.2vw, 21px);
   font-weight: 600;
   letter-spacing: -0.024em;
-  line-height: var(--leading-tight);
+  line-height: var(--leading-body);
 }
 
 .brief-confidence-reason {
@@ -355,6 +356,7 @@
   font-size: var(--text-sm);
   text-align: left;
   transition: border-color var(--duration-fast) var(--ease-standard);
+  border-color: var(--line);
 }
 
 .brief-artifact:hover {
