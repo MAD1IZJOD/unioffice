@@ -227,6 +227,122 @@ around 100-150 MB each, while `qwen3:8b` wants roughly 8-10 GB of RAM on CPU.
 Pointing `OLLAMA_BASE_URL` at a machine or service that hosts the model
 elsewhere needs no code change at all.
 
+
+## Verification on 7 November 2026
+
+The linked hosted migration ledger was read directly. All three migrations below
+are pending; their service RPCs are absent. The migration dry run lists exactly
+this sequence:
+
+1. `20261106000000_guard_execution_attempt_writes.sql`
+2. `20261106000100_fail_exhausted_execution_jobs.sql`
+3. `20261106000200_protect_queued_work_during_startup.sql`
+
+The guard checks ownership in the transaction that writes task results,
+artifacts and events. Unscoped API writes and human approval decisions remain
+permitted. Exhaustion closes the queue job and unfinished mission together;
+startup reconciliation excludes queued and running jobs. Repository regression
+tests and isolated PostgreSQL checks cover these cases. They do not establish
+that the hosted database has these protections.
+
+The Windows origin has no API listener on port 4000 and no UNIOFFICE API or
+worker process. Cloudflared readiness returns 200, but public API health and
+`/me` return 502. The tunnel is up; its API origin is absent. No new job claim,
+authenticated mission or replacement-worker recovery was verified.
+
+Linked database management access works. The hosted backup list is empty.
+The CLI dump path fails temporary-role authentication; separate verified-TLS
+`pg_dump` attempts timed out before producing an archive. Temporary backup
+logins were removed. No hosted migration or business-data mutation was made.
+
+The host account is not an administrator. No UNIOFFICE service or scheduled task
+was found. The repository's local environment is configured for development,
+including workforce seeding. Starting it against the hosted project would not
+be a safe production rollout.
+
+### Finish the rollout
+
+Run from the repository root on the approved deployment host. Keep both API and
+worker stopped until a verified backup exists and all migrations are applied.
+
+1. Provision PostgreSQL client tools and a trusted database connection. Set
+   `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`,
+   `PGSSLMODE=verify-full` and `PGSSLROOTCERT` through the host's secret
+   configuration. Use the direct connection or session pooler, not transaction
+   pooling. Do not print credentials. Create and inspect a custom archive:
+
+   ```powershell
+   pg_dump --format=custom --file=unioffice-before-lease-guards.dump
+   if ($LASTEXITCODE -ne 0) { throw 'Database backup failed' }
+   pg_restore --list unioffice-before-lease-guards.dump
+   if ($LASTEXITCODE -ne 0) { throw 'Backup archive is unreadable' }
+   Get-FileHash unioffice-before-lease-guards.dump -Algorithm SHA256
+   ```
+
+   Restore the archive into an isolated database using equivalent required
+   roles and extensions. Verify schema and row counts. Secure the archive
+   because it contains company and authentication data. Do not proceed if the
+   archive cannot be restored.
+
+2. Stop old API and worker instances through their supervisor. Verify the
+   deployment checkout is clean `main` and matches `origin/main`. With the
+   linked project's database password provided securely if requested:
+
+   ```powershell
+   pnpm exec supabase migration list --linked
+   pnpm exec supabase db push --linked --dry-run
+   # Continue only if the list is exactly the three migrations above.
+   pnpm exec supabase db push --linked
+   if ($LASTEXITCODE -ne 0) { throw 'Migration application failed' }
+   pnpm exec supabase migration list --linked
+   ```
+
+3. Provision a separate production environment file. Set `NODE_ENV=production`,
+   `SEED_DEVELOPMENT_WORKFORCE=false`, the production origins from the table
+   above, and the existing database/model/provider secrets. Set
+   `UNIOFFICE_ENV_FILE` to that absolute file path in each supervisor entry.
+   The current development file must not be used. Confirm the model is
+   reachable from the worker account.
+
+4. Register API and worker as independently restartable processes with the
+   host's approved Windows supervisor. This repository does not supply an
+   installed supervisor configuration; selecting and provisioning it remains
+   a deployment step. Use the repository root as the working directory and
+   these separate entrypoints:
+
+   ```powershell
+   pnpm --filter @unioffice/api start
+   pnpm --filter @unioffice/worker start
+   ```
+
+   Retain separate logs, restart-on-failure settings and graceful-stop support.
+   Confirm both processes survive a supervisor restart. Keep the existing
+   tunnel's origin at `http://127.0.0.1:4000`; no tunnel change is needed to
+   repair the absent listener.
+
+5. Verify fresh local and public health/readiness, then use a newly signed-in
+   user's access token held in an environment variable:
+
+   ```powershell
+   Invoke-RestMethod http://127.0.0.1:4000/health
+   Invoke-RestMethod http://127.0.0.1:4000/readiness
+   Invoke-RestMethod https://api.unioffice.pro/health
+   Invoke-RestMethod https://api.unioffice.pro/readiness
+   Invoke-RestMethod https://api.unioffice.pro/me -Headers @{
+     Authorization = "Bearer $env:UNIOFFICE_SMOKE_ACCESS_TOKEN"
+   }
+   ```
+
+   Run a fresh authenticated mission with two dependent tasks and a real tool.
+   Check its queue claim, task outputs, artifacts, events and terminal status
+   in the hosted database. Verify a human approval/resume flow. Interrupt a
+   worker during a fresh attempt, let its lease expire, start its replacement,
+   and verify recovery and rejection of stale-attempt writes. Inspect the
+   provider before repeating an external action whose outcome is uncertain.
+
+The frontend can deploy independently. A successful static build or public
+sign-in page does not establish that authenticated operations or execution work.
+
 ## Signing in
 
 Sign-in is Supabase Auth: Google, or a one-time email link. Neither sets a
