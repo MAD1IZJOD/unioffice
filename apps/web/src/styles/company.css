@@ -39,7 +39,6 @@
 }
 
 .workspace-mark-active .workspace-mark-node {
-  animation: workspace-pulse 2.8s ease-in-out infinite;
 }
 
 @keyframes workspace-pulse {
@@ -98,6 +97,7 @@
   transition:
     background 160ms ease,
     transform 160ms ease;
+  box-shadow: none;
 }
 
 .plate:hover {
@@ -223,12 +223,8 @@
   padding: 44px 22px 30px;
   border-bottom: 1px solid var(--line-subtle);
   background:
-    radial-gradient(
-      110% 140% at 6% 0%,
-      rgba(59, 130, 246, 0.09) 0%,
-      rgba(6, 7, 10, 0) 60%
-    ),
-    var(--surface-0);
+    var(--surface-1);
+  padding-block: clamp(24px, 4vw, 42px);
 }
 
 @media (max-width: 640px) {
@@ -307,9 +303,9 @@
   max-width: 18ch;
   margin: 0;
   color: var(--ink-primary);
-  font-size: clamp(30px, 5vw, 56px);
+  font-size: clamp(27px, 4.5vw, 46px);
   font-weight: 640;
-  letter-spacing: -0.036em;
+  letter-spacing: var(--tracking-tight);
   line-height: 1.04;
 }
 
@@ -480,6 +476,7 @@
 .dossier-block {
   padding: 24px 0;
   border-top: 1px solid var(--line-subtle);
+  border-color: var(--line);
 }
 
 .dossier-block:first-child {
@@ -520,6 +517,7 @@
 
 .config-row {
   margin-top: 18px;
+  border-color: var(--line);
 }
 
 .config-row:first-child {
@@ -529,7 +527,7 @@
 .config-label {
   display: block;
   margin-bottom: 9px;
-  color: var(--ink-faint);
+  color: var(--ink-secondary);
   font-family: var(--mono);
   font-size: var(--text-2xs);
   letter-spacing: 0.18em;
@@ -587,6 +585,7 @@
     border-color 150ms ease,
     background 150ms ease,
     color 150ms ease;
+  border-color: var(--line-strong);
 }
 
 .config-choice:hover:not(:disabled) {
@@ -643,7 +642,7 @@
   gap: 6px;
   padding: 5px 10px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   color: var(--ink-secondary);
   font-family: var(--mono);
   font-size: var(--text-2xs);
