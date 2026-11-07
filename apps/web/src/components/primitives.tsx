@@ -93,10 +93,8 @@ export function Panel({
 /**
  * The opening of a route.
  *
- * Every page begins the same way the Command Center does - an oversized
- * statement, a single line of plain detail, and an optional reading strip -
- * so moving between surfaces feels like turning a page in one document rather
- * than loading a different app.
+ * A shared heading, supporting detail and optional status strip keep each
+ * route recognizable. Actions wrap beneath the heading when space is limited.
  */
 export function PageOpening({
   eyebrow,
@@ -120,7 +118,7 @@ export function PageOpening({
   return (
     <header className={`dispatch dispatch-${tone} dispatch-page`}>
       <div className="dispatch-inner">
-        <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="t-eyebrow mb-4">{eyebrow}</div>
 
